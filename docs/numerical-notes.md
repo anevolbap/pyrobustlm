@@ -35,32 +35,47 @@ per-dataset tolerances reflecting this sensitivity.
 
 ### 2. Performance vs R (Phase 11)
 
-**What.** Pure-Python pyrobustlm is roughly 5-50x slower than R's C-backed
-lmrob on default settings. Bench (single thread, AMD x86_64, OpenBLAS):
+**What.** With the bisquare Cython kernel for psi/wgt/rho/m_scale wired into
+the hot path of ``fast_s`` and ``m_scale``, pyrobustlm is now within 1.1x to
+12x of R's C-backed lmrob on the bisquare-default path:
 
 | n | p | R | pyrobustlm | ratio |
 |---|---|---|------------|-------|
-| 100  | 5  | 8 ms   | 390 ms | 49x |
-| 500  | 10 | 30 ms  | 287 ms | 9.6x |
-| 1000 | 10 | 46 ms  | 373 ms | 8.1x |
-| 2000 | 20 | 249 ms | 574 ms | 2.3x |
+| 100  | 5  | 8 ms   | 94 ms  | 12x  |
+| 500  | 10 | 30 ms  | 79 ms  | 2.6x |
+| 1000 | 10 | 46 ms  | 119 ms | 2.6x |
+| 2000 | 20 | 249 ms | 277 ms | 1.1x |
 
-**Why.** Python-level overhead in the resampling loop dominates on small
-problems. On larger problems NumPy/BLAS catches up.
+**Why.** Cython kernels remove the Python-loop overhead in the inner
+resampling loop. On large problems NumPy/BLAS dominates and we approach R.
+On small problems Python's ``np.linalg.lstsq`` and ``np.linalg.solve``
+overhead dominates.
 
-**Future work.** Phase 11 plans Cython acceleration of the inner loops
-(``_core/_fast_s.pyx``). Plan target: ≤1.3x R on n>=1e4, multi-threaded
-beat R on n>=1e3.
+**Remaining gap.** Other psi families (huber, hampel, optimal, lqq, ggw)
+still use the NumPy path; Cython kernels for them follow the same pattern.
 
-### 3. ``init="M-S"`` not yet implemented (Phase 5)
+### 3. M-S estimator (Phase 5)
 
-**What.** ``Control(init="M-S")`` raises ``NotImplementedError``. Designs
-with categorical predictors that produce frequently singular subsamples
-should bump ``Control(mts=...)`` higher (default 1000 already covers our
-reference corpus). Phase 5 will implement Maronna-Yohai 2000 properly.
+**What.** ``init="M-S"`` and ``init="auto"`` both work. The estimator is
+a simplified Maronna-Yohai 2000: alternating L1 (via SciPy linprog) on the
+factor block and S (via fast-S) on the continuous block. Convergence and
+final scale match R's behaviour qualitatively but are not bit-identical
+because the C ``m_s_descent`` does sophisticated multi-restart subsampling
+we do not replicate.
 
-### 4. ``vcov_w`` falls back to ``vcov_avar1`` (Phase 7)
+### 4. ``vcov_w`` (Phase 7)
 
-**What.** ``Control(cov=".vcov.w")`` currently emits a ``RuntimeWarning``
-and uses the ``avar1`` sandwich. The KS2011 finite-sample corrections will
-land in a follow-up.
+**What.** ``Control(cov=".vcov.w")`` implements the
+``cov.corrfact = "asympt"`` branch of robustbase's ``.vcov.w`` (the
+asymptotic-correction-factor version). The other branches (``empirical``,
+``hybrid``, ``tau``, ``tauold``) and the optional Huber finite-sample
+correction are deferred; they primarily affect inference in small
+samples and do not change point estimates.
+
+### 5. ``vcov_avar1`` matches R element-wise
+
+**What.** With the corrected ``Mchi(deriv=1) = chi'`` mapping (R's chi is
+normalised so ``chi(inf) = 1``; ``chi' = (1/rho_unnorm(inf)) * psi``) and
+the proper R formula ported from ``lmrob.MM.R:510-577``, the covariance
+matrix now matches R element-wise to ``rtol=1e-3`` on stackloss/delivery/
+phosphor.

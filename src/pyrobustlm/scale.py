@@ -113,7 +113,19 @@ def m_scale(
             return 0.0
         s = float(init_scale)
 
-    # Hoist family dispatch out of the inner loop.
+    fam_lower = family.lower()
+    # Cython fast path for the bisquare default.
+    if fam_lower in ("bisquare", "biweight"):
+        try:
+            from pyrobustlm._core import _psi as _cpsi
+
+            kk = float(np.asarray(k, dtype=np.float64).ravel()[0])
+            r_buf = np.ascontiguousarray(r, dtype=np.float64)
+            return float(_cpsi.m_scale_bisquare(r_buf, kk, b0, s, max_iter, tol, p))
+        except ImportError:
+            pass
+
+    # Generic NumPy path.
     rho_fn = _pf._dispatch(family, "rho")
     k_arr = np.asarray(k, dtype=np.float64)
 

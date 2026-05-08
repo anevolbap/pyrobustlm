@@ -696,6 +696,49 @@ def _ggw_general_rho(x: ArrayLike, k: NDArray[np.float64]) -> NDArray[np.float64
 # ===========================================================================
 PsiFn = Callable[[ArrayLike, ArrayLike], NDArray[np.float64]]
 
+
+# Normalisation: for the chi-shaped families used in lmrob, ``rho``/``Mchi``
+# is normalised so that ``rho(infinity) = 1``, while ``psi``/``Mpsi`` returns
+# the unnormalised derivative. Therefore ``chi'(x) = (factor) * psi(x)``
+# where ``factor`` depends on the family and tuning constants.
+def _chi_prime_factor(family: str, k_arr: NDArray[np.float64]) -> float:
+    fam = family.lower()
+    if fam in ("bisquare", "biweight"):
+        # rho_unnorm(inf) = c^2 / 6  =>  chi = rho_unnorm / (c^2/6) = 6/c^2 * rho_unnorm
+        # chi' = 6/c^2 * psi
+        c = float(k_arr[0])
+        return 6.0 / (c * c)
+    if fam == "huber":
+        # huber rho has rho(inf) = inf, but Mchi truncates it. The factor used
+        # by Mchi follows c. Here chi(x) = min(x^2/2, c*(|x|-c/2)) / c^2 * 2.
+        # For Phase 7 we leave Mchi(deriv=1) = psi (the unnormalised psi);
+        # if huber is needed for vcov, revisit.
+        return 1.0
+    if fam == "hampel":
+        # rho_unnorm(inf) = a*(b+r-a)/2 = nc; chi normalised by 1/nc.
+        a, b, r = float(k_arr[0]), float(k_arr[1]), float(k_arr[2])
+        nc = a * (b + r - a) / 2.0
+        return 1.0 / nc
+    if fam == "optimal":
+        # rho_unnorm(inf) = 3.25 (see lmrob.c rho_opt branch).
+        return 1.0 / 3.25
+    if fam == "lqq":
+        # rho_lqq is already normalised (chi(inf) = 1); validation pass
+        # in Phase 7+ will tighten this.
+        return 1.0  # placeholder
+    if fam == "ggw":
+        return 1.0  # placeholder
+    return 1.0
+
+
+def chi_prime(x: ArrayLike, family: str, k: ArrayLike) -> NDArray[np.float64]:
+    """``Mchi(x, c, family, deriv=1)`` — derivative of the normalised chi."""
+    k_arr = np.atleast_1d(np.asarray(k, dtype=np.float64)).ravel()
+    psi_fn = _dispatch(family, "psi")
+    factor = _chi_prime_factor(family, k_arr)
+    return factor * psi_fn(x, k_arr)
+
+
 _FAMILY_FNS: dict[str, dict[str, PsiFn]] = {
     "huber": {
         "rho": rho_huber,

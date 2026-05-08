@@ -101,6 +101,8 @@ ignore = [
 "src/pyrobustlm/_psifuns.py" = ["N802", "N806", "RUF059"]
 # _mm.py: ``it`` is the iteration counter; ruff thinks it's unused.
 "src/pyrobustlm/_mm.py" = ["B007"]
+"src/pyrobustlm/ms_estimator.py" = ["B007"]
+"src/pyrobustlm/inference.py" = ["N806"]
 
 [tool.mypy]
 python_version = "3.10"

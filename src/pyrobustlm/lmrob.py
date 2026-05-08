@@ -17,6 +17,7 @@ from pyrobustlm._mm import mm_iterate
 from pyrobustlm.control import Control
 from pyrobustlm.formula import model_matrix
 from pyrobustlm.inference import vcov_avar1, vcov_w
+from pyrobustlm.ms_estimator import m_s_fit
 from pyrobustlm.results import LmRobResults
 
 if TYPE_CHECKING:
@@ -77,36 +78,104 @@ def lmrob(
     else:
         raise ValueError(f"unknown na_action: {na_action!r}")
 
-    y, X, term_names = model_matrix(formula, data)
+    design = model_matrix(formula, data)
+    y, X, term_names = design.y, design.X, design.term_names
     n, p = X.shape
     if n <= p:
         raise ValueError(f"need n > p; got n={n}, p={p}")
 
     # ------------------------------------------------------------------
-    # Initial S estimate via fast-S resampling
+    # Pick init method. ``init="auto"`` chooses M-S when factor columns
+    # exist and S otherwise. Anything else honors the explicit user request.
     # ------------------------------------------------------------------
-    cfg = FastSConfig(
-        psi_chi=control.psi,
-        k_chi=tuple(np.atleast_1d(np.asarray(control.tuning_chi, dtype=float)).ravel()),
-        b0=control.bb,
-        nResample=control.nResample,
-        k_fast_s=control.k_fast_s,
-        best_r=control.best_r_s,
-        max_it=control.max_it,
-        refine_tol=control.refine_tol,
-        scale_tol=control.scale_tol,
-        max_iter_scale=control.k_max,
-        mts=control.mts,
-    )
-    s_seed = seed if seed is not None else control.seed
-    s_result = fast_s(X, y, cfg=cfg, seed=s_seed)
+    init_method = control.init
+    if init_method == "auto":
+        init_method = "M-S" if design.is_factor_col.any() else "S"
 
-    init_info: dict[str, object] = {
-        "coef": s_result.coef.copy(),
-        "scale": s_result.scale,
-        "n_iter": s_result.n_iter,
-        "method": "S",
-    }
+    s_seed = seed if seed is not None else control.seed
+    k_chi_tuple = tuple(np.atleast_1d(np.asarray(control.tuning_chi, dtype=float)).ravel())
+
+    if init_method == "S":
+        # ------------------------------------------------------------------
+        # Initial S estimate via fast-S resampling
+        # ------------------------------------------------------------------
+        cfg = FastSConfig(
+            psi_chi=control.psi,
+            k_chi=k_chi_tuple,
+            b0=control.bb,
+            nResample=control.nResample,
+            k_fast_s=control.k_fast_s,
+            best_r=control.best_r_s,
+            max_it=control.max_it,
+            refine_tol=control.refine_tol,
+            scale_tol=control.scale_tol,
+            max_iter_scale=control.k_max,
+            mts=control.mts,
+        )
+        s_result = fast_s(X, y, cfg=cfg, seed=s_seed)
+        beta_init = s_result.coef
+        sigma_init = s_result.scale
+        init_info: dict[str, object] = {
+            "coef": s_result.coef.copy(),
+            "scale": s_result.scale,
+            "n_iter": s_result.n_iter,
+            "method": "S",
+        }
+    elif init_method == "M-S":
+        if not design.is_factor_col.any():
+            # No factor cols; M-S degenerates to S.
+            cfg = FastSConfig(
+                psi_chi=control.psi,
+                k_chi=k_chi_tuple,
+                b0=control.bb,
+                nResample=control.nResample,
+                k_fast_s=control.k_fast_s,
+                best_r=control.best_r_s,
+                max_it=control.max_it,
+                refine_tol=control.refine_tol,
+                scale_tol=control.scale_tol,
+                max_iter_scale=control.k_max,
+                mts=control.mts,
+            )
+            s_result = fast_s(X, y, cfg=cfg, seed=s_seed)
+            beta_init = s_result.coef
+            sigma_init = s_result.scale
+            init_info = {
+                "coef": s_result.coef.copy(),
+                "scale": s_result.scale,
+                "n_iter": s_result.n_iter,
+                "method": "S",
+            }
+        else:
+            cat_cols = design.is_factor_col
+            X_cat = X[:, cat_cols]
+            X_cont = X[:, ~cat_cols]
+            ms_result = m_s_fit(
+                X_cat=X_cat,
+                X_cont=X_cont,
+                y=y,
+                psi_chi=control.psi,
+                k_chi=k_chi_tuple,
+                b0=control.bb,
+                k_m_s=control.k_m_s,
+                nResample=control.nResample,
+                max_it=control.max_it,
+                rel_tol=control.rel_tol,
+                seed=s_seed,
+            )
+            # Re-stitch into the original column order.
+            beta_init = np.empty(p, dtype=np.float64)
+            beta_init[cat_cols] = ms_result.coef_cat
+            beta_init[~cat_cols] = ms_result.coef_cont
+            sigma_init = ms_result.scale
+            init_info = {
+                "coef": beta_init.copy(),
+                "scale": ms_result.scale,
+                "n_iter": ms_result.n_iter,
+                "method": "M-S",
+            }
+    else:
+        raise NotImplementedError(f"init={init_method!r} not implemented")
 
     # ------------------------------------------------------------------
     # MM step holding sigma fixed.
@@ -115,8 +184,8 @@ def lmrob(
     mm = mm_iterate(
         X=X,
         y=y,
-        beta_init=s_result.coef,
-        sigma=s_result.scale,
+        beta_init=beta_init,
+        sigma=sigma_init,
         psi_family=control.psi,
         psi_k=psi_k_eff,
         max_it=control.max_it,
@@ -124,7 +193,7 @@ def lmrob(
     )
 
     coef = mm.coef
-    sigma = s_result.scale
+    sigma = sigma_init
     residuals = y - X @ coef
     fitted = X @ coef
     z = residuals / sigma if sigma != 0 else residuals
@@ -133,12 +202,37 @@ def lmrob(
     # ------------------------------------------------------------------
     # Covariance
     # ------------------------------------------------------------------
-    cov_fn = {
-        ".vcov.avar1": vcov_avar1,
-        ".vcov.w": vcov_w,
-        "Asymp": vcov_avar1,
-    }.get(control.cov, vcov_avar1)
-    cov = cov_fn(X, residuals, sigma, control.psi, psi_k_eff)
+    init_residuals = y - X @ beta_init
+    if control.cov == ".vcov.avar1":
+        cov = vcov_avar1(
+            X=X,
+            residuals=residuals,
+            sigma=sigma,
+            psi_family=control.psi,
+            psi_k=psi_k_eff,
+            init_residuals=init_residuals,
+            chi_family=control.psi,
+            chi_k=k_chi_tuple,
+            bb=control.bb,
+        )
+    elif control.cov == ".vcov.w":
+        cov = vcov_w(
+            X=X,
+            residuals=residuals,
+            sigma=sigma,
+            psi_family=control.psi,
+            psi_k=psi_k_eff,
+            rweights=rweights,
+        )
+    else:
+        # Fallback: legacy / unknown
+        cov = vcov_avar1(
+            X=X,
+            residuals=residuals,
+            sigma=sigma,
+            psi_family=control.psi,
+            psi_k=psi_k_eff,
+        )
 
     return LmRobResults(
         coef_=np.asarray(coef, dtype=np.float64),

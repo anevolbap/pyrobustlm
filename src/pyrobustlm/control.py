@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 PsiFamily = Literal["bisquare", "huber", "hampel", "optimal", "ggw", "lqq"]
-InitMethod = Literal["S", "M-S", "L1"]
+InitMethod = Literal["auto", "S", "M-S", "L1"]
 Setting = Literal["KS2011", "KS2014", "MM"]
 
 

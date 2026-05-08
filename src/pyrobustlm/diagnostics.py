@@ -66,22 +66,47 @@ def plot(results: LmRobResults) -> object:
     return fig
 
 
-def cooks_distance(results: LmRobResults, robust: bool = True) -> np.ndarray:
-    """Robust analogue of Cook's distance.
+def hatvalues(results: LmRobResults, X: np.ndarray) -> np.ndarray:
+    """Diagonal of the (robust) hat matrix ``H = X (X' W X)^-1 X' W``.
 
-    For a robust fit, we compute the *weighted* analogue
-    ``D_i = (w_i * r_i^2) / (p * sigma^2 * (1 - h_i))``
-    where ``h_i`` is the diagonal of the hat-like matrix
-    ``H = X (X^T W X)^-1 X^T W`` evaluated at the fit's robust weights.
+    Mirrors ``robustbase:::.lmrob.hat``: compute the weighted QR of
+    ``sqrt(w) * X`` and read the row sums of squares of the orthogonal
+    factor's leading columns. The result is clamped to [0, 1].
+
+    Parameters
+    ----------
+    results :
+        Fitted ``LmRobResults`` object (uses ``rweights_``).
+    X :
+        Design matrix used in the fit, shape ``(n, p)``.
+    """
+    w = results.rweights_
+    sw = np.sqrt(np.maximum(w, 0.0))
+    Xw = np.asarray(X, dtype=np.float64) * sw[:, None]
+    Q, _ = np.linalg.qr(Xw, mode="reduced")
+    h = np.minimum(1.0, np.sum(Q * Q, axis=1))
+    return h
+
+
+def cooks_distance(
+    results: LmRobResults,
+    X: np.ndarray,
+    robust: bool = True,
+) -> np.ndarray:
+    """Robust Cook's distance per observation.
+
+    .. math::
+        D_i = \\frac{w_i\\,r_i^2}{p\\,\\sigma^2\\,(1 - h_i)^2}\\,
+              \\frac{h_i}{1 - h_i}
+
+    where ``h_i`` are the robust hat values from :func:`hatvalues`.
     """
     if not robust:
         raise NotImplementedError("Only robust=True is supported in v1.")
-    raise NotImplementedError(
-        "diagnostics.cooks_distance — Phase 9+ (deferred); only the plot "
-        "wrapper is implemented in v1. PRs welcome."
-    )
-
-
-def hatvalues(results: LmRobResults) -> np.ndarray:
-    """Robust analogue of hat values."""
-    raise NotImplementedError("diagnostics.hatvalues — Phase 9+ (deferred). PRs welcome.")
+    p = int(results.coef_.size)
+    h = hatvalues(results, X)
+    h_safe = np.minimum(h, 1.0 - 1e-12)
+    sigma = max(results.scale_, 1e-300)
+    r = results.residuals_
+    w = results.rweights_
+    return (w * r * r) / (p * sigma * sigma * (1.0 - h_safe) ** 2) * (h_safe / (1.0 - h_safe))

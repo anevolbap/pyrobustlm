@@ -91,9 +91,22 @@ def _irwls_step(
     if sigma == 0.0:
         return beta.copy()
     z = r / sigma
-    wgt_fn = _pf._dispatch(psi_family, "wgt")
-    k_arr = np.asarray(psi_k, dtype=np.float64)
-    w = wgt_fn(z, k_arr)
+
+    fam_lower = psi_family.lower()
+    if fam_lower in ("bisquare", "biweight"):
+        try:
+            from pyrobustlm._core import _psi as _cpsi
+
+            kk = float(np.asarray(psi_k, dtype=np.float64).ravel()[0])
+            w = np.empty_like(z)
+            _cpsi.bisquare_wgt(np.ascontiguousarray(z), kk, w)
+        except ImportError:
+            wgt_fn = _pf._dispatch(psi_family, "wgt")
+            w = wgt_fn(z, np.asarray(psi_k, dtype=np.float64))
+    else:
+        wgt_fn = _pf._dispatch(psi_family, "wgt")
+        w = wgt_fn(z, np.asarray(psi_k, dtype=np.float64))
+
     sw = np.sqrt(w)
     Xw = X * sw[:, None]
     yw = y * sw
