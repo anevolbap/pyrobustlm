@@ -123,6 +123,43 @@ corpus <- list(
     formula = stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.,
     control = list(psi = "lqq"),
     seed    = 1
+  ),
+  list(
+    name    = "delivery_default",
+    dataset = "delivery",
+    formula = delTime ~ n.prod + distance,
+    control = list(),
+    seed    = 1
+  ),
+  list(
+    name    = "aircraft_default",
+    dataset = "aircraft",
+    formula = Y ~ X1 + X2 + X3 + X4,
+    control = list(),
+    seed    = 1
+  ),
+  list(
+    name    = "pension_default",
+    dataset = "pension",
+    formula = Reserves ~ Income,
+    control = list(),
+    seed    = 1
+  ),
+  list(
+    name    = "phosphor_default",
+    dataset = "phosphor",
+    formula = plant ~ inorg + organic,
+    control = list(),
+    seed    = 1
+  ),
+  # education has Region (factor) and X1..X3 (numeric). State (50 levels) is
+  # left out for now; Phase 5 (M-S init) will add a full-State reference.
+  list(
+    name    = "education_simple",
+    dataset = "education",
+    formula = Y ~ Region + X1 + X2 + X3,
+    control = list(),
+    seed    = 1
   )
 )
 

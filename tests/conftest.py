@@ -69,25 +69,103 @@ def _rpy2_available() -> bool:
     return True
 
 
-@pytest.fixture(scope="session")
-def r_session() -> Iterator[Any]:
-    """An rpy2 R session with ``robustbase`` loaded.
+class _RBridge:
+    """Convenience wrapper around an rpy2 session.
 
-    Tests that need a live R interpreter should depend on this fixture.
-    Skipped automatically when rpy2 / R / robustbase are unavailable.
+    Exposes the R primitives that pyrobustlm tests need to diff against:
+
+    - ``Mpsi``, ``Mchi``, ``Mwgt`` (+ ``deriv`` argument for higher derivatives)
+    - ``lmrob_mscale``  → ``robustbase::lmrob.mscale``
+    - ``lmrob_control`` → ``robustbase::lmrob.control``
+    - ``rdataset(name)`` → fetch a ``robustbase`` (or base ``datasets``) data frame
+      as a pandas DataFrame.
+    """
+
+    def __init__(self) -> None:
+        import numpy as np
+        import rpy2.robjects as ro
+        from rpy2.robjects import numpy2ri
+        from rpy2.robjects.packages import importr
+
+        try:
+            self.robustbase = importr("robustbase")
+        except Exception as exc:  # pragma: no cover - surfaced via skip
+            pytest.skip(f"R package 'robustbase' not available: {exc}")
+
+        self.ro = ro
+        self.r = ro.r
+        self._numpy2ri = numpy2ri
+        self._np = np
+
+    # ----- numeric primitives ----------------------------------------------
+    def _to_r_vec(self, x: np.ndarray | float) -> Any:
+        if hasattr(x, "__len__"):
+            return self.ro.FloatVector(self._np.asarray(x, dtype=float).ravel())
+        return self.ro.FloatVector([float(x)])
+
+    def Mpsi(
+        self,
+        x: np.ndarray | float,
+        cc: float | tuple[float, ...],
+        family: str,
+        deriv: int = 0,
+    ) -> np.ndarray:
+        cc_vec = (
+            self.ro.FloatVector([float(cc)])
+            if isinstance(cc, (int, float))
+            else self.ro.FloatVector([float(c) for c in cc])
+        )
+        out = self.r["Mpsi"](self._to_r_vec(x), cc=cc_vec, psi=family, deriv=deriv)
+        return self._np.asarray(out)
+
+    def Mchi(
+        self,
+        x: np.ndarray | float,
+        cc: float | tuple[float, ...],
+        family: str,
+        deriv: int = 0,
+    ) -> np.ndarray:
+        cc_vec = (
+            self.ro.FloatVector([float(cc)])
+            if isinstance(cc, (int, float))
+            else self.ro.FloatVector([float(c) for c in cc])
+        )
+        out = self.r["Mchi"](self._to_r_vec(x), cc=cc_vec, psi=family, deriv=deriv)
+        return self._np.asarray(out)
+
+    def Mwgt(
+        self,
+        x: np.ndarray | float,
+        cc: float | tuple[float, ...],
+        family: str,
+    ) -> np.ndarray:
+        cc_vec = (
+            self.ro.FloatVector([float(cc)])
+            if isinstance(cc, (int, float))
+            else self.ro.FloatVector([float(c) for c in cc])
+        )
+        out = self.r["Mwgt"](self._to_r_vec(x), cc=cc_vec, psi=family)
+        return self._np.asarray(out)
+
+    # ----- M-scale ---------------------------------------------------------
+    def lmrob_mscale(self, r: np.ndarray, **control_kwargs: Any) -> float:
+        ctrl = self.r["lmrob.control"](**control_kwargs)
+        out = self.r["lmrob.mscale"](self._to_r_vec(r), ctrl)
+        return float(out[0])
+
+    def lmrob_control(self, **kwargs: Any) -> Any:
+        return self.r["lmrob.control"](**kwargs)
+
+
+@pytest.fixture(scope="session")
+def r_session() -> Iterator[_RBridge]:
+    """A live rpy2 session with ``robustbase`` loaded.
+
+    Skipped automatically when rpy2, R, or ``robustbase`` are unavailable.
     """
     if not _rpy2_available():
         pytest.skip("rpy2 not available")
-    import rpy2.robjects as ro
-    from rpy2.robjects.packages import importr
-
-    try:
-        robustbase = importr("robustbase")
-    except Exception as exc:
-        pytest.skip(f"R package 'robustbase' not available: {exc}")
-
-    ns = {"r": ro.r, "robustbase": robustbase, "ro": ro}
-    yield ns
+    yield _RBridge()
 
 
 # ---------------------------------------------------------------------------

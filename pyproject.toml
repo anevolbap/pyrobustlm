@@ -48,7 +48,9 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.10",
     "pre-commit>=3.7",
-    "rpy2>=3.5",
+    # rpy2 3.6 requires R >= 4.4. Cap at 3.5.x for compatibility with R 4.2/4.3
+    # systems; CI installs R release (currently 4.4+) and may unpin in future.
+    "rpy2>=3.5,<3.6",
     "Cython>=3.0",
 ]
 docs = [
