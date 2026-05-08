@@ -16,7 +16,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from pyrobustlm import psi as _psi
+from pyrobustlm import _psifuns as _pf
+from pyrobustlm import psi as _psi  # noqa: F401  (kept for legacy callers)
 
 if TYPE_CHECKING:
     from pyrobustlm.control import PsiFamily
@@ -112,10 +113,13 @@ def m_scale(
             return 0.0
         s = float(init_scale)
 
+    # Hoist family dispatch out of the inner loop.
+    rho_fn = _pf._dispatch(family, "rho")
+    k_arr = np.asarray(k, dtype=np.float64)
+
     prev = s
     for _it in range(max_iter):
-        # mean(chi(r/s)) over (n - p) -- matches sum_rho_sc in the C source.
-        chi_vals = _psi.rho(r / s, family, k)
+        chi_vals = rho_fn(r / s, k_arr)
         mean_chi = float(np.sum(chi_vals)) / (n - p)
         s = s * np.sqrt(mean_chi / b0)
         if abs(s - prev) <= tol * prev:

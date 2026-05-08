@@ -23,7 +23,8 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from pyrobustlm import psi as _psi
+from pyrobustlm import _psifuns as _pf
+from pyrobustlm import psi as _psi  # noqa: F401
 from pyrobustlm.scale import _mad, m_scale
 
 
@@ -90,7 +91,9 @@ def _irwls_step(
     if sigma == 0.0:
         return beta.copy()
     z = r / sigma
-    w = _psi.wgt(z, psi_family, psi_k)
+    wgt_fn = _pf._dispatch(psi_family, "wgt")
+    k_arr = np.asarray(psi_k, dtype=np.float64)
+    w = wgt_fn(z, k_arr)
     sw = np.sqrt(w)
     Xw = X * sw[:, None]
     yw = y * sw
