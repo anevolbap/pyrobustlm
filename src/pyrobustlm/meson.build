@@ -1,6 +1,9 @@
 python_sources = [
   '__init__.py',
   '_version.py',
+  '_fast_s.py',
+  '_mm.py',
+  '_psifuns.py',
   'control.py',
   'psi.py',
   'scale.py',

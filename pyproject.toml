@@ -95,6 +95,12 @@ ignore = [
 # (E[psi^2], E[D psi], etc.). We want to keep them for grep-ability.
 "src/pyrobustlm/control.py" = ["N815"]
 "src/pyrobustlm/psi.py" = ["N802"]
+"src/pyrobustlm/_fast_s.py" = ["N815"]
+# _psifuns.py: capitalised constants (R1, R2, ...) match the published
+# polynomial coefficients in the optimal psi family.
+"src/pyrobustlm/_psifuns.py" = ["N802", "N806", "RUF059"]
+# _mm.py: ``it`` is the iteration counter; ruff thinks it's unused.
+"src/pyrobustlm/_mm.py" = ["B007"]
 
 [tool.mypy]
 python_version = "3.10"

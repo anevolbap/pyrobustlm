@@ -148,13 +148,52 @@ class _RBridge:
         return self._np.asarray(out)
 
     # ----- M-scale ---------------------------------------------------------
-    def lmrob_mscale(self, r: np.ndarray, **control_kwargs: Any) -> float:
-        ctrl = self.r["lmrob.control"](**control_kwargs)
-        out = self.r["lmrob.mscale"](self._to_r_vec(r), ctrl)
+    def lmrob_mscale(
+        self,
+        r: np.ndarray,
+        family: str = "bisquare",
+        k: float | tuple[float, ...] = 1.547645,  # 50% bdp default
+        b0: float = 0.5,
+        max_iter: int = 200,
+        tol: float = 1e-10,
+        p: int = 0,
+    ) -> float:
+        """Compute the M-scale via robustbase::Mchi inside R, mirroring
+        ``find_scale`` in lmrob.c. ``lmrob.mscale`` is not exported by the
+        package, so we replicate the iteration here.
+        """
+        cc_vec = (
+            self.ro.FloatVector([float(k)])
+            if isinstance(k, (int, float))
+            else self.ro.FloatVector([float(c) for c in k])
+        )
+        rscript = """
+        function(r, cc, family, b0, max_it, tol, p) {
+            s <- mad(r)
+            if (s == 0) return(0)
+            for (it in 1:max_it) {
+                chi <- robustbase::Mchi(r/s, cc, family)
+                s_new <- s * sqrt(sum(chi) / (length(r) - p) / b0)
+                if (abs(s_new - s) <= tol * s) return(s_new)
+                s <- s_new
+            }
+            s_new
+        }
+        """
+        fn = self.r(rscript)
+        out = fn(
+            self._to_r_vec(r),
+            cc_vec,
+            family,
+            float(b0),
+            int(max_iter),
+            float(tol),
+            int(p),
+        )
         return float(out[0])
 
     def lmrob_control(self, **kwargs: Any) -> Any:
-        return self.r["lmrob.control"](**kwargs)
+        return self.robustbase.lmrob_control(**kwargs)
 
 
 @pytest.fixture(scope="session")
