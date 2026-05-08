@@ -1,0 +1,143 @@
+[build-system]
+requires = [
+    "meson-python>=0.16",
+    "meson>=1.4",
+    "ninja",
+    "Cython>=3.0",
+    "numpy>=2.0; python_version>='3.10'",
+]
+build-backend = "mesonpy"
+
+[project]
+name = "pyrobustlm"
+description = "Python port of robustbase::lmrob (MM regression)"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Pablo Vena", email = "vena.pablo@gmail.com" }]
+requires-python = ">=3.10"
+dynamic = ["version"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Cython",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.11",
+    "pandas>=2.0",
+    "formulaic>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-cov",
+    "pytest-xdist",
+    "hypothesis>=6.100",
+    "ruff>=0.6",
+    "mypy>=1.10",
+    "pre-commit>=3.7",
+    "rpy2>=3.5",
+    "Cython>=3.0",
+]
+docs = [
+    "sphinx>=7",
+    "sphinx-rtd-theme",
+    "sphinx-autodoc-typehints",
+    "myst-parser",
+]
+
+[project.urls]
+Homepage = "https://github.com/anevolbap/pyrobustlm"
+Source = "https://github.com/anevolbap/pyrobustlm"
+Issues = "https://github.com/anevolbap/pyrobustlm/issues"
+
+[tool.meson-python.args]
+setup = ["--default-library=static"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",      # pycodestyle / pyflakes
+    "I",                 # isort
+    "B",                 # bugbear
+    "UP",                # pyupgrade
+    "N",                 # pep8-naming
+    "SIM",               # simplify
+    "RUF",
+]
+ignore = [
+    "E501",              # line length: ruff format handles this
+    "N806",              # we use mathematical names like X, beta, sigma
+    "N803",              # same for arg names
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["N"]
+# Names mirrored from R's lmrob.control() and from the math literature
+# (E[psi^2], E[D psi], etc.). We want to keep them for grep-ability.
+"src/pyrobustlm/control.py" = ["N815"]
+"src/pyrobustlm/psi.py" = ["N802"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unused_configs = true
+warn_unused_ignores = true
+warn_return_any = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+ignore_missing_imports = true
+files = ["src/pyrobustlm"]
+
+[[tool.mypy.overrides]]
+module = "pyrobustlm._core.*"
+ignore_errors = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+]
+markers = [
+    "slow: marks tests as slow",
+    "rpy2: requires a working rpy2/R install",
+    "rng_sensitive: result depends on RNG; tolerances are looser",
+    "validation: cross-checks against R reference output",
+]
+
+[tool.cibuildwheel]
+build = "cp310-* cp311-* cp312-* cp313-*"
+skip = ["*-musllinux_*", "*-win32", "*-manylinux_i686"]
+build-verbosity = 1
+test-requires = ["pytest", "numpy", "scipy", "pandas", "formulaic"]
+test-command = "pytest {project}/tests/unit -x"
+
+[tool.cibuildwheel.linux]
+archs = ["x86_64", "aarch64"]
+manylinux-x86_64-image = "manylinux_2_28"
+manylinux-aarch64-image = "manylinux_2_28"
+
+[tool.cibuildwheel.macos]
+archs = ["x86_64", "arm64"]
+
+[tool.cibuildwheel.windows]
+archs = ["AMD64"]

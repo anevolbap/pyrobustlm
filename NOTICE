@@ -1,0 +1,46 @@
+pyrobustlm
+==========
+
+This project is a Python port of the `lmrob` MM-estimator and supporting
+machinery from the R package `robustbase`.
+
+Algorithms, defaults, tuning constant tables, and certain numerical
+choices are derived from `robustbase`. We gratefully acknowledge the
+authors and maintainers of `robustbase`:
+
+  Martin Maechler, Peter Rousseeuw, Christophe Croux, Valentin Todorov,
+  Andreas Ruckstuhl, Matias Salibian-Barrera, Tobias Verbeke,
+  Manuel Koller, Eduardo L. T. Conceicao, Maria Anna di Palma.
+
+Upstream project:
+  https://cran.r-project.org/package=robustbase
+  https://robustbase.r-forge.r-project.org/
+
+Upstream license: GPL (>= 2).
+
+This project is licensed under the GNU General Public License, version 3,
+to remain compatible with `robustbase`. See LICENSE for the full text.
+
+References
+----------
+
+The implementation follows the published algorithms:
+
+  Yohai, V. J. (1987). High breakdown-point and high efficiency robust
+  estimates for regression. Annals of Statistics 15, 642-656.
+
+  Salibian-Barrera, M. and Yohai, V. J. (2006). A fast algorithm for
+  S-regression estimates. JCGS 15, 414-427.
+
+  Maronna, R. A. and Yohai, V. J. (2000). Robust regression with both
+  continuous and categorical predictors. JSPI 89, 197-214.
+
+  Koller, M. and Stahel, W. A. (2011). Sharpening Wald-type inference
+  in robust regression for small samples. CSDA 55, 2504-2515.
+
+  Koller, M. and Stahel, W. A. (2017). Nonsingular subsampling for
+  regression S estimators with categorical predictors. Comp. Stat.
+  32, 631-646.
+
+Any divergences from `robustbase` are documented in
+docs/numerical-notes.md.

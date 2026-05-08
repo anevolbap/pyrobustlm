@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs of the same workflow on the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint + type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install lint deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ruff mypy numpy pandas-stubs
+      - name: Ruff
+        run: ruff check src tests
+      - name: Ruff format check
+        run: ruff format --check src tests
+      - name: Mypy
+        run: mypy --config-file pyproject.toml src/pyrobustlm
+
+  test:
+    name: Tests (${{ matrix.os }} / py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      # ------------------------------------------------------------------
+      # R + robustbase. We only run rpy2-backed tests on Linux to keep CI
+      # cheap; correctness against the JSON references is platform-agnostic.
+      # ------------------------------------------------------------------
+      - name: Install R (Linux)
+        if: runner.os == 'Linux'
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "release"
+          use-public-rspm: true
+
+      - name: Cache R packages (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.R_LIBS_USER }}
+          key: r-${{ runner.os }}-robustbase-${{ hashFiles('scripts/generate_r_reference.R') }}
+
+      - name: Install robustbase (Linux)
+        if: runner.os == 'Linux'
+        run: Rscript -e 'install.packages(c("robustbase","jsonlite"), repos="https://cloud.r-project.org")'
+
+      - name: Install OpenMP runtime (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install libomp
+          echo "LDFLAGS=-L$(brew --prefix libomp)/lib"   >> $GITHUB_ENV
+          echo "CPPFLAGS=-I$(brew --prefix libomp)/include" >> $GITHUB_ENV
+
+      - name: Install build deps + project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -v -e ".[dev]"
+
+      - name: Install rpy2 (Linux only)
+        if: runner.os == 'Linux'
+        run: python -m pip install rpy2
+
+      - name: Generate R reference (Linux only)
+        if: runner.os == 'Linux'
+        run: Rscript scripts/generate_r_reference.R
+
+      - name: Run pytest
+        env:
+          PYROBUSTLM_SKIP_RPY2: ${{ runner.os != 'Linux' && '1' || '' }}
+        run: pytest -v --maxfail=10
