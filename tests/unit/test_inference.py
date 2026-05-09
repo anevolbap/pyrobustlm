@@ -50,6 +50,44 @@ def test_vcov_avar1_matches_r(ref_name, dataset, formula, rtol):
     np.testing.assert_allclose(fit.cov_, R_cov, rtol=rtol, atol=1e-6)
 
 
+_COV_W_CASES = [
+    (
+        "stackloss_KS2014",
+        "stackloss",
+        "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
+        "KS2014",
+        2e-3,
+    ),
+    (
+        "stackloss_KS2011",
+        "stackloss",
+        "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
+        "KS2011",
+        2e-3,
+    ),
+]
+
+
+@pytest.mark.parametrize("ref_name,dataset,formula,setting,rtol", _COV_W_CASES)
+def test_vcov_w_matches_r(ref_name, dataset, formula, setting, rtol):
+    """vcov_w (KS2011/KS2014 sandwich) matches R element-wise.
+
+    Setting-specific defaults pick the right ``cov_corrfact`` automatically.
+    Both KS2011 and KS2014 use method=SMDM, so ``"D" in method`` and
+    R defaults to ``cov_hubercorr=False`` + ``cov_corrfact='tau'``.
+    """
+    ref = json.loads((REFERENCE_DIR / f"{ref_name}.json").read_text())
+    df = _ensure_dataset(dataset)
+    fit = lmrob(
+        formula,
+        df,
+        control=Control(setting=setting, nResample=1000),
+        seed=42,
+    )
+    R_cov = np.asarray(ref["cov"], dtype=float)
+    np.testing.assert_allclose(fit.cov_, R_cov, rtol=rtol, atol=1e-6)
+
+
 def test_standard_errors_positive():
     df = _ensure_dataset("stackloss")
     fit = lmrob(

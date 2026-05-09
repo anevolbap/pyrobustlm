@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Full ``vcov_w`` port.** All five ``cov.corrfact`` branches
+  (``asympt``, ``empirical``, ``tau``, ``hybrid``, ``tauold``) plus the
+  Huber finite-sample correction (``cov.hubercorr``), the five
+  ``cov.dfcorr`` branches (``mean``, ``mn.vc``, ``none``, ``varc``,
+  ``mn.df``), and the three ``cov.resid`` modes (``final``, ``initial``,
+  ``trick``). Setting-driven defaults match R's
+  ``lmrob.control(setting="KS2014" / "KS2011")`` exactly.
+  ``setting="KS2014"`` and ``setting="KS2011"`` covariance now matches R
+  **element-wise to rtol=1e-3** on stackloss (was 0.10 / 0.18 before).
 - **Full M-S port.** Replaces the simplified L1/S alternation with a
   direct port of robustbase's ``R_lmrob_M_S`` (4 phases: orthogonalize
   via L1, subsample many candidates in orth space, transform back via

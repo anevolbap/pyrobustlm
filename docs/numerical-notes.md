@@ -78,12 +78,15 @@ default tunings (use ``Control(nResample=2000)`` for tighter agreement).
 
 ### 4. ``vcov_w`` (Phase 7)
 
-**What.** ``Control(cov=".vcov.w")`` implements the
-``cov.corrfact = "asympt"`` branch of robustbase's ``.vcov.w`` (the
-asymptotic-correction-factor version). The other branches (``empirical``,
-``hybrid``, ``tau``, ``tauold``) and the optional Huber finite-sample
-correction are deferred; they primarily affect inference in small
-samples and do not change point estimates.
+**What.** ``Control(cov=".vcov.w")`` now implements all five
+``cov.corrfact`` branches (``asympt``, ``empirical``, ``tau``,
+``hybrid``, ``tauold``), the five ``cov.dfcorr`` modes, the three
+``cov.resid`` modes, and the Huber finite-sample correction. R's
+setting-driven defaults are honoured (``"D" in method`` triggers
+``cov.hubercorr=False`` and ``cov_corrfact="tau"``).
+
+On stackloss with ``setting="KS2014"`` (and ``"KS2011"``), the cov
+matrix matches R element-wise to ``rtol=1e-3``.
 
 ### 5. ``vcov_avar1`` matches R element-wise
 

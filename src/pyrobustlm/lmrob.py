@@ -210,10 +210,12 @@ def lmrob(
     # ------------------------------------------------------------------
     # D-step (used by methods SMD and SMDM): refines scale via design-
     # adaptive weighting. SMDM also re-fits MM with the new scale.
+    # ``tau_vec`` is also stashed for ``vcov_w(corrfact='tau' | 'hybrid' | 'tauold')``.
     # ------------------------------------------------------------------
     method = control.method or "MM"
+    tau_vec: np.ndarray | None = None
     if "D" in method:
-        sigma_d, d_converged, _tau, _h = d_scale(
+        sigma_d, d_converged, tau_vec, _h = d_scale(
             X=X,
             residuals=residuals,
             rweights=rweights,
@@ -262,6 +264,20 @@ def lmrob(
             bb=control.bb,
         )
     elif cov_kind == ".vcov.w":
+        # Pre-compute tau if it isn't already populated by the D-step.
+        # vcov_w with corrfact="tau"/"hybrid"/"tauold" needs it.
+        if tau_vec is None:
+            from pyrobustlm.d_scale import tau as _compute_tau
+
+            sw = np.sqrt(np.maximum(rweights, 0.0))
+            Xw = X * sw[:, None]
+            Q, _ = np.linalg.qr(Xw, mode="reduced")
+            h = np.minimum(1.0, np.sum(Q * Q, axis=1))
+            tau_vec = _compute_tau(h, psi_family, psi_k_eff)
+        s_init_scale_raw = init_info.get("scale", sigma)
+        s_init_scale = (
+            float(s_init_scale_raw) if isinstance(s_init_scale_raw, (int, float)) else float(sigma)
+        )  # type: ignore[arg-type]
         cov = vcov_w(
             X=X,
             residuals=residuals,
@@ -269,6 +285,11 @@ def lmrob(
             psi_family=psi_family,
             psi_k=psi_k_eff,
             rweights=rweights,
+            init_residuals=init_residuals,
+            init_scale=s_init_scale,
+            chi_k=k_chi_tuple,
+            method=method,
+            tau=tau_vec,
         )
     else:
         # Fallback: legacy / unknown

@@ -191,6 +191,55 @@ def _asympt_corrfact(psi_family: str, psi_k: float | tuple[float, ...]) -> float
     return num / (den * den)
 
 
+_VALID_CORRFACT = ("tau", "empirical", "asympt", "hybrid", "tauold")
+_VALID_DFCORR = ("mean", "none", "mn.vc", "varc", "mn.df")
+_VALID_RESID = ("final", "initial", "trick")
+
+
+def _hybrid_mpp2(psi_family: str, psi_k: float | tuple[float, ...]) -> float:
+    """Asymptotic ``E[r psi(r)]^2`` under N(0,1) for the hybrid correction.
+
+    Hardcoded for the default tuning of each family (R/lmrob.MM.R:476-487).
+    Falls back to numerical integration otherwise.
+    """
+    fam = psi_family.lower()
+    k_arr = np.atleast_1d(np.asarray(psi_k, dtype=float)).ravel()
+
+    DEFAULT_MPP2 = {
+        "bisquare": 0.5742327,
+        "welsh": 0.5445068,
+        "optimal": 0.8598825,
+        "hampel": 0.6775217,
+        "lqq": 0.6883393,
+    }
+    DEFAULT_TUNING = {
+        "bisquare": np.array([4.685061]),
+        "huber": np.array([1.345]),
+        "hampel": np.array([1.5 * 0.9016085, 3.5 * 0.9016085, 8.0 * 0.9016085]),
+        "optimal": np.array([1.060158]),
+        "lqq": np.array([1.4734061, 0.9822707, 1.5]),
+    }
+    if fam in DEFAULT_MPP2:
+        d = DEFAULT_TUNING.get(fam)
+        if d is not None and d.shape == k_arr.shape and np.allclose(d, k_arr):
+            return DEFAULT_MPP2[fam]
+
+    from scipy import integrate
+
+    def integrand(t: float) -> float:
+        v = float(_psi.psi(np.array([t]), fam, psi_k)[0])
+        return t * v * np.exp(-0.5 * t * t) / np.sqrt(2.0 * np.pi)
+
+    val, _ = integrate.quad(
+        integrand,
+        -50.0,
+        50.0,
+        points=[0.0, -1.0, 1.0, -3.0, 3.0],
+        epsabs=1e-12,
+    )
+    return val * val
+
+
 def vcov_w(
     X: NDArray[np.float64],
     residuals: NDArray[np.float64],
@@ -198,32 +247,171 @@ def vcov_w(
     psi_family: str,
     psi_k: float | tuple[float, ...],
     rweights: NDArray[np.float64] | None = None,
+    *,
+    init_residuals: NDArray[np.float64] | None = None,
+    init_scale: float | None = None,
+    chi_k: float | tuple[float, ...] | None = None,
+    method: str = "MM",
+    cov_corrfact: str | None = None,
+    cov_hubercorr: bool | None = None,
+    cov_dfcorr: str | None = None,
+    cov_resid: str = "final",
+    cov_xwx: bool = True,
+    tau: NDArray[np.float64] | None = None,
 ) -> NDArray[np.float64]:
-    """Koller & Stahel (2011) sandwich, ``cov.corrfact = "asympt"`` branch.
+    """Koller & Stahel (2011) sandwich, all five ``cov.corrfact`` branches.
 
-    Implements the asymptotic-correction-factor branch of robustbase's
-    ``.vcov.w`` (R/lmrob.MM.R:354):
+    Direct port of robustbase's ``.vcov.w`` (R/lmrob.MM.R:354-507). The
+    formula is::
 
-        V = sigma^2 * corrfact * (X' W X)^{-1}
+        V = scale^2 * sscorr * corrfact * Cinv
 
-    where ``W = diag(rweights)`` and ``corrfact`` is the per-family value
-    tabulated at default tuning, falling back to numerical integration
-    otherwise.
+    where ``Cinv = (R^{-1})(R^{-1})'`` from the QR of ``sqrt(w) X`` (with
+    ``w = rweights`` when ``cov_xwx=True``), ``corrfact`` and ``sscorr``
+    depend on the chosen branches, and ``scale`` is the final scale.
 
-    The Huber finite-sample correction (``cov.hubercorr=TRUE``) and the
-    other ``cov.corrfact`` branches (``empirical``, ``hybrid``, ``tau``,
-    ``tauold``) are not yet implemented; they primarily affect inference
-    in small samples and do not change point estimates.
+    Parameters
+    ----------
+    X, residuals, sigma, psi_family, psi_k :
+        Required model inputs.
+    rweights :
+        Robustness weights from the MM fit. Recomputed from residuals
+        and ``psi_k`` if omitted.
+    init_residuals, init_scale, chi_k :
+        S-step residuals, S-step scale, and chi tuning. Needed for
+        ``cov_resid in {"initial", "trick"}``.
+    method :
+        Fit method (``"MM"``, ``"SMD"``, ``"SMDM"``, ...). The default
+        ``cov_hubercorr`` is ``True`` when ``"D"`` is not in the method.
+    cov_corrfact :
+        One of ``{"asympt", "empirical", "tau", "hybrid", "tauold"}``.
+        Default depends on ``cov_hubercorr``.
+    cov_hubercorr :
+        Apply Huber's finite-sample correction. Defaults to
+        ``"D" not in method``.
+    cov_dfcorr :
+        One of ``{"mean", "mn.vc", "none", "varc", "mn.df"}``.
+    cov_resid :
+        ``"final"`` (default), ``"initial"``, or ``"trick"`` -- selects
+        which residuals/scale standardise the inputs.
+    cov_xwx :
+        Whether ``Cinv`` uses the rweights-weighted QR (default True).
+    tau :
+        Per-observation design factors. Required for
+        ``cov_corrfact in {"tau", "hybrid", "tauold"}``.
     """
+    if cov_corrfact is not None and cov_corrfact not in _VALID_CORRFACT:
+        raise ValueError(f"cov_corrfact must be one of {_VALID_CORRFACT}")
+    if cov_dfcorr is not None and cov_dfcorr not in _VALID_DFCORR:
+        raise ValueError(f"cov_dfcorr must be one of {_VALID_DFCORR}")
+    if cov_resid not in _VALID_RESID:
+        raise ValueError(f"cov_resid must be one of {_VALID_RESID}")
+
+    # Defaults (mirror lmrob.MM.R:362-377)
+    if cov_hubercorr is None:
+        cov_hubercorr = "D" not in method
+    if cov_corrfact is None:
+        cov_corrfact = "empirical" if cov_hubercorr else "tau"
+    if cov_dfcorr is None:
+        cov_dfcorr = "mn.vc" if (cov_hubercorr or cov_corrfact in ("tau", "hybrid")) else "mean"
+
+    # Tuning constant for the residuals' standardisation. R picks tuning.chi
+    # for cov_resid='initial' or method in (S, SD); else tuning.psi.
+    if cov_resid == "initial" or method in ("S", "SD"):
+        c_psi = chi_k if chi_k is not None else psi_k
+    else:
+        c_psi = psi_k
+
     if rweights is None:
         z = residuals / sigma if sigma != 0 else residuals
         rweights = _psi.wgt(z, psi_family, psi_k)
-    sw = np.sqrt(np.maximum(rweights, 0.0))
+
+    n = X.shape[0]
+    w = rweights if cov_xwx else np.ones(n)
+    sw = np.sqrt(np.maximum(w, 0.0))
     Xw = X * sw[:, None]
-    XtWX = Xw.T @ Xw
-    XtWX_inv = np.linalg.inv(XtWX)
-    corrfact = _asympt_corrfact(psi_family, psi_k)
-    return (sigma**2) * corrfact * XtWX_inv
+    # Cinv = (X' W X)^{-1} via QR of sqrt(w) * X.
+    _, R = np.linalg.qr(Xw, mode="reduced")
+    try:
+        Rinv = np.linalg.solve(R, np.eye(R.shape[0]))
+    except np.linalg.LinAlgError:
+        Rinv = np.linalg.pinv(R)
+    cinv = Rinv @ Rinv.T
+    p = R.shape[0]
+
+    # Correction factor
+    if cov_corrfact == "asympt":
+        corrfact = _asympt_corrfact(psi_family, c_psi)
+        varcorr = 1.0
+    else:
+        # Standardised residuals
+        if cov_resid == "initial":
+            if init_residuals is None or init_scale is None:
+                raise ValueError("cov_resid='initial' needs init_residuals and init_scale")
+            rstand = np.asarray(init_residuals) / float(init_scale)
+        elif cov_resid == "trick":
+            if init_residuals is None or init_scale is None:
+                raise ValueError("cov_resid='trick' needs init_residuals and init_scale")
+            rstand = np.asarray(init_residuals) / float(init_scale)
+        else:  # "final"
+            rstand = np.asarray(residuals) / float(sigma)
+
+        # tau per-observation factor
+        if cov_corrfact in ("tau", "hybrid", "tauold"):
+            if tau is None:
+                raise ValueError(f"cov_corrfact={cov_corrfact!r} needs the tau vector")
+            tau_vec = np.asarray(tau, dtype=np.float64)
+        else:
+            tau_vec = np.ones(n)
+
+        rstand = rstand / tau_vec
+        r_psi = _psi.psi(rstand, psi_family, c_psi)
+        r_psipr = _psi.psi_prime(rstand, psi_family, c_psi)
+
+        mpp = float(np.mean(r_psipr))
+        mpp2 = mpp * mpp
+
+        # Huber correction
+        if cov_hubercorr:
+            vpp = float(np.sum((r_psipr - mpp) ** 2)) / n
+            hcorr = (1.0 + p / n * vpp / mpp2) ** 2
+        else:
+            hcorr = 1.0
+
+        # varcorr (R/lmrob.MM.R:472-473)
+        if cov_corrfact == "tau" and not np.allclose(tau_vec, 1.0):
+            varcorr = 1.0 / float(np.mean(tau_vec * tau_vec))
+        else:
+            varcorr = n / max(n - p, 1)
+
+        # Hybrid: replace mpp2 by tabulated asymptotic E[r psi(r)]^2
+        if cov_corrfact == "hybrid":
+            mpp2 = _hybrid_mpp2(psi_family, c_psi)
+
+        tau_factor = np.ones(n) if cov_corrfact == "tauold" else tau_vec * tau_vec
+        corrfact = float(np.mean(tau_factor * r_psi * r_psi)) / mpp2 * hcorr
+
+    # Sample-size correction (sscorr)
+    mean_w = float(np.mean(w))
+    if cov_dfcorr == "mean":
+        sscorr = mean_w
+    elif cov_dfcorr == "mn.vc":
+        sscorr = mean_w * varcorr
+    elif cov_dfcorr == "none":
+        sscorr = 1.0
+    elif cov_dfcorr == "varc":
+        sscorr = varcorr
+    elif cov_dfcorr == "mn.df":
+        sw_sum = float(np.sum(w))
+        if sw_sum <= p:
+            raise FloatingPointError("vcov_w: sum(w) <= p; cov_dfcorr='mn.df' undefined")
+        sscorr = mean_w * mean_w / (1.0 - p / sw_sum)
+    else:  # pragma: no cover  -- already validated above
+        raise ValueError(f"unknown cov_dfcorr: {cov_dfcorr}")
+
+    cov = (sigma**2) * sscorr * corrfact * cinv
+    cov = 0.5 * (cov + cov.T)
+    return cov
 
 
 def vcov_asymp(
