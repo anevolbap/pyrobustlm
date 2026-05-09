@@ -111,7 +111,6 @@ ignore = [
 "src/pyrobustlm/inference.py" = ["N806"]
 
 [tool.ty.environment]
-python = ".venv"
 python-version = "3.10"
 
 [tool.ty.src]
