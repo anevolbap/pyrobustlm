@@ -21,19 +21,19 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-      - name: Install lint deps
+      - name: Install project + lint deps
+        # Install the project (so ty sees numpy/scipy/pandas/formulaic in
+        # the same env) plus ruff and ty.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install ruff numpy
+          python -m pip install ".[dev]" ruff ty
       - name: Ruff
         run: ruff check src tests
       - name: Ruff format check
         run: ruff format --check src tests
       - name: ty (type check)
         # Astral's ty is the project's standard type checker (replaces mypy).
-        run: uvx ty check src/pyrobustlm
+        run: ty check src/pyrobustlm
 
   test:
     name: Tests (${{ matrix.os }} / py${{ matrix.python-version }})
