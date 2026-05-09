@@ -51,14 +51,18 @@ class Control:
     Defaults follow R's ``lmrob.control(setting="KS2014")``.
     """
 
-    setting: Setting = "KS2014"
-    psi: PsiFamily = "bisquare"  # KS2014 default; the docs say "lqq" but
-    # robustbase 0.99-7 actually defaults to "bisquare"
+    # ``setting=None`` (and ``"MM"``) follow R's plain default: psi="bisquare",
+    # method="MM", cov=".vcov.avar1". ``setting="KS2014"`` switches to
+    # psi="lqq", method="SMDM" (with D-step), cov=".vcov.w".
+    # ``setting="KS2011"`` is psi="lqq", method="MM", cov=".vcov.w".
+    # Pass ``psi`` / ``method`` / ``cov`` explicitly to override.
+    setting: Setting | None = None
+    psi: PsiFamily | None = None
     tuning_chi: float | tuple[float, ...] | None = None
     tuning_psi: float | tuple[float, ...] | None = None
 
     init: InitMethod = "S"
-    method: str = "MM"
+    method: str | None = None
 
     nResample: int = 500
     max_it: int = 50
@@ -76,7 +80,7 @@ class Control:
     mts: int = 1000
     subsampling: Literal["nonsingular", "simple"] = "nonsingular"
 
-    cov: str = ".vcov.avar1"
+    cov: str | None = None
     eps_outlier: float | None = None
     eps_x: float | None = None
 
@@ -88,6 +92,26 @@ class Control:
     extra: dict[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        # Apply named-setting defaults, mirroring R's lmrob.control(setting=...)
+        # for fields the user passed as None.
+        if self.setting in ("KS2014", "KS2011"):
+            if self.psi is None:
+                self.psi = "lqq"
+            if self.method is None:
+                # Both KS2011 and KS2014 use the SMDM pipeline in
+                # robustbase. They differ in tuning constants and
+                # ``cov.corrfact`` defaults.
+                self.method = "SMDM"
+            if self.cov is None:
+                self.cov = ".vcov.w"
+        else:
+            if self.psi is None:
+                self.psi = "bisquare"
+            if self.method is None:
+                self.method = "MM"
+            if self.cov is None:
+                self.cov = ".vcov.avar1"
+
         # Fill in default tuning constants matching R.
         if self.tuning_psi is None:
             if self.psi not in _DEFAULT_TUNING_PSI:

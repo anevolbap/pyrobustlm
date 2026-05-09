@@ -88,12 +88,17 @@ PER_PSI = [
     ("psi_ggw", "ggw"),
 ]
 
+PER_SETTING = [
+    ("setting_KS2014_stackloss", "KS2014"),
+    ("setting_KS2011_stackloss", "KS2011"),
+]
+
 SYNTHETIC = [
-    ("synth_n100_p5",    100, 5),
-    ("synth_n500_p10",   500, 10),
-    ("synth_n1000_p10",  1000, 10),
-    ("synth_n2000_p20",  2000, 20),
-    ("synth_n5000_p20",  5000, 20),
+    ("synth_n100_p5", 100, 5),
+    ("synth_n500_p10", 500, 10),
+    ("synth_n1000_p10", 1000, 10),
+    ("synth_n2000_p20", 2000, 20),
+    ("synth_n5000_p20", 5000, 20),
     ("synth_n10000_p20", 10000, 20),
     ("synth_n10000_p50", 10000, 50),
 ]
@@ -104,9 +109,16 @@ for fam in ("bisquare", "optimal", "hampel", "lqq", "ggw"):
         SYNTH_PER_PSI.append((f"synth_{fam}_n{n}_p{p}", n, p, fam))
 
 
-def _fit_and_time(formula: str, df: pd.DataFrame, psi_family: str, k_reps: int = 5) -> dict:
-    ctrl = Control(psi=psi_family, nResample=500)
-    # Warm up (covers Cython JIT cost on first call, though we don't have JIT).
+def _fit_and_time(
+    formula: str,
+    df: pd.DataFrame,
+    psi_family: str = "bisquare",
+    setting: str | None = None,
+    k_reps: int = 5,
+) -> dict:
+    # ``setting=None`` matches R's plain ``lmrob.control()`` default
+    # (psi=bisquare unless overridden, method=MM, cov=.vcov.avar1).
+    ctrl = Control(psi=psi_family, setting=setting, nResample=500)
     _ = lmrob(formula, df, control=ctrl, seed=1)
     runtimes = []
     for _ in range(k_reps):
@@ -164,6 +176,36 @@ def main() -> None:
         df = _ensure_dataset("stackloss")
         result = _fit_and_time("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, psi_family)
         _serialize(result, name, psi_family)
+
+    for name, setting in PER_SETTING:
+        print(f"[py bench] {name}")
+        df = _ensure_dataset("stackloss")
+        # Don't pin psi here: each named setting carries its own default
+        # (KS2014 / KS2011 both use psi="lqq").
+        ctrl = Control(setting=setting, nResample=500)
+        _ = lmrob(
+            "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
+            df,
+            control=ctrl,
+            seed=1,
+        )
+        runtimes = []
+        for _ in range(5):
+            t0 = time.perf_counter()
+            fit = lmrob(
+                "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
+                df,
+                control=ctrl,
+                seed=1,
+            )
+            runtimes.append(time.perf_counter() - t0)
+        result = {
+            "fit": fit,
+            "runtimes_sec": runtimes,
+            "runtime_min_sec": float(min(runtimes)),
+            "runtime_median_sec": float(np.median(runtimes)),
+        }
+        _serialize(result, name, ctrl.psi)
 
     for name, n, p in SYNTHETIC:
         print(f"[py bench] {name}")

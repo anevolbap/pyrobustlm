@@ -45,6 +45,10 @@ classical <- list(
 )
 
 per_psi <- list(
+  list(name="setting_KS2014_stackloss", dataset="stackloss",
+       formula=stack.loss ~ Air.Flow + Water.Temp + Acid.Conc., control=list(setting="KS2014")),
+  list(name="setting_KS2011_stackloss", dataset="stackloss",
+       formula=stack.loss ~ Air.Flow + Water.Temp + Acid.Conc., control=list(setting="KS2011")),
   list(name="psi_bisquare", dataset="stackloss",
        formula=stack.loss ~ Air.Flow + Water.Temp + Acid.Conc., control=list(psi="bisquare")),
   list(name="psi_optimal",  dataset="stackloss",

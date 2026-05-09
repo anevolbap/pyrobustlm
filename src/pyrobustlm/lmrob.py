@@ -15,6 +15,7 @@ from pyrobustlm import psi as _psi
 from pyrobustlm._fast_s import FastSConfig, fast_s
 from pyrobustlm._mm import mm_iterate
 from pyrobustlm.control import Control
+from pyrobustlm.d_scale import d_scale
 from pyrobustlm.formula import model_matrix
 from pyrobustlm.inference import vcov_avar1, vcov_w
 from pyrobustlm.ms_estimator import m_s_fit
@@ -66,6 +67,13 @@ def lmrob(
         raise TypeError(f"unexpected keyword arguments: {sorted(kwargs)!r}")
     if control is None:
         control = Control()
+    # Control.__post_init__ guarantees these are populated; narrow for the
+    # type checker.
+    assert control.psi is not None
+    assert control.method is not None
+    assert control.cov is not None
+    psi_family: str = control.psi
+    cov_kind: str = control.cov
 
     # ------------------------------------------------------------------
     # Design matrix
@@ -100,7 +108,7 @@ def lmrob(
         # Initial S estimate via fast-S resampling
         # ------------------------------------------------------------------
         cfg = FastSConfig(
-            psi_chi=control.psi,
+            psi_chi=psi_family,
             k_chi=k_chi_tuple,
             b0=control.bb,
             nResample=control.nResample,
@@ -125,7 +133,7 @@ def lmrob(
         if not design.is_factor_col.any():
             # No factor cols; M-S degenerates to S.
             cfg = FastSConfig(
-                psi_chi=control.psi,
+                psi_chi=psi_family,
                 k_chi=k_chi_tuple,
                 b0=control.bb,
                 nResample=control.nResample,
@@ -154,7 +162,7 @@ def lmrob(
                 X_cat=X_cat,
                 X_cont=X_cont,
                 y=y,
-                psi_chi=control.psi,
+                psi_chi=psi_family,
                 k_chi=k_chi_tuple,
                 b0=control.bb,
                 k_m_s=control.k_m_s,
@@ -186,7 +194,7 @@ def lmrob(
         y=y,
         beta_init=beta_init,
         sigma=sigma_init,
-        psi_family=control.psi,
+        psi_family=psi_family,
         psi_k=psi_k_eff,
         max_it=control.max_it,
         rel_tol=control.rel_tol,
@@ -197,30 +205,68 @@ def lmrob(
     residuals = y - X @ coef
     fitted = X @ coef
     z = residuals / sigma if sigma != 0 else residuals
-    rweights = _psi.wgt(z, control.psi, psi_k_eff)
+    rweights = _psi.wgt(z, psi_family, psi_k_eff)
+
+    # ------------------------------------------------------------------
+    # D-step (used by methods SMD and SMDM): refines scale via design-
+    # adaptive weighting. SMDM also re-fits MM with the new scale.
+    # ------------------------------------------------------------------
+    method = control.method or "MM"
+    if "D" in method:
+        sigma_d, d_converged, _tau, _h = d_scale(
+            X=X,
+            residuals=residuals,
+            rweights=rweights,
+            init_scale=sigma,
+            family=psi_family,
+            c_psi=psi_k_eff,
+            max_iter=control.k_max,
+            tol=control.rel_tol,
+        )
+        if d_converged and sigma_d > 0:
+            sigma = sigma_d
+            init_info["d_scale"] = sigma_d
+            init_info["d_converged"] = True
+            # The trailing M in SMDM: re-fit MM with the new D-scale.
+            if method.endswith("M"):
+                mm2 = mm_iterate(
+                    X=X,
+                    y=y,
+                    beta_init=coef,
+                    sigma=sigma,
+                    psi_family=psi_family,
+                    psi_k=psi_k_eff,
+                    max_it=control.max_it,
+                    rel_tol=control.rel_tol,
+                )
+                coef = mm2.coef
+                residuals = y - X @ coef
+                fitted = X @ coef
+                z = residuals / sigma if sigma != 0 else residuals
+                rweights = _psi.wgt(z, psi_family, psi_k_eff)
 
     # ------------------------------------------------------------------
     # Covariance
     # ------------------------------------------------------------------
     init_residuals = y - X @ beta_init
-    if control.cov == ".vcov.avar1":
+    if cov_kind == ".vcov.avar1":
         cov = vcov_avar1(
             X=X,
             residuals=residuals,
             sigma=sigma,
-            psi_family=control.psi,
+            psi_family=psi_family,
             psi_k=psi_k_eff,
             init_residuals=init_residuals,
-            chi_family=control.psi,
+            chi_family=psi_family,
             chi_k=k_chi_tuple,
             bb=control.bb,
         )
-    elif control.cov == ".vcov.w":
+    elif cov_kind == ".vcov.w":
         cov = vcov_w(
             X=X,
             residuals=residuals,
             sigma=sigma,
-            psi_family=control.psi,
+            psi_family=psi_family,
             psi_k=psi_k_eff,
             rweights=rweights,
         )
@@ -230,7 +276,7 @@ def lmrob(
             X=X,
             residuals=residuals,
             sigma=sigma,
-            psi_family=control.psi,
+            psi_family=psi_family,
             psi_k=psi_k_eff,
         )
 

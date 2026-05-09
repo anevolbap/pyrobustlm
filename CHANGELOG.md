@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Design-adaptive D-scale (Koller & Stahel 2014).** New module
+  ``pyrobustlm.d_scale`` ports ``robustbase::lmrob..D..fit`` and the
+  ``R_find_D_scale`` C iteration. ``setting="KS2014"`` and
+  ``setting="KS2011"`` now run the full SMDM pipeline (S-init, MM,
+  D-scale, MM with new scale). Matches R's C kernel to ``rtol=1e-4``
+  on identical inputs (verified in ``tests/unit/test_d_scale.py``).
+- **Setting-driven defaults.** ``Control(setting=None)`` (or omitted)
+  follows R's plain ``lmrob.control()`` (psi=bisquare, method=MM,
+  cov=.vcov.avar1). ``setting="KS2014"`` and ``setting="KS2011"``
+  default to psi=lqq, method=SMDM, cov=.vcov.w (matching R 0.99-7).
+
+### Changed
+
+- ``Control`` now treats ``psi``, ``method``, and ``cov`` as
+  ``None``-defaulted "auto from setting" fields. Pass them explicitly
+  to override.
+
 - **Cython kernels for all six psi families.** `huber`, `hampel`, `optimal`,
   `lqq`, and `ggw` now have inlined Cython implementations of
   `psi`/`wgt`/`rho`/`psi_prime` and a fully-inlined `m_scale_<family>` that

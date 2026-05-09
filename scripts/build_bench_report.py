@@ -103,10 +103,8 @@ def main() -> None:
         "",
         f"- Coefficient max-relative-error: median {np.median(coef_rs):.2e}, "
         f"max {np.max(coef_rs):.2e}",
-        f"- Scale relative error: median {np.median(scale_rs):.2e}, "
-        f"max {np.max(scale_rs):.2e}",
-        f"- Cov diagonal max-rerr: median {np.median(cov_rs):.2e}, "
-        f"max {np.max(cov_rs):.2e}",
+        f"- Scale relative error: median {np.median(scale_rs):.2e}, max {np.max(scale_rs):.2e}",
+        f"- Cov diagonal max-rerr: median {np.median(cov_rs):.2e}, max {np.max(cov_rs):.2e}",
         f"- Runtime ratio (py/R): median {np.median(rt_ratios):.2f}x, "
         f"min {np.min(rt_ratios):.2f}x, max {np.max(rt_ratios):.2f}x",
         "",
