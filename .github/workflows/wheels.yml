@@ -1,8 +1,9 @@
 name: Build wheels
 
+# Trigger manually only, until the PyPI trusted publisher is configured.
+# When ready to release, switch this back to ``push: tags: ["v*"]`` (or
+# trigger via the Actions UI).
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
 
 jobs:
