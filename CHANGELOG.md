@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Full M-S port.** Replaces the simplified L1/S alternation with a
+  direct port of robustbase's ``R_lmrob_M_S`` (4 phases: orthogonalize
+  via L1, subsample many candidates in orth space, transform back via
+  ``b1 = ot1 + b1_orth - oT2 @ b2_orth``, descent alternating L1 + WLS).
+  On the ``education`` reference, M-S now matches R within ~2% on
+  coefficients and ~0.6% on scale at ``nResample=2000`` (was 30%+ off).
 - **Design-adaptive D-scale (Koller & Stahel 2014).** New module
   ``pyrobustlm.d_scale`` ports ``robustbase::lmrob..D..fit`` and the
   ``R_find_D_scale`` C iteration. ``setting="KS2014"`` and

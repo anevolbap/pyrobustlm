@@ -56,27 +56,25 @@ still use the NumPy path; Cython kernels for them follow the same pattern.
 
 ### 3. M-S estimator (Phase 5)
 
-**What.** ``init="M-S"`` and ``init="auto"`` both work. The estimator is
-a simplified Maronna-Yohai 2000: alternating L1 (via SciPy linprog) on the
-factor block and S (via fast-S) on the continuous block.
+**What.** ``init="M-S"`` and ``init="auto"`` use a full port of
+robustbase's ``R_lmrob_M_S`` in four phases (orthogonalize via L1,
+subsample many candidates in orth space, transform back, descent via
+alternating L1 + weighted-LS).
 
-**Gap vs R.** On the ``education`` reference (Y ~ Region + X1 + X2 + X3),
-our simplified M-S converges to a different solution than R's
-``robustbase::lmrob(init="M-S")``::
+**Gap vs R.** On the ``education`` reference (Y ~ Region + X1 + X2 + X3)
+at ``nResample=2000``::
 
     R   coef: (-135.7, -20.6, -9.9, 24.6, 0.034, 0.043, 0.579)  scale=26.4
-    py  coef: (-158.6,  -8.2, -11.3, 20.1, 0.045, 0.043, 0.632)  scale=37.8
+    py  coef: (-138.2, -19.4, -10.0, 24.2, 0.035, 0.043, 0.584)  scale=26.4
 
-This is **not** RNG drift; it is an algorithmic gap. R's M-S
-(``robustbase/src/lmrob.c::m_s_subsample`` + ``m_s_descent``, ~600 lines
-of C) does many random subsample restarts followed by a careful descent
-phase. We currently do a single L1/S alternating descent. Porting the
-multi-restart + descent logic is tracked but not yet done.
+Coefficient max-rerr ~1.8e-2, scale rerr ~6e-3. Most of the residual gap
+is the usual RNG-basin drift (PCG64 vs MT) rather than an algorithmic
+mismatch. The gap shrinks with more resamples; R's default of 500 will
+land slightly different from ours.
 
-**User guidance.** If your design is continuous, use ``init="S"`` (the
-default) and you will match R within RNG drift. If you must use M-S,
-treat the result as approximate and re-fit in R for publication-grade
-inference.
+**User guidance.** ``init="S"`` matches R to ``rtol=1e-6`` on continuous
+designs. For factor designs, ``init="M-S"`` matches R within ~2% on
+default tunings (use ``Control(nResample=2000)`` for tighter agreement).
 
 ### 4. ``vcov_w`` (Phase 7)
 

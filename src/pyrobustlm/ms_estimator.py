@@ -1,25 +1,22 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """M-S estimator for designs with categorical predictors.
 
-Simplified Maronna & Yohai (2000) alternating descent. The full robustbase
-implementation lives in C (``src/lmrob.c::m_s_descent``); we mirror its
-high-level structure in NumPy:
+Direct port of robustbase's ``R_lmrob_M_S`` (src/lmrob.c:401), in four
+phases:
 
-1. Split design ``X = [X_cat | X_cont]``.
-2. Initialise ``beta_cat`` by L1 fit of ``y`` on ``X_cat`` (no continuous
-   part). L1 is solved via SciPy's ``linprog``.
-3. Iterate ``k_m_s`` times:
+1. **Orthogonalize** via L1 regression. ``y`` and each column of
+   ``X_cont`` are L1-regressed on ``X_cat``; the residuals form the
+   "orthogonal" working data.
+2. **Subsample** ``nResample`` random ``p2``-subsets of the orthogonal
+   ``(X_cont_orth, y_orth)``. Each yields a candidate coefficient pair;
+   we keep the best (smallest M-scale) across resamples.
+3. **Transform back** the orthogonal-space coefficients to the original
+   design space.
+4. **Descent**: alternate L1 (cat block) and weighted-LS (cont block)
+   updates until convergence or K_m_s steps without improvement.
 
-   a. ``beta_cont`` <- S fit of ``y - X_cat @ beta_cat`` on ``X_cont``.
-   b. ``beta_cat``  <- L1 fit of ``y - X_cont @ beta_cont`` on ``X_cat``.
-
-4. Stitch ``beta = [beta_cat, beta_cont]`` and return it together with the
-   final M-scale of the full residual vector.
-
-This is good enough for designs where pure-S resampling fails (random
-p-subsets are systematically singular). It is **not** bit-identical with
-robustbase's M-S; the C implementation does sophisticated subsample +
-descent with multiple restarts. Documented in ``docs/numerical-notes.md``.
+References: Maronna & Yohai (2000); robustbase ``src/lmrob.c::m_s_subsample``,
+``m_s_descent``.
 """
 
 from __future__ import annotations
@@ -30,13 +27,14 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import linprog
 
-from pyrobustlm._fast_s import FastSConfig, fast_s
+from pyrobustlm import psi as _psi
+from pyrobustlm._fast_s import _draw_nonsingular_subset
 from pyrobustlm.scale import m_scale
 
 
 @dataclass
 class MSResult:
-    coef: NDArray[np.float64]  # full-design beta (cat slots first, then cont)
+    coef: NDArray[np.float64]  # full beta in original column order
     coef_cat: NDArray[np.float64]
     coef_cont: NDArray[np.float64]
     scale: float
@@ -45,14 +43,13 @@ class MSResult:
 
 
 def _l1_fit(X: NDArray[np.float64], y: NDArray[np.float64]) -> NDArray[np.float64]:
-    """Solve ``min_b sum |y - X b|`` via linear programming.
+    """Solve ``min_b sum |y - X b|`` via linprog.
 
-    Reformulation: introduce slack ``u >= |y - X b|``. The constraints
-    ``u >= y - X b`` and ``u >= X b - y`` give two linear inequalities per
-    observation. In linprog's ``A_ub @ x <= b_ub`` form:
+    Reformulation: introduce slack ``u >= |y - X b|`` with two linear
+    inequalities per observation. ``A_ub @ x <= b_ub`` form::
 
-        [-X, -I]  [b; u] <= -y         (u >= y - X b)
-        [+X, -I]  [b; u] <= +y         (u >= X b - y)
+        [-X, -I] [b; u] <= -y         (u >= y - X b)
+        [+X, -I] [b; u] <= +y         (u >= X b - y)
     """
     n, p = X.shape
     c = np.concatenate([np.zeros(p), np.ones(n)])
@@ -70,6 +67,27 @@ def _l1_fit(X: NDArray[np.float64], y: NDArray[np.float64]) -> NDArray[np.float6
     return res.x[:p].astype(np.float64)
 
 
+def _l1_fit_residuals(
+    X: NDArray[np.float64], y: NDArray[np.float64]
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """L1 fit returning ``(coef, y - X coef)``."""
+    coef = _l1_fit(X, y)
+    return coef, y - X @ coef
+
+
+def _wls_fit(
+    X: NDArray[np.float64],
+    y: NDArray[np.float64],
+    w: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """Weighted-LS fit: ``min_b sum w_i (y_i - x_i b)^2`` via QR/lstsq."""
+    sw = np.sqrt(np.maximum(w, 0.0))
+    Xw = X * sw[:, None]
+    yw = y * sw
+    beta, *_ = np.linalg.lstsq(Xw, yw, rcond=None)
+    return np.ascontiguousarray(beta, dtype=np.float64)
+
+
 def m_s_fit(
     X_cat: NDArray[np.float64],
     X_cont: NDArray[np.float64],
@@ -77,97 +95,179 @@ def m_s_fit(
     psi_chi: str = "bisquare",
     k_chi: tuple[float, ...] = (1.547645,),
     b0: float = 0.5,
-    k_m_s: int = 20,
     nResample: int = 200,
+    k_m_s: int = 20,
+    max_k: int = 200,
     max_it: int = 50,
     rel_tol: float = 1e-7,
+    scale_tol: float = 1e-10,
+    zero_tol: float = 1e-10,
+    mts: int = 1000,
     seed: int | np.random.Generator | None = None,
 ) -> MSResult:
-    """Alternating L1/S estimator for designs with factor + continuous parts.
+    """Maronna-Yohai 2000 M-S estimator.
 
-    Parameters
-    ----------
-    X_cat, X_cont :
-        Categorical and continuous parts of the design matrix.
-    y :
-        Response vector.
-    psi_chi, k_chi, b0 :
-        Chi family / tuning constants / consistency constant for the S step.
-    k_m_s :
-        Number of alternating descent iterations.
-    nResample, max_it, rel_tol, seed :
-        Forwarded to :func:`pyrobustlm._fast_s.fast_s` for the inner S step.
+    Parameters mirror robustbase's ``lmrob.control`` for the M-S subset
+    (``k.m_s``, ``max.k``, ``rel.tol``, ``scale.tol``, ``zero.tol``,
+    ``mts``).
     """
     X_cat = np.ascontiguousarray(X_cat, dtype=np.float64)
     X_cont = np.ascontiguousarray(X_cont, dtype=np.float64)
     y = np.ascontiguousarray(y, dtype=np.float64)
-    if X_cat.ndim != 2 or X_cont.ndim != 2:
-        raise ValueError("X_cat and X_cont must be 2-D")
-    if X_cat.shape[0] != X_cont.shape[0] or X_cat.shape[0] != y.shape[0]:
+    n, p1 = X_cat.shape
+    _, p2 = X_cont.shape
+    if X_cont.shape[0] != n or y.shape[0] != n:
         raise ValueError("row counts of X_cat, X_cont, y must agree")
+    if p1 == 0 or p2 == 0:
+        raise ValueError("M-S requires both categorical and continuous columns")
 
-    p_cat = X_cat.shape[1]
-    p_cont = X_cont.shape[1]
+    rng = np.random.default_rng(seed)
 
-    # 1. L1 init for beta_cat (no continuous part yet)
-    beta_cat = _l1_fit(X_cat, y) if p_cat > 0 else np.empty(0)
-    beta_cont = np.zeros(p_cont, dtype=np.float64)
+    # ------------------------------------------------------------------
+    # Phase 1: Orthogonalize via L1
+    # ------------------------------------------------------------------
+    ot1, y_orth = _l1_fit_residuals(X_cat, y)
+    oT2 = np.empty((p1, p2), dtype=np.float64)
+    X_cont_orth = np.empty_like(X_cont)
+    for j in range(p2):
+        coef_j, X_cont_orth[:, j] = _l1_fit_residuals(X_cat, X_cont[:, j])
+        oT2[:, j] = coef_j
 
-    cfg = FastSConfig(
-        psi_chi=psi_chi,
-        k_chi=k_chi,
-        b0=b0,
-        nResample=nResample,
-        max_it=max_it,
-        refine_tol=rel_tol,
-    )
+    # ------------------------------------------------------------------
+    # Phase 2: Subsample (in orth space). Track best by M-scale.
+    # ------------------------------------------------------------------
+    best_b1_orth = np.zeros(p1)
+    best_b2 = np.zeros(p2)
+    best_scale = float("inf")
+    p_total = p1 + p2
 
-    converged = False
-    last_beta_cat = beta_cat.copy()
-    last_beta_cont = beta_cont.copy()
-    it = 0
-    for it in range(k_m_s):
-        # (a) S fit of partial residual on X_cont
-        partial_resid = y - (X_cat @ beta_cat if p_cat > 0 else 0.0)
-        if p_cont > 0:
-            s_res = fast_s(X_cont, partial_resid, cfg=cfg, seed=seed)
-            beta_cont = s_res.coef
-        # (b) L1 fit of partial residual on X_cat
-        partial_resid = y - (X_cont @ beta_cont if p_cont > 0 else 0.0)
-        if p_cat > 0:
-            beta_cat = _l1_fit(X_cat, partial_resid)
+    for _ in range(nResample):
+        idx = _draw_nonsingular_subset(X_cont_orth, rng, p2, mts)
+        if idx is None:
+            continue
+        try:
+            t2 = np.linalg.solve(X_cont_orth[idx], y_orth[idx])
+        except np.linalg.LinAlgError:
+            continue
 
-        # Convergence: changes in both blocks
-        d_cat = float(np.linalg.norm(beta_cat - last_beta_cat))
-        d_cont = float(np.linalg.norm(beta_cont - last_beta_cont))
-        denom = max(
-            float(np.linalg.norm(beta_cat)) + float(np.linalg.norm(beta_cont)),
-            1e-300,
+        partial = y_orth - X_cont_orth @ t2
+        t1 = _l1_fit(X_cat, partial)
+        res = partial - X_cat @ t1
+
+        # Cheap "looks promising" gate (lmrob.c:2291): mean(rho(res / best_sc)) < bb
+        sc_test = max(_mad(res), 1e-12) if best_scale == float("inf") else best_scale
+        rho_vals = _psi.rho(res / sc_test, psi_chi, k_chi)
+        if float(np.mean(rho_vals)) * n / max(n - p_total, 1) < b0:
+            new_scale = m_scale(
+                res,
+                family=psi_chi,
+                k=k_chi,
+                b0=b0,
+                max_iter=max_it,
+                tol=scale_tol,
+                p=p_total,
+            )
+            if new_scale > 0 and new_scale < best_scale:
+                best_scale = new_scale
+                best_b1_orth = t1.copy()
+                best_b2 = t2.copy()
+                if new_scale < zero_tol:
+                    # perfect fit; stop early
+                    break
+
+    if best_scale == float("inf"):
+        # No candidate cleared the gate; fall back to the last-iter L1 + a
+        # full M-scale just so we return *something* plausible.
+        coef_init = _l1_fit(np.column_stack([X_cat, X_cont]), y)
+        b_cat = coef_init[:p1]
+        b_cont = coef_init[p1:]
+        sc = m_scale(
+            y - X_cat @ b_cat - X_cont @ b_cont,
+            family=psi_chi,
+            k=k_chi,
+            b0=b0,
+            p=p_total,
         )
-        if (d_cat + d_cont) / denom < rel_tol:
-            converged = True
+        return MSResult(
+            coef=np.concatenate([b_cat, b_cont]),
+            coef_cat=b_cat,
+            coef_cont=b_cont,
+            scale=float(sc),
+            converged=False,
+            n_iter=0,
+        )
+
+    # ------------------------------------------------------------------
+    # Phase 3: Transform back
+    #   b1_orig = ot1 + b1_orth - oT2 @ b2_orth
+    # ------------------------------------------------------------------
+    b1 = ot1 + best_b1_orth - oT2 @ best_b2
+    b2 = best_b2.copy()
+    sc = best_scale
+    res = y - X_cat @ b1 - X_cont @ b2
+
+    # ------------------------------------------------------------------
+    # Phase 4: Descent. Alternate L1 (cat) and WLS (cont) until k_m_s
+    # consecutive non-improvements or max_k iterations.
+    # ------------------------------------------------------------------
+    no_improve = 0
+    converged = False
+    iter_used = 0
+    t1, t2 = b1.copy(), b2.copy()
+    res2 = res.copy()
+    for k in range(max_k):
+        iter_used = k + 1
+        # WLS update of t2
+        y_tilde = y - X_cat @ t1
+        if sc == 0.0:
             break
-        last_beta_cat = beta_cat.copy()
-        last_beta_cont = beta_cont.copy()
+        w = _psi.wgt(res2 / sc, psi_chi, k_chi)
+        t2_new = _wls_fit(X_cont, y_tilde, w)
+        res2 = y - X_cont @ t2_new
 
-    # Final scale on the full residual.
-    full_resid = (
-        y - (X_cat @ beta_cat if p_cat > 0 else 0.0) - (X_cont @ beta_cont if p_cont > 0 else 0.0)
-    )
-    sigma = m_scale(
-        full_resid,
-        family=psi_chi,
-        k=k_chi,
-        b0=b0,
-        p=p_cat + p_cont,
-    )
+        # L1 update of t1 against res2
+        t1_new, res2 = _l1_fit_residuals(X_cat, res2)
 
-    coef = np.concatenate([beta_cat, beta_cont])
+        # New scale on full residuals
+        sc_new = m_scale(
+            res2,
+            family=psi_chi,
+            k=k_chi,
+            b0=b0,
+            max_iter=max_it,
+            tol=scale_tol,
+            p=p_total,
+            init_scale=sc,
+        )
+
+        # Convergence: relative change in the joint coef vector
+        delta = np.sqrt(float(np.sum((t1_new - t1) ** 2)) + float(np.sum((t2_new - t2) ** 2)))
+        nrm_b = np.sqrt(float(np.sum(t1_new**2)) + float(np.sum(t2_new**2)))
+        if delta < rel_tol * max(rel_tol, nrm_b):
+            converged = True
+
+        t1, t2 = t1_new, t2_new
+        if sc_new < sc and sc_new > 0:
+            b1, b2, sc = t1.copy(), t2.copy(), sc_new
+            no_improve = 0
+        else:
+            no_improve += 1
+
+        if converged:
+            break
+        if no_improve >= k_m_s:
+            break
+
     return MSResult(
-        coef=coef,
-        coef_cat=beta_cat,
-        coef_cont=beta_cont,
-        scale=sigma,
+        coef=np.concatenate([b1, b2]),
+        coef_cat=b1,
+        coef_cont=b2,
+        scale=float(sc),
         converged=converged,
-        n_iter=it + 1,
+        n_iter=iter_used,
     )
+
+
+def _mad(x: NDArray[np.float64]) -> float:
+    med = float(np.median(x))
+    return float(1.4826 * np.median(np.abs(x - med)))
