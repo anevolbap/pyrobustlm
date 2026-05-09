@@ -28,6 +28,7 @@ _DATASET_R_NAMES = {
     "aircraft": "aircraft",
     "pension": "pension",
     "phosphor": "phosphor",
+    "education": "education",
 }
 
 
@@ -111,10 +112,10 @@ def test_lmrob_returns_results_object():
     assert "Air.Flow" in s and "scale" in s
 
 
-def test_predict_round_trip():
+def test_predict_round_trip_array():
+    """predict() accepts a raw NumPy design matrix (intercept included)."""
     df = _load_dataset("stackloss")
     fit = lmrob("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, seed=0)
-    # Fitted values come back from predict on the same X (with intercept).
     X = np.column_stack(
         [
             np.ones(len(df)),
@@ -123,3 +124,49 @@ def test_predict_round_trip():
     )
     pred = fit.predict(X)
     np.testing.assert_allclose(pred, fit.fitted_, rtol=1e-12, atol=1e-12)
+
+
+def test_predict_round_trip_dataframe():
+    """predict(DataFrame) re-applies the formula and matches fitted values."""
+    df = _load_dataset("stackloss")
+    fit = lmrob("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, seed=0)
+    pred = fit.predict(df)
+    np.testing.assert_allclose(pred, fit.fitted_, rtol=1e-12, atol=1e-12)
+
+
+def test_predict_dataframe_new_rows():
+    """predict() works on rows the model has never seen."""
+    df = _load_dataset("stackloss")
+    fit = lmrob("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, seed=0)
+    new_df = pd.DataFrame(
+        {
+            "Air.Flow": [60.0, 80.0],
+            "Water.Temp": [20.0, 25.0],
+            "Acid.Conc.": [85.0, 90.0],
+        }
+    )
+    pred = fit.predict(new_df)
+    assert pred.shape == (2,)
+    # Cross-check: pre-build the design row by row.
+    X = np.column_stack([np.ones(2), new_df.to_numpy(dtype=float)])
+    np.testing.assert_allclose(pred, X @ fit.coef_, rtol=1e-12, atol=1e-12)
+
+
+def test_predict_dataframe_factor_design():
+    """predict(DataFrame) on a fit with categorical predictors."""
+    education = _load_dataset("education")
+    education["Region"] = pd.Categorical(education["Region"], categories=[1, 2, 3, 4])
+    fit = lmrob(
+        "Y ~ Region + X1 + X2 + X3",
+        education,
+        seed=0,
+    )
+    pred = fit.predict(education)
+    np.testing.assert_allclose(pred, fit.fitted_, rtol=1e-12, atol=1e-12)
+
+
+def test_predict_array_wrong_shape_raises():
+    df = _load_dataset("stackloss")
+    fit = lmrob("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, seed=0)
+    with pytest.raises(ValueError, match="design has 2 columns"):
+        fit.predict(np.zeros((3, 2)))

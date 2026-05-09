@@ -249,6 +249,7 @@ def lmrob(
         term_names_=term_names,
         control=control,
         init_=init_info,
+        rhs_spec_=design.rhs_spec,
     )
 
 
@@ -275,13 +276,19 @@ class LmRob:
         return self
 
     def predict(self, X: np.ndarray) -> np.ndarray:
+        """Predict on a new design matrix (raw, without intercept column).
+
+        ``LmRob`` always fits with an intercept, so we wrap ``X`` in a
+        DataFrame with the same column names used at fit time and let the
+        stored formula spec re-add the intercept.
+        """
         if self._result is None:
             raise RuntimeError("call .fit before .predict")
-        # Re-attach intercept column.
+        import pandas as pd
+
         X = np.asarray(X, dtype=np.float64)
-        # Add intercept if the fit included one (always true in our default formula).
-        ones = np.ones((X.shape[0], 1), dtype=np.float64)
-        return self._result.predict(np.hstack([ones, X]))
+        cols = [f"x{i}" for i in range(X.shape[1])]
+        return self._result.predict(pd.DataFrame(X, columns=cols))
 
     @property
     def result_(self) -> LmRobResults:

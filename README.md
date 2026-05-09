@@ -6,12 +6,12 @@
 Python port of the `lmrob` MM-estimator from R's
 [`robustbase`](https://cran.r-project.org/package=robustbase) package.
 
-Status: pre-alpha (v0.1). End-to-end pipeline works against R reference fits
-for the classical robust regression datasets (`stackloss`, `coleman`,
-`delivery`, `aircraft`, `phosphor`, etc.) within documented tolerances. See
-[`plan.md`](plan.md) for the full roadmap and
-[`docs/numerical-notes.md`](docs/numerical-notes.md) for known divergences
-from R.
+Status: v0.1.0 (alpha). End-to-end pipeline matches R's `lmrob` element-wise
+on the classical robust regression datasets (`stackloss`, `coleman`,
+`delivery`, `aircraft`, `phosphor`, etc.) within `rtol=1e-3` for both
+coefficients and covariance. See [`plan.md`](plan.md) for the full roadmap
+and [`docs/numerical-notes.md`](docs/numerical-notes.md) for known
+divergences from R.
 
 ## What works
 
@@ -69,6 +69,17 @@ print(fit.summary())
 # Water.Temp    0.5796
 # Acid.Conc.   -0.1129
 # scale = 1.9123
+
+# Predict on new rows; the formula spec is re-applied automatically.
+new_rows = pd.DataFrame({
+    "Air.Flow":    [60, 80],
+    "Water.Temp":  [20, 25],
+    "Acid.Conc.":  [85, 90],
+})
+fit.predict(new_rows)
+
+# Confidence intervals:
+fit.confint(level=0.95)
 ```
 
 ## Comparison with `statsmodels`

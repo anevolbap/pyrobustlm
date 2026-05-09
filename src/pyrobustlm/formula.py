@@ -24,6 +24,10 @@ class DesignMatrix:
     term_names: list[str]
     # Boolean mask: True where the column is from a categorical encoding.
     is_factor_col: np.ndarray
+    # formulaic ModelSpec for the RHS, so :meth:`LmRobResults.predict` can
+    # re-apply the same factor-encoding / interaction / I(...) transforms
+    # to a new DataFrame.
+    rhs_spec: object | None = None
 
 
 def model_matrix(
@@ -52,4 +56,24 @@ def model_matrix(
         ["[T." in c or c.startswith("C(") for c in term_names],
         dtype=bool,
     )
-    return DesignMatrix(y=y, X=X, term_names=term_names, is_factor_col=is_factor)
+    return DesignMatrix(
+        y=y,
+        X=X,
+        term_names=term_names,
+        is_factor_col=is_factor,
+        rhs_spec=X_df.model_spec,
+    )
+
+
+def apply_spec(rhs_spec: object, data: object) -> np.ndarray:
+    """Re-apply a stored ``formulaic.ModelSpec`` to a new DataFrame.
+
+    ``rhs_spec`` is typed as ``object`` because we do not want to depend
+    on ``formulaic`` at type-check time, but at runtime it must be a
+    ``formulaic.ModelSpec``. Returns the design matrix as a NumPy array.
+    """
+    get_mm = getattr(rhs_spec, "get_model_matrix", None)
+    if get_mm is None:
+        raise TypeError("rhs_spec is not a formulaic ModelSpec (no get_model_matrix)")
+    new_mm = get_mm(data)
+    return np.asarray(new_mm.to_numpy(), dtype=np.float64)

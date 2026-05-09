@@ -33,6 +33,9 @@ class LmRobResults:
     term_names_: list[str]
     control: Control
     init_: dict[str, object] = field(default_factory=dict)
+    # formulaic ModelSpec for the RHS, used by ``predict`` to re-apply the
+    # design transformation (factor encoding, I(x**2), etc.) to new data.
+    rhs_spec_: object | None = None
 
     # Backwards-compatible alias to mirror R's $coefficients.
     @property
@@ -52,8 +55,42 @@ class LmRobResults:
         hi = self.coef_ + z * se
         return np.column_stack([lo, hi])
 
-    def predict(self, new_X: np.ndarray) -> np.ndarray:
-        return np.asarray(new_X, dtype=np.float64) @ self.coef_
+    def predict(self, new_data: object) -> np.ndarray:
+        """Predict on new data.
+
+        Accepts either:
+
+        - a pandas ``DataFrame`` with the columns referenced by the original
+          formula. The fit's stored formulaic ``ModelSpec`` re-applies any
+          factor encoding, interactions, ``I(x**2)`` transforms, etc.
+        - a 2-D NumPy array already shaped ``(n, p)``, matching the original
+          design (intercept column included if the formula had one).
+        """
+        # pandas is a hard dependency, but only required when ``new_data`` is
+        # a DataFrame. We dispatch by duck-typing to avoid a top-level import.
+        is_dataframe = type(new_data).__name__ == "DataFrame" and hasattr(new_data, "columns")
+
+        arr: np.ndarray
+        if is_dataframe:
+            if self.rhs_spec_ is None:
+                raise RuntimeError(
+                    "predict(DataFrame) requires the result to carry a "
+                    "formula spec; pass a NumPy array instead."
+                )
+            from pyrobustlm.formula import apply_spec
+
+            arr = apply_spec(self.rhs_spec_, new_data)
+        else:
+            arr = np.asarray(new_data, dtype=np.float64)
+
+        if arr.ndim != 2:
+            raise ValueError(f"predict expected a 2-D matrix; got shape {arr.shape}")
+        if arr.shape[1] != self.coef_.size:
+            raise ValueError(
+                f"predict: design has {arr.shape[1]} columns but the fit "
+                f"has {self.coef_.size} coefficients"
+            )
+        return arr @ self.coef_
 
     def summary(self) -> str:
         from scipy.stats import norm
