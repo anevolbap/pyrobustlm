@@ -78,6 +78,17 @@ def main() -> None:
     only_r = sorted(set(r_cases) - set(py_cases))
     only_py = sorted(set(py_cases) - set(r_cases))
 
+    # Compute headline parity numbers for the summary block.
+    coef_rs, scale_rs, cov_rs = [], [], []
+    rt_ratios = []
+    for name in common:
+        rj = r_cases[name]
+        pj = py_cases[name]
+        coef_rs.append(_max_rel_err(pj["coefficients"], rj["coefficients"]))
+        scale_rs.append(_scale_rel_err(float(pj["scale"]), float(rj["scale"])))
+        cov_rs.append(_diag_rel_err(pj["cov"], rj["cov"]))
+        if rj["runtime_median_sec"] > 0:
+            rt_ratios.append(pj["runtime_median_sec"] / rj["runtime_median_sec"])
     body: list[str] = [
         "# Benchmark report",
         "",
@@ -87,6 +98,17 @@ def main() -> None:
         "    Rscript scripts/benchmark.R",
         "    python  scripts/benchmark.py",
         "    python  scripts/build_bench_report.py",
+        "",
+        f"## Headline (across {len(common)} cases)",
+        "",
+        f"- Coefficient max-relative-error: median {np.median(coef_rs):.2e}, "
+        f"max {np.max(coef_rs):.2e}",
+        f"- Scale relative error: median {np.median(scale_rs):.2e}, "
+        f"max {np.max(scale_rs):.2e}",
+        f"- Cov diagonal max-rerr: median {np.median(cov_rs):.2e}, "
+        f"max {np.max(cov_rs):.2e}",
+        f"- Runtime ratio (py/R): median {np.median(rt_ratios):.2f}x, "
+        f"min {np.min(rt_ratios):.2f}x, max {np.max(rt_ratios):.2f}x",
         "",
         "## Environment",
         "",

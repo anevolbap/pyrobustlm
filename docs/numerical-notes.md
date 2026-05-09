@@ -58,10 +58,25 @@ still use the NumPy path; Cython kernels for them follow the same pattern.
 
 **What.** ``init="M-S"`` and ``init="auto"`` both work. The estimator is
 a simplified Maronna-Yohai 2000: alternating L1 (via SciPy linprog) on the
-factor block and S (via fast-S) on the continuous block. Convergence and
-final scale match R's behaviour qualitatively but are not bit-identical
-because the C ``m_s_descent`` does sophisticated multi-restart subsampling
-we do not replicate.
+factor block and S (via fast-S) on the continuous block.
+
+**Gap vs R.** On the ``education`` reference (Y ~ Region + X1 + X2 + X3),
+our simplified M-S converges to a different solution than R's
+``robustbase::lmrob(init="M-S")``::
+
+    R   coef: (-135.7, -20.6, -9.9, 24.6, 0.034, 0.043, 0.579)  scale=26.4
+    py  coef: (-158.6,  -8.2, -11.3, 20.1, 0.045, 0.043, 0.632)  scale=37.8
+
+This is **not** RNG drift; it is an algorithmic gap. R's M-S
+(``robustbase/src/lmrob.c::m_s_subsample`` + ``m_s_descent``, ~600 lines
+of C) does many random subsample restarts followed by a careful descent
+phase. We currently do a single L1/S alternating descent. Porting the
+multi-restart + descent logic is tracked but not yet done.
+
+**User guidance.** If your design is continuous, use ``init="S"`` (the
+default) and you will match R within RNG drift. If you must use M-S,
+treat the result as approximate and re-fit in R for publication-grade
+inference.
 
 ### 4. ``vcov_w`` (Phase 7)
 

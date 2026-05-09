@@ -75,12 +75,27 @@ make_synthetic <- function(n, p, contam=0.1, seed=1) {
 }
 
 synthetic <- list(
-  list(name="synth_n100_p5",   n=100,  p=5),
-  list(name="synth_n500_p10",  n=500,  p=10),
-  list(name="synth_n1000_p10", n=1000, p=10),
-  list(name="synth_n2000_p20", n=2000, p=20),
-  list(name="synth_n5000_p20", n=5000, p=20)
+  list(name="synth_n100_p5",     n=100,   p=5),
+  list(name="synth_n500_p10",    n=500,   p=10),
+  list(name="synth_n1000_p10",   n=1000,  p=10),
+  list(name="synth_n2000_p20",   n=2000,  p=20),
+  list(name="synth_n5000_p20",   n=5000,  p=20),
+  list(name="synth_n10000_p20",  n=10000, p=20),
+  list(name="synth_n10000_p50",  n=10000, p=50)
 )
+
+# Per-psi-family timings for a moderate-sized synthetic, so we can
+# compare runtime profile across families on more than just stackloss.
+synth_per_psi <- list()
+for (fam in c("bisquare", "optimal", "hampel", "lqq", "ggw")) {
+  for (cfg in list(c(500, 10), c(2000, 20))) {
+    n <- cfg[1]; p <- cfg[2]
+    synth_per_psi[[length(synth_per_psi) + 1]] <- list(
+      name = sprintf("synth_%s_n%d_p%d", fam, n, p),
+      n = n, p = p, psi_family = fam
+    )
+  }
+}
 
 corpus <- c(classical, per_psi)
 
@@ -143,12 +158,14 @@ run_one <- function(entry) {
         file = file.path(OUT_DIR, paste0(entry$name, ".json")))
 }
 
-run_synthetic <- function(s) {
-  entry <- list(name=s$name, dataset=NULL, formula=NULL, control=list(),
+run_synthetic <- function(s, psi_family = NULL) {
+  ctrl <- if (is.null(psi_family)) list() else list(psi = psi_family)
+  entry <- list(name=s$name, dataset=NULL, formula=NULL, control=ctrl,
                 synth_args=list(n=s$n, p=s$p))
   run_one(entry)
 }
 
 for (e in corpus) run_one(e)
 for (s in synthetic) run_synthetic(s)
+for (s in synth_per_psi) run_synthetic(s, psi_family = s$psi_family)
 cat(sprintf("Wrote R bench JSONs to %s\n", OUT_DIR))

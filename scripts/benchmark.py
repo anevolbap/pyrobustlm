@@ -89,12 +89,19 @@ PER_PSI = [
 ]
 
 SYNTHETIC = [
-    ("synth_n100_p5", 100, 5),
-    ("synth_n500_p10", 500, 10),
-    ("synth_n1000_p10", 1000, 10),
-    ("synth_n2000_p20", 2000, 20),
-    ("synth_n5000_p20", 5000, 20),
+    ("synth_n100_p5",    100, 5),
+    ("synth_n500_p10",   500, 10),
+    ("synth_n1000_p10",  1000, 10),
+    ("synth_n2000_p20",  2000, 20),
+    ("synth_n5000_p20",  5000, 20),
+    ("synth_n10000_p20", 10000, 20),
+    ("synth_n10000_p50", 10000, 50),
 ]
+
+SYNTH_PER_PSI = []
+for fam in ("bisquare", "optimal", "hampel", "lqq", "ggw"):
+    for n, p in [(500, 10), (2000, 20)]:
+        SYNTH_PER_PSI.append((f"synth_{fam}_n{n}_p{p}", n, p, fam))
 
 
 def _fit_and_time(formula: str, df: pd.DataFrame, psi_family: str, k_reps: int = 5) -> dict:
@@ -164,6 +171,13 @@ def main() -> None:
         formula = "y ~ " + " + ".join(f"x{i + 1}" for i in range(p))
         result = _fit_and_time(formula, df, "bisquare")
         _serialize(result, name, "bisquare")
+
+    for name, n, p, fam in SYNTH_PER_PSI:
+        print(f"[py bench] {name}")
+        df = _make_synthetic(n, p)
+        formula = "y ~ " + " + ".join(f"x{i + 1}" for i in range(p))
+        result = _fit_and_time(formula, df, fam)
+        _serialize(result, name, fam)
     print(f"Wrote Python bench JSONs to {OUT_DIR}")
 
 
