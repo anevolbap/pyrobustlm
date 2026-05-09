@@ -14,4 +14,6 @@ phase by phase:
 For Phase 0 only ``_stub`` exists; it exists to verify the build toolchain.
 """
 
-from pyrobustlm._core import _stub  # noqa: F401
+# Compiled extensions ``_stub`` and ``_psi`` are loaded lazily by their
+# callers via ``importlib`` so that static type checkers don't trip on the
+# Cython-built modules at analysis time.

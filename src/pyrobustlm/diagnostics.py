@@ -20,8 +20,19 @@ def plot(results: LmRobResults) -> object:
 
     Panels: (a) Residuals vs Fitted, (b) Standardized residuals Q-Q,
     (c) Robust weights vs index, (d) Residuals vs Leverage proxy.
+
+    Requires ``matplotlib`` (an optional install dep). Install with
+    ``pip install pyrobustlm[plot]`` or just add matplotlib to your env.
     """
-    import matplotlib.pyplot as plt
+    import importlib
+
+    try:
+        plt = importlib.import_module("matplotlib.pyplot")
+    except ImportError as exc:
+        raise ImportError(
+            "diagnostics.plot requires matplotlib; install with "
+            "`pip install matplotlib` or `pip install pyrobustlm[plot]`."
+        ) from exc
     from scipy.stats import norm
 
     fig, axes = plt.subplots(2, 2, figsize=(9, 7))

@@ -24,8 +24,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from pyrobustlm import _psifuns as _pf
-from pyrobustlm import psi as _psi  # noqa: F401
-from pyrobustlm.scale import _mad, m_scale
+from pyrobustlm.scale import _mad, _try_import_cpsi, m_scale
 
 
 @dataclass(frozen=True)
@@ -93,16 +92,11 @@ def _irwls_step(
     z = r / sigma
 
     fam_lower = psi_family.lower()
-    if fam_lower in ("bisquare", "biweight"):
-        try:
-            from pyrobustlm._core import _psi as _cpsi
-
-            kk = float(np.asarray(psi_k, dtype=np.float64).ravel()[0])
-            w = np.empty_like(z)
-            _cpsi.bisquare_wgt(np.ascontiguousarray(z), kk, w)
-        except ImportError:
-            wgt_fn = _pf._dispatch(psi_family, "wgt")
-            w = wgt_fn(z, np.asarray(psi_k, dtype=np.float64))
+    cpsi = _try_import_cpsi() if fam_lower in ("bisquare", "biweight") else None
+    if cpsi is not None:
+        kk = float(np.asarray(psi_k, dtype=np.float64).ravel()[0])
+        w = np.empty_like(z)
+        cpsi.bisquare_wgt(np.ascontiguousarray(z), kk, w)
     else:
         wgt_fn = _pf._dispatch(psi_family, "wgt")
         w = wgt_fn(z, np.asarray(psi_k, dtype=np.float64))
@@ -111,7 +105,7 @@ def _irwls_step(
     Xw = X * sw[:, None]
     yw = y * sw
     beta_new, *_ = np.linalg.lstsq(Xw, yw, rcond=None)
-    return beta_new
+    return np.ascontiguousarray(beta_new, dtype=np.float64)
 
 
 def _refine_to_convergence(

@@ -8,10 +8,13 @@ system as later phases land.
 
 from __future__ import annotations
 
+import importlib
+
 import numpy as np
 
 import pyrobustlm
-from pyrobustlm._core import _stub
+
+_stub = importlib.import_module("pyrobustlm._core._stub")
 
 
 def test_version_is_string() -> None:

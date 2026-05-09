@@ -101,15 +101,16 @@ class Control:
         - ``"KS2011"``: same families with KS2011-specific cov estimator.
         - ``"MM"``: legacy MM defaults (psi="bisquare").
         """
-        defaults: dict[str, object]
         if setting == "KS2014":
-            defaults = {"psi": "bisquare", "cov": ".vcov.avar1", "init": "S"}
+            ctrl = cls(setting="KS2014", psi="bisquare", cov=".vcov.avar1", init="S")
         elif setting == "KS2011":
-            defaults = {"psi": "bisquare", "cov": ".vcov.w", "init": "S"}
+            ctrl = cls(setting="KS2011", psi="bisquare", cov=".vcov.w", init="S")
         elif setting == "MM":
-            defaults = {"psi": "bisquare", "cov": ".vcov.avar1", "init": "S"}
+            ctrl = cls(setting="MM", psi="bisquare", cov=".vcov.avar1", init="S")
         else:
             raise ValueError(f"unknown setting: {setting!r}")
-        defaults["setting"] = setting
-        defaults.update(overrides)
-        return cls(**defaults)  # type: ignore[arg-type]
+        for key, value in overrides.items():
+            if not hasattr(ctrl, key):
+                raise TypeError(f"unknown Control field: {key!r}")
+            setattr(ctrl, key, value)
+        return ctrl

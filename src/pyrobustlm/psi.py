@@ -19,14 +19,18 @@ from __future__ import annotations
 from typing import Literal
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 from pyrobustlm import _psifuns
 
+# Public type aliases. ``PsiFamily`` is the constrained Literal users should
+# pass; functions also accept plain ``str`` for runtime convenience and
+# validate at call time inside the dispatch table.
 PsiFamily = Literal["bisquare", "huber", "hampel", "optimal", "ggw", "lqq"]
-_KIND = Literal["rho", "psi", "psi_prime", "wgt"]
+TuningK = float | tuple[float, ...] | ArrayLike
 
 
-def _eval(kind: str, x: object, family: str, k: object) -> np.ndarray:
+def _eval(kind: str, x: ArrayLike, family: str, k: TuningK) -> np.ndarray:
     fn = _psifuns._dispatch(family, kind)
     out = fn(x, k)
     if np.isscalar(x):
@@ -34,19 +38,19 @@ def _eval(kind: str, x: object, family: str, k: object) -> np.ndarray:
     return out
 
 
-def rho(x: object, family: PsiFamily, k: object) -> np.ndarray:
+def rho(x: ArrayLike, family: str, k: TuningK) -> np.ndarray:
     return _eval("rho", x, family, k)
 
 
-def psi(x: object, family: PsiFamily, k: object) -> np.ndarray:
+def psi(x: ArrayLike, family: str, k: TuningK) -> np.ndarray:
     return _eval("psi", x, family, k)
 
 
-def psi_prime(x: object, family: PsiFamily, k: object) -> np.ndarray:
+def psi_prime(x: ArrayLike, family: str, k: TuningK) -> np.ndarray:
     return _eval("psi_prime", x, family, k)
 
 
-def wgt(x: object, family: PsiFamily, k: object) -> np.ndarray:
+def wgt(x: ArrayLike, family: str, k: TuningK) -> np.ndarray:
     return _eval("wgt", x, family, k)
 
 
@@ -55,7 +59,7 @@ def wgt(x: object, family: PsiFamily, k: object) -> np.ndarray:
 # .vcov.avar1). For Phase 2 we expose them as numerical-integration based
 # helpers; closed-form versions for huber/bisquare can land later.
 # ---------------------------------------------------------------------------
-def Epsi2(family: PsiFamily, k: object) -> float:
+def Epsi2(family: str, k: TuningK) -> float:
     from scipy import integrate
 
     def integrand(t: float) -> float:
@@ -66,7 +70,7 @@ def Epsi2(family: PsiFamily, k: object) -> float:
     return float(val)
 
 
-def EDpsi(family: PsiFamily, k: object) -> float:
+def EDpsi(family: str, k: TuningK) -> float:
     from scipy import integrate
 
     def integrand(t: float) -> float:
@@ -106,7 +110,7 @@ _PSI_TUNING_DEFAULT_CHI: dict[str, tuple[float, ...]] = {
 }
 
 
-def tuning_for_efficiency(family: PsiFamily, efficiency: float = 0.95) -> tuple[float, ...]:
+def tuning_for_efficiency(family: str, efficiency: float = 0.95) -> tuple[float, ...]:
     """Return tuning constants giving the requested asymptotic efficiency.
 
     For Phase 2 we only support the canonical 95%-efficiency tuning that R
@@ -121,7 +125,7 @@ def tuning_for_efficiency(family: PsiFamily, efficiency: float = 0.95) -> tuple[
     return _PSI_TUNING_DEFAULT_PSI[fam]
 
 
-def tuning_for_breakdown(family: PsiFamily, breakdown: float = 0.5) -> tuple[float, ...]:
+def tuning_for_breakdown(family: str, breakdown: float = 0.5) -> tuple[float, ...]:
     """Return tuning constants giving the requested breakdown (chi side)."""
     if abs(breakdown - 0.5) > 1e-6:
         raise NotImplementedError("tuning_for_breakdown only supports breakdown=0.5 in Phase 2.")

@@ -17,15 +17,16 @@ repos:
         args: ["--fix"]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.2
+  # ty is run in CI via `uvx ty check`. Adding it here as a local hook so
+  # it runs against the project venv (which has the compiled extension
+  # available, unlike isolated pre-commit envs).
+  - repo: local
     hooks:
-      - id: mypy
-        additional_dependencies:
-          - "numpy>=2.0"
-          - "scipy-stubs"
-          - "pandas-stubs"
-        args: ["--config-file=pyproject.toml"]
+      - id: ty
+        name: ty (type check)
+        entry: uvx ty check
+        language: system
+        pass_filenames: false
         files: ^src/pyrobustlm/.*\.py$
 
   - repo: https://github.com/compilerla/conventional-pre-commit

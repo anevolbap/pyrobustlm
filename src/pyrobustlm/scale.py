@@ -12,15 +12,24 @@ supplied.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import importlib
+from typing import Any
 
 import numpy as np
 
 from pyrobustlm import _psifuns as _pf
-from pyrobustlm import psi as _psi  # noqa: F401  (kept for legacy callers)
 
-if TYPE_CHECKING:
-    from pyrobustlm.control import PsiFamily
+
+def _try_import_cpsi() -> Any | None:
+    """Return the compiled ``pyrobustlm._core._psi`` module, or ``None``.
+
+    Imported lazily through ``importlib`` so static type checkers don't
+    flag the Cython extension as missing.
+    """
+    try:
+        return importlib.import_module("pyrobustlm._core._psi")
+    except ImportError:
+        return None
 
 
 _DEFAULT_K_CHI: dict[str, tuple[float, ...]] = {
@@ -45,7 +54,7 @@ def _mad(x: np.ndarray) -> float:
 
 def m_scale(
     r: np.ndarray,
-    family: PsiFamily = "bisquare",
+    family: str = "bisquare",
     k: float | tuple[float, ...] | None = None,
     b0: float = 0.5,
     max_iter: int = 200,
@@ -114,16 +123,14 @@ def m_scale(
         s = float(init_scale)
 
     fam_lower = family.lower()
-    # Cython fast path for the bisquare default.
+    # Cython fast path for the bisquare default. Imported via importlib so
+    # static type checkers (mypy/ty) don't trip on the compiled module.
     if fam_lower in ("bisquare", "biweight"):
-        try:
-            from pyrobustlm._core import _psi as _cpsi
-
+        cpsi = _try_import_cpsi()
+        if cpsi is not None:
             kk = float(np.asarray(k, dtype=np.float64).ravel()[0])
             r_buf = np.ascontiguousarray(r, dtype=np.float64)
-            return float(_cpsi.m_scale_bisquare(r_buf, kk, b0, s, max_iter, tol, p))
-        except ImportError:
-            pass
+            return float(cpsi.m_scale_bisquare(r_buf, kk, b0, s, max_iter, tol, p))
 
     # Generic NumPy path.
     rho_fn = _pf._dispatch(family, "rho")
