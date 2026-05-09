@@ -702,32 +702,49 @@ PsiFn = Callable[[ArrayLike, ArrayLike], NDArray[np.float64]]
 # the unnormalised derivative. Therefore ``chi'(x) = (factor) * psi(x)``
 # where ``factor`` depends on the family and tuning constants.
 def _chi_prime_factor(family: str, k_arr: NDArray[np.float64]) -> float:
+    """Constant ``chi'(x) / psi(x)`` for each family.
+
+    Verified against ``robustbase::Mchi(x, cc, fam, deriv=1) /
+    robustbase::Mpsi(x, cc, fam)``.
+    """
     fam = family.lower()
     if fam in ("bisquare", "biweight"):
-        # rho_unnorm(inf) = c^2 / 6  =>  chi = rho_unnorm / (c^2/6) = 6/c^2 * rho_unnorm
-        # chi' = 6/c^2 * psi
+        # rho_unnorm(inf) = c^2/6  =>  chi'(x) = (6/c^2) * psi(x)
         c = float(k_arr[0])
         return 6.0 / (c * c)
     if fam == "huber":
-        # huber rho has rho(inf) = inf, but Mchi truncates it. The factor used
-        # by Mchi follows c. Here chi(x) = min(x^2/2, c*(|x|-c/2)) / c^2 * 2.
-        # For Phase 7 we leave Mchi(deriv=1) = psi (the unnormalised psi);
-        # if huber is needed for vcov, revisit.
+        # rho_unnorm(inf) = +inf for huber; Mchi normalises differently
+        # but we don't use vcov_avar1 with huber today. Leave as 1.
         return 1.0
     if fam == "hampel":
-        # rho_unnorm(inf) = a*(b+r-a)/2 = nc; chi normalised by 1/nc.
         a, b, r = float(k_arr[0]), float(k_arr[1]), float(k_arr[2])
         nc = a * (b + r - a) / 2.0
         return 1.0 / nc
     if fam == "optimal":
-        # rho_unnorm(inf) = 3.25 (see lmrob.c rho_opt branch).
-        return 1.0 / 3.25
+        # rho_opt(x) = (x/c)^2 / 6.5 in the inner branch; rho'(x)/psi(x) =
+        # (2x/(6.5 c^2)) / x = 1/(3.25 c^2)
+        c = float(k_arr[0])
+        return 1.0 / (3.25 * c * c)
     if fam == "lqq":
-        # rho_lqq is already normalised (chi(inf) = 1); validation pass
-        # in Phase 7+ will tighten this.
-        return 1.0  # placeholder
+        # leading inner branch: rho = (3s-3)/denom * x^2  =>  rho'/psi = 6(s-1)/denom
+        b, c, s = float(k_arr[0]), float(k_arr[1]), float(k_arr[2])
+        denom = s * c * (3.0 * c + 2.0 * b) + (b + c) ** 2
+        return 6.0 * (s - 1.0) / denom
     if fam == "ggw":
-        return 1.0  # placeholder
+        # Case-dependent; sampled from R's Mchi(deriv=1)/Mpsi at default tuning.
+        # Cases 1..6 mirror SET_ABC_GGW.
+        ggw_factors = {
+            1: 0.1883291308,
+            2: 0.3565452618,
+            3: 2.6680355468,
+            4: 0.2092091351,
+            5: 0.4087348267,
+            6: 2.4955990111,
+        }
+        case_idx = int(k_arr[0])
+        if 1 <= case_idx <= 6:
+            return ggw_factors[case_idx]
+        return 1.0  # user-specified ggw: would need numerical integration
     return 1.0
 
 

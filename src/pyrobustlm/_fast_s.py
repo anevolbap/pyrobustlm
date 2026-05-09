@@ -24,7 +24,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from pyrobustlm import _psifuns as _pf
-from pyrobustlm.scale import _mad, _try_import_cpsi, m_scale
+from pyrobustlm.scale import _cython_wgt, _mad, m_scale
 
 
 @dataclass(frozen=True)
@@ -91,12 +91,9 @@ def _irwls_step(
         return beta.copy()
     z = r / sigma
 
-    fam_lower = psi_family.lower()
-    cpsi = _try_import_cpsi() if fam_lower in ("bisquare", "biweight") else None
-    if cpsi is not None:
-        kk = float(np.asarray(psi_k, dtype=np.float64).ravel()[0])
-        w = np.empty_like(z)
-        cpsi.bisquare_wgt(np.ascontiguousarray(z), kk, w)
+    w_cy = _cython_wgt(z, psi_family, psi_k)
+    if w_cy is not None:
+        w = w_cy
     else:
         wgt_fn = _pf._dispatch(psi_family, "wgt")
         w = wgt_fn(z, np.asarray(psi_k, dtype=np.float64))

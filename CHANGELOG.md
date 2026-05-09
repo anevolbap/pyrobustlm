@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Cython kernels for all six psi families.** `huber`, `hampel`, `optimal`,
+  `lqq`, and `ggw` now have inlined Cython implementations of
+  `psi`/`wgt`/`rho`/`psi_prime` and a fully-inlined `m_scale_<family>` that
+  keeps the iteration in C. End-to-end runtime is now uniform across
+  families (~26x R for small problems, ~1.6x R for n=2000).
+- **`vcov_avar1` parity for all five lmrob-supported families.** Fixed
+  per-family `chi_prime_factor` constants verified against R's
+  `Mchi(deriv=1) / Mpsi`. Hampel uses `1/nc`, optimal uses
+  `1/(3.25 c²)`, lqq uses `6(s-1)/denom`, ggw uses tabulated factors per
+  case (1..6).
+- **Per-family parity tests** in `tests/validation/test_vs_r_psi_families.py`:
+  bisquare/optimal/hampel/lqq match R within `rtol=1e-3`; ggw within `5e-3`
+  (limited by R's polynomial chi approximation).
+- **Benchmark harness.** `scripts/benchmark.R` and `scripts/benchmark.py`
+  run identical fits in R and Python; `scripts/build_bench_report.py`
+  merges them into `docs/bench-report.md` with side-by-side accuracy and
+  runtime tables. 20 cases: 10 classical datasets, 5 per-psi-family,
+  5 synthetic timing grids.
+
+### Fixed
+
+- Default `Control.tuning_psi` for `lqq` (was `0.9826779`, now R's
+  `0.9822707`) and for `ggw` (was case-1 parameters, now case 4 = b=1.5,
+  95% efficiency, matching R's default).
+
 ## [0.1.0] - 2026-05-09
 
 First public release. End-to-end MM regression that matches R's

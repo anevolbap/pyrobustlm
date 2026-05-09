@@ -18,13 +18,18 @@ Setting = Literal["KS2011", "KS2014", "MM"]
 
 # Default tuning constants matching R's robustbase 0.99-7. (See R's
 # .Mpsi.tuning.default and .Mchi.tuning.default for the canonical table.)
+# Default tuning constants in **R's internal form** (post-``.psi.conv.cc``).
+# Source: ``robustbase:::.psi.conv.cc`` applied to the user-facing defaults
+# from ``robustbase::.Mpsi.tuning.default()``.
 _DEFAULT_TUNING_PSI: dict[str, tuple[float, ...]] = {
     "huber": (1.345,),
     "bisquare": (4.685061,),
     "hampel": (1.5 * 0.9016085, 3.5 * 0.9016085, 8.0 * 0.9016085),
     "optimal": (1.060158,),
-    "ggw": (-0.5, 1.5, 0.95, float("nan")),  # user-facing form
-    "lqq": (-0.5, 1.5, 0.95, float("nan")),
+    # ggw: case index 4 = (b=1.5, 95% efficiency).
+    "ggw": (4,),
+    # lqq: (b, c, s) - converted from user-facing (-0.5, 1.5, 0.95, NA).
+    "lqq": (1.4734061, 0.9822707, 1.5),
 }
 
 _DEFAULT_TUNING_CHI: dict[str, tuple[float, ...]] = {
@@ -32,8 +37,10 @@ _DEFAULT_TUNING_CHI: dict[str, tuple[float, ...]] = {
     "bisquare": (1.547645,),
     "hampel": (1.5 * 0.2119163, 3.5 * 0.2119163, 8.0 * 0.2119163),
     "optimal": (0.4047,),
-    "ggw": (-0.5, 1.5, float("nan"), 0.5),
-    "lqq": (-0.5, 1.5, float("nan"), 0.5),
+    # ggw: case index 6 = (b=1.5, breakdown=0.5).
+    "ggw": (6,),
+    # lqq: (b, c, s) - converted from user-facing (-0.5, 1.5, NA, 0.5).
+    "lqq": (0.4015457, 0.2676971, 1.5),
 }
 
 

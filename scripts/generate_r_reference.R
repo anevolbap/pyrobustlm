@@ -124,6 +124,16 @@ corpus <- list(
     control = list(psi = "lqq"),
     seed    = 1
   ),
+  # NOTE: huber not added because robustbase::lmrob requires a redescending
+  # psi for the MM step. huber stays available via psi="huber" in our M and
+  # M-scale APIs.
+  list(
+    name    = "stackloss_psi_hampel",
+    dataset = "stackloss",
+    formula = stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.,
+    control = list(psi = "hampel"),
+    seed    = 1
+  ),
   list(
     name    = "delivery_default",
     dataset = "delivery",
