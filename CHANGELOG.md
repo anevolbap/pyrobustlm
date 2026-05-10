@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Cython resampling kernel for the bisquare default.** New module
+  ``pyrobustlm._core._fast_s`` runs the per-iteration body
+  (initial p-subset solve, k-step refinement, m-scale, IRWLS) in
+  ``nogil`` C with LAPACK calls via ``scipy.linalg.cython_lapack``
+  (``dgesv`` for the subset solve, ``dgels`` for IRWLS). This is the
+  hot path for ``Control(psi="bisquare")``, which is the default.
+  Subset draws still happen in Python (RNG path is Python-side); the
+  iteration body is fully nogil so ``n_workers > 1`` now scales on
+  small problems too.
+  Measured serial speedup vs the NumPy implementation: 2.4x at
+  n=100/p=5/nR=500, 2.0x at n=500/p=10. With 8 worker threads:
+  3-5x at n>=500 problems and ~5x faster than R wall-clock at
+  n=2000/p=20.
 - **Parallel fast-S resampling.** ``Control(n_workers=...)`` distributes
   the resampling loop across a ``ThreadPoolExecutor``. ``n_workers=0`` is
   auto (only kicks in for problems where ``n*p^2 >= 1e6`` and

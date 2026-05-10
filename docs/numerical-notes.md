@@ -88,7 +88,40 @@ setting-driven defaults are honoured (``"D" in method`` triggers
 On stackloss with ``setting="KS2014"`` (and ``"KS2011"``), the cov
 matrix matches R element-wise to ``rtol=1e-3``.
 
-### 5. Thread-based parallel resampling
+### 5. Cython resampling kernel (bisquare hot path)
+
+**What.** ``pyrobustlm._core._fast_s.cy_resample_iter_bisquare`` runs one
+fast-S resampling iteration in ``nogil`` C: dgesv for the p-subset solve,
+dgels for the IRWLS step, and an inlined m_scale iteration matching
+``lmrob.c::find_scale``. The bisquare path of ``fast_s`` dispatches to
+this kernel automatically.
+
+**Speedup.** Serial vs the v0.2.0 NumPy implementation, all on a 16-core
+OpenBLAS Linux box with BLAS pinned to 1 thread (so threading benefits
+are clean):
+
+| n / p / nResample | NumPy serial | Cython serial | Cython 8-thread |
+|---|---|---|---|
+| 100 / 5 / 500 | 102 ms | 43 ms | 42 ms |
+| 500 / 10 / 500 | 261 ms | 128 ms | 68 ms |
+| 1000 / 10 / 500 | 309 ms | 225 ms | 82 ms |
+| 2000 / 20 / 500 | 634 ms | 562 ms | 187 ms |
+| 5000 / 30 / 2000 | 9.7 s | 7.2 s | 2.0 s |
+
+R wall-clock at n=2000/p=20 was 249 ms in the v0.1.0 benchmark; we
+are now faster at that size with 8 threads.
+
+**Where the rest of the gap lives.** At n=100 the iteration body is
+small enough that subset-draw RNG and the survivor-refinement loop
+(both still pure Python) dominate. Closing them would mean either
+moving RNG into Cython (``np.random.cython`` extension or a struct-based
+PCG64) or porting ``_refine_to_convergence`` to the same kernel. Both
+deferred.
+
+**Where.** ``src/pyrobustlm/_core/_fast_s.pyx`` and
+``tests/unit/test_fast_s_parallel.py``.
+
+### 6. Thread-based parallel resampling
 
 **What.** ``Control(n_workers=...)`` opts the fast-S resampling loop into a
 ``ThreadPoolExecutor``. Each worker draws from a ``SeedSequence``-spawned
@@ -115,7 +148,7 @@ closing it would require pushing the loop body into Cython.
 
 **Where.** ``tests/unit/test_fast_s_parallel.py``.
 
-### 6. ``anova()`` chained mode
+### 7. ``anova()`` chained mode
 
 **What.** Calling ``anova(m1, m2, m3, ...)`` compares each adjacent pair
 sequentially: ``m2`` vs ``m1``, then ``m3`` vs ``m2``, etc. R's
@@ -131,7 +164,7 @@ which is the conventional reading of nested-model anova tables.
 
 **Where.** ``tests/validation/test_summary_anova.py::test_anova_*``.
 
-### 7. ``vcov_avar1`` matches R element-wise
+### 8. ``vcov_avar1`` matches R element-wise
 
 **What.** With the corrected ``Mchi(deriv=1) = chi'`` mapping (R's chi is
 normalised so ``chi(inf) = 1``; ``chi' = (1/rho_unnorm(inf)) * psi``) and

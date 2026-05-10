@@ -19,6 +19,7 @@ when ``init="S"``.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
@@ -28,6 +29,36 @@ from numpy.typing import NDArray
 
 from pyrobustlm import _psifuns as _pf
 from pyrobustlm.scale import _cython_wgt, _mad, m_scale
+
+# Cython kernel signature. Returns ``(scale, status)`` where ``status`` is
+# 0 (ok), 1 (singular subset), 2 (exact fit), 3 (LAPACK error).
+_CyIterFn = Callable[
+    [
+        NDArray[np.float64],  # X
+        NDArray[np.float64],  # y
+        NDArray[np.int64],  # idx
+        float,  # k_chi
+        float,  # b0
+        int,  # k_fast_s
+        int,  # max_iter_scale
+        float,  # scale_tol
+        NDArray[np.float64],  # beta_out
+    ],
+    tuple[float, int],
+]
+
+
+def _try_import_cy_iter() -> _CyIterFn | None:
+    try:
+        import importlib
+
+        mod = importlib.import_module("pyrobustlm._core._fast_s")
+        return mod.cy_resample_iter_bisquare  # type: ignore[attr-defined,no-any-return]
+    except Exception:
+        return None
+
+
+_CY_ITER: _CyIterFn | None = _try_import_cy_iter()
 
 
 @dataclass(frozen=True)
@@ -115,6 +146,73 @@ def _irwls_step(
     return np.ascontiguousarray(beta_new, dtype=np.float64)
 
 
+def _resample_chunk_cython(
+    X: NDArray[np.float64],
+    y: NDArray[np.float64],
+    cfg: FastSConfig,
+    rng: np.random.Generator,
+    n_iter: int,
+) -> _ChunkResult:
+    """Bisquare-only Cython fast path.
+
+    Pre-draws subsets in Python (the RNG isn't easily callable from nogil
+    yet), then dispatches each iteration body into ``cy_resample_iter_bisquare``
+    where the LAPACK calls and m_scale iteration run without the GIL.
+    """
+    cy_iter = _CY_ITER
+    assert cy_iter is not None  # caller already checked
+    p = X.shape[1]
+    k_chi = float(cfg.k_chi[0])
+    best_betas: list[NDArray[np.float64]] = []
+    best_scales: list[float] = []
+
+    beta_buf = np.empty(p, dtype=np.float64)
+    for _ in range(n_iter):
+        idx = _draw_nonsingular_subset(X, rng, p, cfg.mts)
+        if idx is None:
+            continue
+        idx_long = np.asarray(idx, dtype=np.int64)
+        scale, status = cy_iter(
+            X,
+            y,
+            idx_long,
+            k_chi,
+            cfg.b0,
+            cfg.k_fast_s,
+            cfg.max_iter_scale,
+            cfg.scale_tol,
+            beta_buf,
+        )
+        if status == 1 or status == 3:
+            # Singular subset or LAPACK error.
+            continue
+        if status == 2:
+            # Exact fit: short-circuit.
+            return _ChunkResult(
+                [],
+                [],
+                FastSResult(
+                    coef=beta_buf.copy(),
+                    scale=0.0,
+                    converged=True,
+                    n_iter=0,
+                    n_candidates_kept=1,
+                ),
+            )
+        beta_t = beta_buf.copy()
+        s_t = float(scale)
+        if len(best_scales) < cfg.best_r:
+            best_betas.append(beta_t)
+            best_scales.append(s_t)
+        else:
+            worst_i = int(np.argmax(best_scales))
+            if s_t < best_scales[worst_i]:
+                best_betas[worst_i] = beta_t
+                best_scales[worst_i] = s_t
+
+    return _ChunkResult(best_betas, best_scales, None)
+
+
 @dataclass
 class _ChunkResult:
     best_betas: list[NDArray[np.float64]]
@@ -190,6 +288,12 @@ def _resample_chunk(
     p = X.shape[1]
     best_betas: list[NDArray[np.float64]] = []
     best_scales: list[float] = []
+
+    # Cython fast-path for the default (bisquare) family with a scalar k_chi.
+    # This keeps the inner per-iteration body in nogil C, which is what makes
+    # the thread pool actually scale on small-n problems.
+    if _CY_ITER is not None and cfg.psi_chi in ("bisquare", "biweight") and len(cfg.k_chi) == 1:
+        return _resample_chunk_cython(X, y, cfg, rng, n_iter)
 
     for _ in range(n_iter):
         idx = _draw_nonsingular_subset(X, rng, p, cfg.mts)
