@@ -103,7 +103,7 @@ def test_summary_str_contains_terms():
 # ---------------------------------------------------------------------------
 
 
-def test_anova_wald_pair_matches_r(r_session):
+def test_anova_wald_pair_matches_r() -> None:
     """anova(full, reduced) Wald chi-squared and p-value match R."""
     df = _ensure_dataset("stackloss")
     ctrl = Control(nResample=500)
@@ -167,9 +167,31 @@ def test_anova_requires_two_fits():
         anova(fit)
 
 
-def test_anova_only_wald_supported():
+def test_anova_unknown_test():
     df = _ensure_dataset("stackloss")
     fit = lmrob("stack.loss ~ Air.Flow + Water.Temp", df, seed=0)
     fit2 = lmrob("stack.loss ~ Air.Flow", df, seed=0)
-    with pytest.raises(NotImplementedError, match="Deviance"):
-        anova(fit, fit2, test="Deviance")
+    with pytest.raises(NotImplementedError, match="'Wald' or 'Deviance'"):
+        anova(fit, fit2, test="LRT")
+
+
+def test_anova_deviance_pair_matches_r() -> None:
+    """anova(full, reduced, test='Deviance') matches R element-wise."""
+    df = _ensure_dataset("stackloss")
+    ctrl = Control(nResample=500)
+    full = lmrob(
+        "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, control=ctrl, seed=42
+    )
+    red = lmrob("stack.loss ~ Air.Flow + Water.Temp", df, control=ctrl, seed=42)
+    red2 = lmrob("stack.loss ~ Air.Flow", df, control=ctrl, seed=42)
+
+    tbl = anova(full, red, test="Deviance").table
+    # R values from `anova(full, red, test='Deviance')`:
+    np.testing.assert_allclose(tbl[1, 1], 1.5978, rtol=2e-3)
+    np.testing.assert_allclose(tbl[1, 3], 0.2062, rtol=2e-3)
+    assert tbl[1, 2] == 1
+
+    tbl2 = anova(full, red2, test="Deviance").table
+    np.testing.assert_allclose(tbl2[1, 1], 6.4836, rtol=2e-3)
+    np.testing.assert_allclose(tbl2[1, 3], 0.03909, rtol=2e-3)
+    assert tbl2[1, 2] == 2

@@ -37,6 +37,10 @@ class LmRobResults:
     # formulaic ModelSpec for the RHS, used by ``predict`` to re-apply the
     # design transformation (factor encoding, I(x**2), etc.) to new data.
     rhs_spec_: object | None = None
+    # Design matrix and response stashed for downstream operations
+    # (e.g. anova(test="Deviance") refits reduced models on the full scale).
+    design_x_: np.ndarray | None = None
+    design_y_: np.ndarray | None = None
 
     # Backwards-compatible alias to mirror R's $coefficients.
     @property

@@ -317,6 +317,8 @@ def lmrob(
         control=control,
         init_=init_info,
         rhs_spec_=design.rhs_spec,
+        design_x_=np.asarray(X, dtype=np.float64),
+        design_y_=np.asarray(y, dtype=np.float64),
     )
 
 

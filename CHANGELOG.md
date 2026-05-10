@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **``anova(test="Deviance")``** ports the Deviance variant from
+  ``robustbase::anovaLmrobPair``. Refits the reduced model via
+  ``mm_iterate`` at the full's scale, then computes
+  ``T = 2 * tauStar * (sum_rho_reduced - sum_rho_full)`` with
+  ``tauStar = mean(psi'(r/s0)) / mean(psi(r/s0)^2)``. Matches R element-wise
+  on stackloss (chi-sq and p-value within rtol=2e-3).
+- ``LmRobResults`` now stashes the design matrix (``design_x_``) and
+  response (``design_y_``) for downstream operations (currently used by
+  the Deviance anova refit).
+
 ## [0.2.0] - 2026-05-10
 
 ### Added
