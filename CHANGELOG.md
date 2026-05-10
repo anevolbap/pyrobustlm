@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Sphinx documentation scaffolding.** ``docs/`` now builds with
+  ``sphinx-build -b html -W docs docs/_build/html``. Pages: index,
+  quickstart, API reference (autodoc on
+  ``lmrob`` / ``Control`` / ``LmRobResults`` / ``SummaryLmRob`` /
+  ``anova``), R-to-Python porting cheatsheet, and the existing
+  numerical-notes log. Theme: ``sphinx-rtd-theme`` with
+  ``myst-parser``, ``napoleon`` (numpy-style), ``intersphinx`` to
+  numpy/scipy/pandas, and ``sphinx-autodoc-typehints``.
 - **Cython resampling kernel for the bisquare default.** New module
   ``pyrobustlm._core._fast_s`` runs the per-iteration body
   (initial p-subset solve, k-step refinement, m-scale, IRWLS) in

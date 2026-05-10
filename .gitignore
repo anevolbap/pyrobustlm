@@ -43,6 +43,7 @@ coverage.xml
 
 # Generated docs
 docs/_build/
+docs/_static/
 docs/api/_autosummary/
 
 # R reference outputs (regenerated on demand; small ones may be committed under tests/reference/)

@@ -82,6 +82,19 @@ fit.predict(new_rows)
 fit.confint(level=0.95)
 ```
 
+## Documentation
+
+The Sphinx docs build locally with:
+
+```bash
+uv pip install -e ".[docs]" --no-build-isolation
+cd docs && uv run sphinx-build -b html -W . _build/html
+open _build/html/index.html
+```
+
+Pages: quickstart, API reference, R-to-Python porting cheatsheet, and the
+numerical-notes log of documented divergences from R.
+
 ## Comparison with `statsmodels`
 
 [`statsmodels.robust.RLM`](https://www.statsmodels.org/stable/rlm.html)
