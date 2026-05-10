@@ -8,6 +8,7 @@ provisional; most symbols are stubs until their phase lands.
 from __future__ import annotations
 
 from pyrobustlm._version import __version__
+from pyrobustlm.anova import anova
 from pyrobustlm.control import Control
 from pyrobustlm.lmrob import LmRob, lmrob
 
@@ -15,5 +16,6 @@ __all__ = [
     "Control",
     "LmRob",
     "__version__",
+    "anova",
     "lmrob",
 ]

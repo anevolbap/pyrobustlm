@@ -13,7 +13,9 @@ python_sources = [
   'inference.py',
   'diagnostics.py',
   'formula.py',
+  'anova.py',
   'ms_estimator.py',
+  'summary.py',
   '_utils.py',
 ]
 

@@ -88,7 +88,23 @@ setting-driven defaults are honoured (``"D" in method`` triggers
 On stackloss with ``setting="KS2014"`` (and ``"KS2011"``), the cov
 matrix matches R element-wise to ``rtol=1e-3``.
 
-### 5. ``vcov_avar1`` matches R element-wise
+### 5. ``anova()`` chained mode
+
+**What.** Calling ``anova(m1, m2, m3, ...)`` compares each adjacent pair
+sequentially: ``m2`` vs ``m1``, then ``m3`` vs ``m2``, etc. R's
+``anova.lmrob`` chained mode keeps the largest model as the reference for
+every row, but its current implementation has a bug: row 3 onwards prints
+the same statistic as row 2 because the iteration's reference state
+collapses to the previous reduced fit's term set after the first pair.
+
+**Why acceptable.** Pair-wise calls ``anova(full, reduced)`` match R
+element-wise (chi-sq and p-value to ``rtol=2e-3`` on stackloss). Our
+sequential chained behaviour matches base R's ``anova.lm`` semantics,
+which is the conventional reading of nested-model anova tables.
+
+**Where.** ``tests/validation/test_summary_anova.py::test_anova_*``.
+
+### 6. ``vcov_avar1`` matches R element-wise
 
 **What.** With the corrected ``Mchi(deriv=1) = chi'`` mapping (R's chi is
 normalised so ``chi(inf) = 1``; ``chi' = (1/rho_unnorm(inf)) * psi``) and

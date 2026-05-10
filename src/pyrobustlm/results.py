@@ -10,6 +10,7 @@ import numpy as np
 
 if TYPE_CHECKING:
     from pyrobustlm.control import Control
+    from pyrobustlm.summary import SummaryLmRob
 
 
 @dataclass
@@ -92,27 +93,16 @@ class LmRobResults:
             )
         return arr @ self.coef_
 
-    def summary(self) -> str:
-        from scipy.stats import norm
+    def summary(self) -> SummaryLmRob:
+        """Return a ``SummaryLmRob`` matching R's ``summary.lmrob``.
 
-        se = self.standard_errors_
-        z = self.coef_ / np.where(se > 0, se, 1)
-        pvals = 2 * (1 - norm.cdf(np.abs(z)))
-        rows = []
-        rows.append(
-            f"lmrob fit (setting={self.control.setting}, psi={self.control.psi}, init={self.control.init})"
-        )
-        rows.append(
-            f"n = {self.nobs_}, df residual = {self.df_residual_}, scale = {self.scale_:.6g}"
-        )
-        rows.append(f"converged = {self.converged_} (iters: {self.n_iter_})")
-        rows.append("")
-        header = f"{'term':<20} {'estimate':>12} {'std.err':>10} {'z':>8} {'p':>10}"
-        rows.append(header)
-        rows.append("-" * len(header))
-        for name, b, s, zi, p in zip(self.term_names_, self.coef_, se, z, pvals, strict=True):
-            rows.append(f"{name:<20} {b:12.6g} {s:10.4g} {zi:8.3g} {p:10.4g}")
-        return "\n".join(rows)
+        The returned object stringifies to an R-style printout (use
+        ``str(fit.summary())`` or just ``print(fit.summary())``) and exposes
+        the underlying coefficient table and R-squared as attributes.
+        """
+        from pyrobustlm.summary import make_summary
+
+        return make_summary(self)
 
     def __repr__(self) -> str:
         coefs = ", ".join(f"{n}={v:.4g}" for n, v in zip(self.term_names_, self.coef_, strict=True))

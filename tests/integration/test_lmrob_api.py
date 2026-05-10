@@ -107,9 +107,10 @@ def test_lmrob_returns_results_object():
     assert (np.diag(fit.cov_) > 0).all()
     # rweights in [0, 1]
     assert fit.rweights_.min() >= 0 and fit.rweights_.max() <= 1.0
-    # summary() returns a string; smoke-check
+    # summary() returns a SummaryLmRob; smoke-check the printout
     s = fit.summary()
-    assert "Air.Flow" in s and "scale" in s
+    out = str(s)
+    assert "Air.Flow" in out and "Robust residual standard error" in out
 
 
 def test_predict_round_trip_array():

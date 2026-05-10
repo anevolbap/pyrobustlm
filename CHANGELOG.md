@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **``summary()``** mirrors ``robustbase:::summary.lmrob``. Returns a
+  ``SummaryLmRob`` with the coefficient table (``Estimate``, ``Std. Error``,
+  ``t value``, ``Pr(>|t|)`` from the t-distribution with ``df_residual``
+  degrees of freedom), robust multiple R-squared and adjusted R-squared
+  (using the family-specific ``E[wgt(r)] / E[r psi(r)]`` correction
+  factor), and an R-style ``__str__``.
+- **``anova(full, *reduced, test="Wald")``** runs the robust Wald test
+  for nested ``LmRobResults``. Pair-wise output matches R element-wise
+  on stackloss (chi-sq and p-value within rtol=2e-3). Chained mode does
+  sequential ``Model k`` vs ``Model k-1`` comparisons (matches
+  ``anova.lm`` semantics).
 - **Full ``vcov_w`` port.** All five ``cov.corrfact`` branches
   (``asympt``, ``empirical``, ``tau``, ``hybrid``, ``tauold``) plus the
   Huber finite-sample correction (``cov.hubercorr``), the five
