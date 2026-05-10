@@ -18,9 +18,12 @@ when ``init="S"``.
 
 from __future__ import annotations
 
+import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 import numpy as np
+from numpy.random import SeedSequence
 from numpy.typing import NDArray
 
 from pyrobustlm import _psifuns as _pf
@@ -40,6 +43,13 @@ class FastSConfig:
     scale_tol: float = 1e-10
     max_iter_scale: int = 200
     mts: int = 1000  # max attempts when drawing a non-singular p-subset
+    # Parallelism:
+    #   n_workers=1: serial (default; bit-identical with pre-parallel releases).
+    #   n_workers=0: auto = min(os.cpu_count(), max(1, nResample // 32)).
+    #   n_workers>1: that many worker threads.
+    # Each worker draws from a SeedSequence-spawned PCG64, so results are
+    # deterministic for a given (seed, n_workers, nResample).
+    n_workers: int = 1
 
 
 @dataclass
@@ -103,6 +113,148 @@ def _irwls_step(
     yw = y * sw
     beta_new, *_ = np.linalg.lstsq(Xw, yw, rcond=None)
     return np.ascontiguousarray(beta_new, dtype=np.float64)
+
+
+@dataclass
+class _ChunkResult:
+    best_betas: list[NDArray[np.float64]]
+    best_scales: list[float]
+    early_exact_fit: FastSResult | None
+
+
+def _resolve_n_workers(req: int, n_iter: int) -> int:
+    """Map ``cfg.n_workers`` to a concrete worker count.
+
+    Special values: ``1`` = serial; ``0`` = auto.
+
+    Auto picks ``min(os.cpu_count(), max(1, n_iter // 250))``. The cap on
+    ``n_iter`` is intentional: per-worker chunks need to be large enough
+    that the per-task overhead amortises. The caller is responsible for
+    only invoking auto mode when the per-iteration BLAS cost is large
+    enough to dominate Python/GIL overhead (see ``fast_s`` for the
+    cost-based gate).
+    """
+    if req == 1:
+        return 1
+    if req == 0:
+        cores = os.cpu_count() or 1
+        return max(1, min(cores, max(1, n_iter // 250)))
+    return max(1, int(req))
+
+
+def _auto_use_threads(n: int, p: int, n_iter: int) -> bool:
+    """Heuristic for when threading is likely to be a net win.
+
+    For small problems the GIL-locked Python work between BLAS calls
+    dominates and threading hurts. The break-even on this hardware
+    (16-core Linux x86_64, OpenBLAS) is roughly when ``n * p^2 >= 1e6``
+    *and* ``n_iter >= 250``. Tune as needed; users can always force
+    ``n_workers`` explicitly.
+    """
+    return (n * p * p >= 1_000_000) and (n_iter >= 250)
+
+
+def _to_seed_sequence(seed: int | np.random.Generator | None) -> SeedSequence:
+    """Turn the user-facing ``seed`` argument into a ``SeedSequence``.
+
+    For an existing ``Generator`` we draw 32 bits from its state to seed a
+    fresh sequence; that keeps determinism while letting parallel workers
+    each get their own PCG64.
+    """
+    if isinstance(seed, np.random.Generator):
+        # Pull a 64-bit seed deterministically out of the generator.
+        s = int(seed.integers(0, 2**63 - 1))
+        return SeedSequence(s)
+    return SeedSequence(seed)
+
+
+def _split_iters(total: int, k: int) -> list[int]:
+    """Split ``total`` iterations across ``k`` workers as evenly as possible."""
+    base, rem = divmod(total, k)
+    return [base + (1 if i < rem else 0) for i in range(k)]
+
+
+def _resample_chunk(
+    X: NDArray[np.float64],
+    y: NDArray[np.float64],
+    cfg: FastSConfig,
+    seed_seq: SeedSequence,
+    n_iter: int,
+) -> _ChunkResult:
+    """Run ``n_iter`` resampling iterations and return the local best-of-best_r heap.
+
+    Each call has its own PCG64; the return value is reduced together with
+    other chunk outputs in :func:`fast_s`.
+    """
+    rng = np.random.default_rng(seed_seq)
+    p = X.shape[1]
+    best_betas: list[NDArray[np.float64]] = []
+    best_scales: list[float] = []
+
+    for _ in range(n_iter):
+        idx = _draw_nonsingular_subset(X, rng, p, cfg.mts)
+        if idx is None:
+            continue
+        try:
+            beta_t = np.linalg.solve(X[idx], y[idx]).astype(np.float64, copy=False)
+        except np.linalg.LinAlgError:
+            continue
+
+        r = y - X @ beta_t
+        s_t = _mad(r)
+        if s_t == 0.0:
+            exact = FastSResult(
+                coef=beta_t,
+                scale=0.0,
+                converged=True,
+                n_iter=0,
+                n_candidates_kept=1,
+            )
+            return _ChunkResult([], [], exact)
+
+        for _kk in range(cfg.k_fast_s):
+            s_t = m_scale(
+                y - X @ beta_t,
+                family=cfg.psi_chi,
+                k=cfg.k_chi,
+                b0=cfg.b0,
+                max_iter=cfg.max_iter_scale,
+                tol=cfg.scale_tol,
+                init_scale=s_t,
+                p=p,
+            )
+            if s_t == 0.0:
+                exact = FastSResult(
+                    coef=beta_t,
+                    scale=0.0,
+                    converged=True,
+                    n_iter=0,
+                    n_candidates_kept=1,
+                )
+                return _ChunkResult([], [], exact)
+            beta_t = _irwls_step(X, y, beta_t, s_t, cfg.psi_chi, cfg.k_chi)
+
+        s_t = m_scale(
+            y - X @ beta_t,
+            family=cfg.psi_chi,
+            k=cfg.k_chi,
+            b0=cfg.b0,
+            max_iter=cfg.max_iter_scale,
+            tol=cfg.scale_tol,
+            init_scale=s_t,
+            p=p,
+        )
+
+        if len(best_scales) < cfg.best_r:
+            best_betas.append(beta_t)
+            best_scales.append(s_t)
+        else:
+            worst_i = int(np.argmax(best_scales))
+            if s_t < best_scales[worst_i]:
+                best_betas[worst_i] = beta_t
+                best_scales[worst_i] = s_t
+
+    return _ChunkResult(best_betas, best_scales, None)
 
 
 def _refine_to_convergence(
@@ -172,7 +324,6 @@ def fast_s(
     a basin of attraction tolerance documented in plan.md §5.1.
     """
     cfg = cfg or FastSConfig()
-    rng = np.random.default_rng(seed)
     X = np.ascontiguousarray(X, dtype=np.float64)
     y = np.ascontiguousarray(y, dtype=np.float64)
     n, p = X.shape
@@ -182,65 +333,49 @@ def fast_s(
         raise ValueError(f"fast_s requires n > p; got n={n}, p={p}")
 
     # ------------------------------------------------------------------
-    # Resampling loop
+    # Resampling loop (optionally parallel via a thread pool)
     # ------------------------------------------------------------------
-    best_betas: list[NDArray[np.float64]] = []
-    best_scales: list[float] = []
+    if cfg.n_workers == 0 and not _auto_use_threads(n, p, cfg.nResample):
+        # Auto mode but problem is small enough that threading hurts.
+        n_workers = 1
+    else:
+        n_workers = _resolve_n_workers(cfg.n_workers, cfg.nResample)
+    seed_seq = _to_seed_sequence(seed)
 
-    for _ in range(cfg.nResample):
-        idx = _draw_nonsingular_subset(X, rng, p, cfg.mts)
-        if idx is None:
-            continue
-        try:
-            beta_t = np.linalg.solve(X[idx], y[idx])
-        except np.linalg.LinAlgError:
-            continue
+    if n_workers == 1:
+        result = _resample_chunk(X, y, cfg, seed_seq, cfg.nResample)
+        if result.early_exact_fit is not None:
+            return result.early_exact_fit
+        best_betas = result.best_betas
+        best_scales = result.best_scales
+    else:
+        # Split nResample across n_workers chunks. Each worker uses a
+        # SeedSequence-spawned PCG64, so results are deterministic per
+        # (seed, n_workers, nResample).
+        chunk_sizes = _split_iters(cfg.nResample, n_workers)
+        child_seeds = seed_seq.spawn(n_workers)
+        with ThreadPoolExecutor(max_workers=n_workers) as ex:
+            futures = [
+                ex.submit(_resample_chunk, X, y, cfg, ss, m)
+                for ss, m in zip(child_seeds, chunk_sizes, strict=True)
+                if m > 0
+            ]
+            chunk_results = [f.result() for f in futures]
 
-        # K-step refinement
-        r = y - X @ beta_t
-        s_t = _mad(r)
-        if s_t == 0.0:
-            return FastSResult(
-                coef=beta_t, scale=0.0, converged=True, n_iter=0, n_candidates_kept=1
-            )
-        for _kk in range(cfg.k_fast_s):
-            s_t = m_scale(
-                y - X @ beta_t,
-                family=cfg.psi_chi,
-                k=cfg.k_chi,
-                b0=cfg.b0,
-                max_iter=cfg.max_iter_scale,
-                tol=cfg.scale_tol,
-                init_scale=s_t,
-                p=p,
-            )
-            if s_t == 0.0:
-                return FastSResult(
-                    coef=beta_t, scale=0.0, converged=True, n_iter=0, n_candidates_kept=1
-                )
-            beta_t = _irwls_step(X, y, beta_t, s_t, cfg.psi_chi, cfg.k_chi)
+        # An exact fit (m_scale==0) short-circuits everything.
+        for cr in chunk_results:
+            if cr.early_exact_fit is not None:
+                return cr.early_exact_fit
 
-        # Final scale at this candidate
-        s_t = m_scale(
-            y - X @ beta_t,
-            family=cfg.psi_chi,
-            k=cfg.k_chi,
-            b0=cfg.b0,
-            max_iter=cfg.max_iter_scale,
-            tol=cfg.scale_tol,
-            init_scale=s_t,
-            p=p,
-        )
-
-        # Insert into the bounded heap (small best_r; linear scan is fine).
-        if len(best_scales) < cfg.best_r:
-            best_betas.append(beta_t)
-            best_scales.append(s_t)
-        else:
-            worst_i = int(np.argmax(best_scales))
-            if s_t < best_scales[worst_i]:
-                best_betas[worst_i] = beta_t
-                best_scales[worst_i] = s_t
+        best_betas = []
+        best_scales = []
+        for cr in chunk_results:
+            best_betas.extend(cr.best_betas)
+            best_scales.extend(cr.best_scales)
+        if len(best_scales) > cfg.best_r:
+            order = np.argsort(best_scales)[: cfg.best_r]
+            best_betas = [best_betas[i] for i in order]
+            best_scales = [best_scales[i] for i in order]
 
     if not best_scales:
         raise RuntimeError("fast_s: no non-singular subsamples were found")

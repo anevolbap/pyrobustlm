@@ -87,6 +87,12 @@ class Control:
     seed: int | None = None
     trace_lev: int = 0
 
+    # Worker threads for the fast-S resampling loop.
+    # 1 = serial (default; deterministic). 0 = auto (only enables threading
+    # for problems large enough that BLAS dominates Python/GIL overhead).
+    # Any positive integer = explicit worker count.
+    n_workers: int = 1
+
     bb: float = 0.5  # consistency constant (target value of mean(chi))
 
     extra: dict[str, object] = field(default_factory=dict)

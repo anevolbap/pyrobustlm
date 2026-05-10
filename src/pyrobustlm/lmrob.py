@@ -119,6 +119,7 @@ def lmrob(
             scale_tol=control.scale_tol,
             max_iter_scale=control.k_max,
             mts=control.mts,
+            n_workers=control.n_workers,
         )
         s_result = fast_s(X, y, cfg=cfg, seed=s_seed)
         beta_init = s_result.coef

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Parallel fast-S resampling.** ``Control(n_workers=...)`` distributes
+  the resampling loop across a ``ThreadPoolExecutor``. ``n_workers=0`` is
+  auto (only kicks in for problems where ``n*p^2 >= 1e6`` and
+  ``nResample >= 250``). Per-thread RNG via ``SeedSequence.spawn`` keeps
+  results deterministic for a given ``(seed, n_workers, nResample)``.
+  Measured ~1.7x speedup at n=5000, p=30, nResample=2000 on a 16-core
+  OpenBLAS box. Small-n problems are GIL-bound and not affected; see
+  ``docs/numerical-notes.md`` entry 5.
 - **``anova(test="Deviance")``** ports the Deviance variant from
   ``robustbase::anovaLmrobPair``. Refits the reduced model via
   ``mm_iterate`` at the full's scale, then computes

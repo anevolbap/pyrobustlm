@@ -88,7 +88,34 @@ setting-driven defaults are honoured (``"D" in method`` triggers
 On stackloss with ``setting="KS2014"`` (and ``"KS2011"``), the cov
 matrix matches R element-wise to ``rtol=1e-3``.
 
-### 5. ``anova()`` chained mode
+### 5. Thread-based parallel resampling
+
+**What.** ``Control(n_workers=...)`` opts the fast-S resampling loop into a
+``ThreadPoolExecutor``. Each worker draws from a ``SeedSequence``-spawned
+PCG64, so results are deterministic for a given
+``(seed, n_workers, nResample)`` triple. ``n_workers=1`` (the default) is
+serial and bit-identical with pre-parallel releases. ``n_workers=0`` is
+auto, only enabling threading when ``n * p^2 >= 1e6`` and ``nResample >=
+250`` (heuristic measured on a 16-core OpenBLAS Linux box).
+
+**Why not OpenMP/Cython prange.** The resampling iteration is dominated
+by NumPy's ``np.linalg.solve``, ``lstsq``, ``svd``, and matmul. Those
+already release the GIL, so a thread pool is the realistic equivalent
+without rewriting the loop body in C+LAPACK. True OpenMP would require
+porting the linalg path off NumPy.
+
+**Speedup numbers** (16-core, OpenBLAS pinned to 1 thread, n=5000, p=30,
+nResample=2000): 9.74 s serial, 5.77 s auto. About 1.7x.
+
+**Why small-n doesn't speed up.** For tiny problems the per-iteration
+work is mostly Python (RNG draws, dictionary lookups, heap updates),
+which holds the GIL. Threading there pays the pool overhead without
+freeing real CPU. The 12x R gap at n=100 is GIL-bound, not BLAS-bound;
+closing it would require pushing the loop body into Cython.
+
+**Where.** ``tests/unit/test_fast_s_parallel.py``.
+
+### 6. ``anova()`` chained mode
 
 **What.** Calling ``anova(m1, m2, m3, ...)`` compares each adjacent pair
 sequentially: ``m2`` vs ``m1``, then ``m3`` vs ``m2``, etc. R's
@@ -104,7 +131,7 @@ which is the conventional reading of nested-model anova tables.
 
 **Where.** ``tests/validation/test_summary_anova.py::test_anova_*``.
 
-### 6. ``vcov_avar1`` matches R element-wise
+### 7. ``vcov_avar1`` matches R element-wise
 
 **What.** With the corrected ``Mchi(deriv=1) = chi'`` mapping (R's chi is
 normalised so ``chi(inf) = 1``; ``chi' = (1/rho_unnorm(inf)) * psi``) and
