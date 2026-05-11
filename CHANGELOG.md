@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-05-11
+
+### Fixed
+
+- **CI green across Linux/macOS/Windows × Python 3.10-3.13.** Three CI-only
+  failures fixed:
+  - ``_fast_s.pyx`` declared ``ndarray[long, ndim=1]`` for the subset-
+    indices buffer, which broke on Windows LLP64 (``long`` is 32-bit on
+    Windows but our ``np.int64`` array is 64-bit). Switched to
+    ``cnp.int64_t``.
+  - ``test_d_iteration_matches_r_kernel`` subprocesses ``Rscript`` and
+    needs ``robustbase`` installed. Skips now when either is missing
+    (CI only installs R on Linux).
+  - ``test_engine_c_speedup_at_small_n`` is a wall-clock assertion that
+    was flaky on shared CI runners. Skips when ``CI`` env var is set.
+
+### Build
+
+- ``scipy`` added to ``[build-system].requires`` and its parent
+  directory wired into ``cython_args`` as ``-I``. The new
+  ``_fast_s.pyx`` and ``_lmrob.pyx`` modules ``cimport`` from
+  ``scipy.linalg.cython_lapack``, which needs scipy at build time when
+  using PEP-517 isolation (as CI does).
+
 ## [0.5.2] - 2026-05-11
 
 ### Added
@@ -328,7 +352,8 @@ First public release. End-to-end MM regression that matches R's
 See [`docs/numerical-notes.md`](docs/numerical-notes.md) for the full list
 of documented divergences from R.
 
-[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/anevolbap/pyrobustlm/compare/v0.4.1...v0.5.0
