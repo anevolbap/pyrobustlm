@@ -62,30 +62,32 @@ def _try_simple_parse(formula: str, data: pd.DataFrame) -> DesignMatrix | None:
         if any(ch in t for ch in " ()[]:*"):
             return None
         cols.append(t)
-    if lhs not in data.columns:
+    df_cols = data.columns
+    if lhs not in df_cols:
         return None
-    if not all(c in data.columns for c in cols):
+    if not all(c in df_cols for c in cols):
         return None
-    # All columns must be numeric (skip categorical fast path).
-    for c in [lhs, *cols]:
-        if data[c].dtype.kind not in ("f", "i", "u"):
+    # Batch-check column dtypes via ``data.dtypes`` (one call) instead of
+    # ``data[c].dtype`` per column (N calls).
+    dtypes = data.dtypes
+    for c in (lhs, *cols):
+        if dtypes[c].kind not in ("f", "i", "u"):
             return None
-    # Pull arrays column-by-column. ``Series.to_numpy()`` is much cheaper
-    # than ``DataFrame.loc[:, cols].to_numpy()`` because it avoids
-    # building an intermediate DataFrame and its block manager.
-    y = np.ascontiguousarray(data[lhs].to_numpy(), dtype=np.float64)
+    # ``Series.values`` is faster than ``.to_numpy()`` and returns the
+    # underlying ndarray when the column is already numeric.
+    y = np.ascontiguousarray(data[lhs].values, dtype=np.float64)
     n_rows = y.shape[0]
     p_feat = len(cols)
     if has_intercept:
         X = np.empty((n_rows, p_feat + 1), dtype=np.float64)
         X[:, 0] = 1.0
         for i, c in enumerate(cols):
-            X[:, i + 1] = data[c].to_numpy()
+            X[:, i + 1] = data[c].values
         term_names = ["Intercept", *cols]
     else:
         X = np.empty((n_rows, p_feat), dtype=np.float64)
         for i, c in enumerate(cols):
-            X[:, i] = data[c].to_numpy()
+            X[:, i] = data[c].values
         term_names = list(cols)
     is_factor = np.zeros(X.shape[1], dtype=bool)
     return DesignMatrix(
