@@ -142,6 +142,7 @@ def lmrob(
 
     s_seed = seed if seed is not None else control.seed
     k_chi_tuple = tuple(np.atleast_1d(np.asarray(control.tuning_chi, dtype=float)).ravel())
+    psi_k_eff = tuple(np.atleast_1d(np.asarray(control.tuning_psi, dtype=float)).ravel())
 
     # ------------------------------------------------------------------
     # Monolithic Cython engine: fast-S + MM in one nogil call. Sets the
@@ -155,61 +156,64 @@ def lmrob(
         and psi_family in _CY_FAMILY_IDS
         and _CY_LMROB_FIT is not None
     ):
-        _cy_lmrob_fit = _CY_LMROB_FIT
-        if True:
-            _psi_k_eff = tuple(np.atleast_1d(np.asarray(control.tuning_psi, dtype=float)).ravel())
-            _tuning_chi = np.zeros(3, dtype=np.float64)
-            _tuning_psi = np.zeros(3, dtype=np.float64)
-            for _i, _v in enumerate(k_chi_tuple[:3]):
-                _tuning_chi[_i] = float(_v)
-            for _i, _v in enumerate(_psi_k_eff[:3]):
-                _tuning_psi[_i] = float(_v)
-            beta_out = np.empty(p, dtype=np.float64)
-            residuals_out = np.empty(n, dtype=np.float64)
-            rweights_out = np.empty(n, dtype=np.float64)
-            beta_init_out = np.empty(p, dtype=np.float64)
-            rng_e = np.random.default_rng(s_seed)
-            scale_e, status_e, n_iter_s, _conv_s, n_iter_mm, conv_mm = _cy_lmrob_fit(
-                np.ascontiguousarray(X, dtype=np.float64),
-                np.ascontiguousarray(y, dtype=np.float64),
-                rng_e.bit_generator.capsule,
-                _CY_FAMILY_IDS[psi_family],
-                _tuning_chi,
-                _tuning_psi,
-                control.bb,
-                control.nResample,
-                control.mts,
-                control.k_fast_s,
-                control.best_r_s,
-                control.max_it,
-                control.refine_tol,
-                control.max_it,
-                control.rel_tol,
-                control.k_max,
-                control.scale_tol,
-                beta_out,
-                residuals_out,
-                rweights_out,
-                beta_init_out,
-            )
-            if status_e == 1:
-                raise RuntimeError("lmrob: no non-singular subsamples found")
-            beta_init = beta_init_out.copy()
-            sigma_init = float(scale_e)
-            init_info = {
-                "coef": beta_out.copy(),
-                "scale": float(scale_e),
-                "n_iter": int(n_iter_s),
-                "method": "S",
-            }
-            from types import SimpleNamespace
+        _tuning_chi = np.zeros(3, dtype=np.float64)
+        _tuning_psi = np.zeros(3, dtype=np.float64)
+        # Tuples are short (1-3 entries); a manual loop avoids the cost of
+        # np.asarray + ravel that ``np.atleast_1d`` would incur.
+        for _i in range(min(3, len(k_chi_tuple))):
+            _tuning_chi[_i] = k_chi_tuple[_i]
+        for _i in range(min(3, len(psi_k_eff))):
+            _tuning_psi[_i] = psi_k_eff[_i]
+        beta_out = np.empty(p, dtype=np.float64)
+        residuals_out = np.empty(n, dtype=np.float64)
+        rweights_out = np.empty(n, dtype=np.float64)
+        beta_init_out = np.empty(p, dtype=np.float64)
+        rng_e = np.random.default_rng(s_seed)
+        # X and y are already float64 C-contiguous coming from the design
+        # builder; skip np.ascontiguousarray if so to avoid a Python call.
+        X_c = X if (X.dtype == np.float64 and X.flags.c_contiguous) else np.ascontiguousarray(X, dtype=np.float64)
+        y_c = y if (y.dtype == np.float64 and y.flags.c_contiguous) else np.ascontiguousarray(y, dtype=np.float64)
+        scale_e, status_e, n_iter_s, _conv_s, n_iter_mm, conv_mm = _CY_LMROB_FIT(
+            X_c,
+            y_c,
+            rng_e.bit_generator.capsule,
+            _CY_FAMILY_IDS[psi_family],
+            _tuning_chi,
+            _tuning_psi,
+            control.bb,
+            control.nResample,
+            control.mts,
+            control.k_fast_s,
+            control.best_r_s,
+            control.max_it,
+            control.refine_tol,
+            control.max_it,
+            control.rel_tol,
+            control.k_max,
+            control.scale_tol,
+            beta_out,
+            residuals_out,
+            rweights_out,
+            beta_init_out,
+        )
+        if status_e == 1:
+            raise RuntimeError("lmrob: no non-singular subsamples found")
+        beta_init = beta_init_out
+        sigma_init = float(scale_e)
+        init_info = {
+            "coef": beta_out,
+            "scale": float(scale_e),
+            "n_iter": int(n_iter_s),
+            "method": "S",
+        }
+        from types import SimpleNamespace
 
-            _engine_mm = SimpleNamespace(
-                coef=beta_out, converged=bool(conv_mm), n_iter=int(n_iter_mm)
-            )
-            _engine_c_done = True
-            _engine_residuals = residuals_out
-            _engine_rweights = rweights_out
+        _engine_mm = SimpleNamespace(
+            coef=beta_out, converged=bool(conv_mm), n_iter=int(n_iter_mm)
+        )
+        _engine_c_done = True
+        _engine_residuals = residuals_out
+        _engine_rweights = rweights_out
 
     if _engine_c_done:
         pass  # cy_lmrob_fit already populated beta_init / sigma_init / init_info
@@ -302,7 +306,6 @@ def lmrob(
     # MM step holding sigma fixed (skipped if the monolithic engine
     # already produced post-MM beta + residuals + rweights).
     # ------------------------------------------------------------------
-    psi_k_eff = tuple(np.atleast_1d(np.asarray(control.tuning_psi, dtype=float)).ravel())
     if _engine_c_done:
         mm = _engine_mm
         coef = mm.coef
