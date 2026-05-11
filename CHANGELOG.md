@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-10
+
 ### Added
 
 - **Sphinx documentation scaffolding.** ``docs/`` now builds with
@@ -176,6 +178,7 @@ First public release. End-to-end MM regression that matches R's
 See [`docs/numerical-notes.md`](docs/numerical-notes.md) for the full list
 of documented divergences from R.
 
-[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/anevolbap/pyrobustlm/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/anevolbap/pyrobustlm/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/anevolbap/pyrobustlm/releases/tag/v0.1.0

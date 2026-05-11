@@ -6,4 +6,4 @@ Until the project is published, the version is hard-coded here. Once we wire
 be replaced by a generated one.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
