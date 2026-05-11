@@ -57,6 +57,7 @@ _FAMILY_IDS: dict[str, int] = {
     "hampel": 1,
     "optimal": 2,
     "lqq": 3,
+    "ggw": 4,
 }
 
 

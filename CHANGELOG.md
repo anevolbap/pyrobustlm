@@ -9,15 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **Cython fast path extended to hampel, optimal, lqq.** The Cython
-  resampling kernel from v0.3.0 now dispatches on a family enum; the
-  bisquare-only ``cy_resample_iter_bisquare`` wrapper is kept for
-  compatibility. End-to-end runtime on n=500/p=10/nR=500 is now
-  uniform across families (~150-220 ms vs. 200-260 ms on the
-  v0.3.0 NumPy path). Stackloss element-wise parity vs R is preserved
-  for all four families (rtol=1e-4 on coef and scale). ``ggw`` still
-  uses the NumPy path: its polynomial chi tables would need to be
-  brought into the Cython module.
+- **Cython fast path extended to hampel, optimal, lqq, ggw.** The
+  Cython resampling kernel from v0.3.0 now dispatches on a family enum;
+  the bisquare-only ``cy_resample_iter_bisquare`` wrapper is kept for
+  compatibility. ggw brings over the six polynomial chi coefficient
+  tables from ``_psi.pyx`` plus the ``_GGW_ABC`` (a, b, c) lookup, so
+  the resampling iteration stays nogil. End-to-end runtime on
+  n=500/p=10/nR=500 is now uniform across all five families
+  (~110-180 ms vs. 200-280 ms on the v0.3.0 NumPy path). Stackloss
+  element-wise parity vs R is preserved for all families (rtol=1e-4
+  on coef and scale; rtol=5e-3 for ggw, limited by R's polynomial
+  chi approximation).
 - **Read the Docs config (``.readthedocs.yaml``).** Builds the Sphinx
   site on every push and PR. Uses ubuntu-22.04 + Python 3.11 with
   libopenblas/liblapack apt packages so meson-python can link against

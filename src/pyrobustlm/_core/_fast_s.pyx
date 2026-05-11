@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Cython kernel for one fast-S resampling iteration. Family-generic:
-# bisquare, hampel, optimal, and lqq dispatch on a small family enum.
-# ggw is not supported here yet (the polynomial-chi tables would need to
-# be brought over from _psi.pyx); ggw fits go through the NumPy path.
+# bisquare, hampel, optimal, lqq, and ggw dispatch on a small family enum.
+# ggw uses the same polynomial chi tables as _psi.pyx (duplicated here so
+# the kernel stays self-contained and nogil).
 
 cimport cython
-from libc.math cimport fabs, sqrt
+from libc.math cimport fabs, sqrt, exp, pow as cpow
 from libc.stdlib cimport malloc, free
 
 from scipy.linalg.cython_lapack cimport dgesv, dgels
@@ -25,6 +25,153 @@ cdef enum:
     FAM_HAMPEL = 1
     FAM_OPTIMAL = 2
     FAM_LQQ = 3
+    FAM_GGW = 4
+
+
+# Largest x such that exp(-x^2/2) does not underflow (matches lmrob.c:945).
+cdef double _MAX_EX2_SQR_HALF = 37.7 * 37.7 / 2.0
+
+
+# ---------------------------------------------------------------------------
+# GGW polynomial chi tables. Mirror the tables in _psi.pyx exactly; we
+# duplicate them here so the resampling loop stays nogil without cross-
+# module cdef linking. Initialised lazily on first ggw call.
+# ---------------------------------------------------------------------------
+cdef double _GGW_C0[6]
+cdef double _GGW_END[6]
+cdef double _GGW_POLY[6][20]
+cdef double _GGW_ABC_A[7]
+cdef double _GGW_ABC_B[7]
+cdef double _GGW_ABC_C[7]
+cdef int _ggw_tables_init = 0
+
+
+cdef _init_ggw_tables():
+    """Populate the ggw polynomial coefficient tables and the (a, b, c)
+    lookup for case_idx in [1, 6]. Idempotent."""
+    global _ggw_tables_init
+    if _ggw_tables_init:
+        return
+    cdef double[20] case0 = [
+        0.094164571656733, -0.168937372816728, 0.00427612218326869,
+        0.336876420549802, -0.166472338873754, 0.0436904383670537,
+        -0.00732077121233756, 0.000792550423837942, -5.08385693557726e-05,
+        1.46908724988936e-06, -0.837547853001024, 0.876392734183528,
+        -0.184600387321924, 0.0219985685280105, -0.00156403138825785,
+        6.16243137719362e-05, -7.478979895101e-07, -3.99563057938975e-08,
+        1.78125589532002e-09, -2.22317669250326e-11
+    ]
+    cdef double[20] case1 = [
+        0.174505224068561, -0.168853188892986, 0.00579250806463694,
+        0.624193375180937, -0.419882092234336, 0.150011303015251,
+        -0.0342185249354937, 0.00504325944243195, -0.0004404209084091,
+        1.73268448820236e-05, -0.842160072154898, 1.19912623576069,
+        -0.345595777445623, 0.0566407000764478, -0.00560501531439071,
+        0.000319084704541442, -7.4279004383686e-06, -2.02063746721802e-07,
+        1.65716101809839e-08, -2.97536178313245e-10
+    ]
+    cdef double[20] case2 = [
+        1.41117142330711, -0.168853741371095, 0.0164713906344165,
+        5.04767833986545, -9.65574752971554, 9.80999125035463,
+        -6.36344090274658, 2.667031271863, -0.662324374141645,
+        0.0740982983873332, -0.84794906554363, 3.4315790970352,
+        -2.82958670601597, 1.33442885893807, -0.384812004961396,
+        0.0661359078129487, -0.00557221619221031, -5.42574872792348e-05,
+        4.92564168111658e-05, -2.80432020951381e-06
+    ]
+    cdef double[20] case3 = [
+        0.104604570079252, 0.0626649856211545, -0.220058184826331,
+        0.403388189975896, -0.213020713708997, 0.102623342948069,
+        -0.0392618698058543, 0.00937878752829234, -0.00122303709506374,
+        6.70669880352453e-05, 0.632651530179424, -1.14744323908043,
+        0.981941598165897, -0.341211275272191, 0.0671272892644464,
+        -0.00826237596187364, 0.0006529134641922, -3.23468516804340e-05,
+        9.17904701930209e-07, -1.14119059405971e-08
+    ]
+    cdef double[20] case4 = [
+        0.205026436642222, 0.0627464477520301, -0.308483319391091,
+        0.791480474953874, -0.585521414631968, 0.394979618040607,
+        -0.211512515412973, 0.0707208739858416, -0.0129092527174621,
+        0.000990938134086886, 0.629919019245325, -1.60049136444912,
+        1.91903069049618, -0.933285960363159, 0.256861783311473,
+        -0.0442133943831343, 0.00488402902512139, -0.000338084604725483,
+        1.33974565571893e-05, -2.32450916247553e-07
+    ]
+    cdef double[20] case5 = [
+        1.35010856132000, 0.0627465630782482, -0.791613168488525,
+        5.21196700244212, -9.89433796586115, 17.1277266427962,
+        -23.5364159883776, 20.1943966645350, -9.4593988142692,
+        1.86332355622445, 0.62986381140768, -4.10676399816156,
+        12.6361433997327, -15.7697199271455, 11.1373468568838,
+        -4.91933095295458, 1.39443093325178, -0.247689078940725,
+        0.0251861553415515, -0.00112130382664914
+    ]
+    cdef Py_ssize_t i
+    for i in range(20):
+        _GGW_POLY[0][i] = case0[i]
+        _GGW_POLY[1][i] = case1[i]
+        _GGW_POLY[2][i] = case2[i]
+        _GGW_POLY[3][i] = case3[i]
+        _GGW_POLY[4][i] = case4[i]
+        _GGW_POLY[5][i] = case5[i]
+    _GGW_C0[0] = 1.694
+    _GGW_C0[1] = 1.2442567
+    _GGW_C0[2] = 0.4375470
+    _GGW_C0[3] = 1.063
+    _GGW_C0[4] = 0.7593544
+    _GGW_C0[5] = 0.2959132
+    _GGW_END[0] = 18.5527638190955
+    _GGW_END[1] = 13.7587939698492
+    _GGW_END[2] = 4.89447236180905
+    _GGW_END[3] = 11.4974874371859
+    _GGW_END[4] = 8.15075376884422
+    _GGW_END[5] = 3.17587939698492
+    # (a, b, c) lookup; mirrors _GGW_ABC in pyrobustlm.scale.
+    _GGW_ABC_A[0] = 0.0; _GGW_ABC_B[0] = 0.0; _GGW_ABC_C[0] = 0.0  # unused
+    _GGW_ABC_A[1] = 0.648;     _GGW_ABC_B[1] = 1.0; _GGW_ABC_C[1] = 1.694
+    _GGW_ABC_A[2] = 0.4760508; _GGW_ABC_B[2] = 1.0; _GGW_ABC_C[2] = 1.2442567
+    _GGW_ABC_A[3] = 0.1674046; _GGW_ABC_B[3] = 1.0; _GGW_ABC_C[3] = 0.4375470
+    _GGW_ABC_A[4] = 1.387;     _GGW_ABC_B[4] = 1.5; _GGW_ABC_C[4] = 1.063
+    _GGW_ABC_A[5] = 0.8372485; _GGW_ABC_B[5] = 1.5; _GGW_ABC_C[5] = 0.7593544
+    _GGW_ABC_A[6] = 0.2036741; _GGW_ABC_B[6] = 1.5; _GGW_ABC_C[6] = 0.2959132
+    _ggw_tables_init = 1
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+cdef inline double _ggw_rho_one(double x, int j) nogil:
+    """Polynomial chi for ggw case j (0-based). Mirrors lmrob.c::rho_ggw."""
+    cdef double ax = x if x >= 0 else -x
+    cdef double c = _GGW_C0[j]
+    cdef double end = _GGW_END[j]
+    cdef double res
+    if ax <= c:
+        return _GGW_POLY[j][0] * ax * ax
+    if ax <= 3 * c:
+        res = _GGW_POLY[j][9]
+        res = res * ax + _GGW_POLY[j][8]
+        res = res * ax + _GGW_POLY[j][7]
+        res = res * ax + _GGW_POLY[j][6]
+        res = res * ax + _GGW_POLY[j][5]
+        res = res * ax + _GGW_POLY[j][4]
+        res = res * ax + _GGW_POLY[j][3]
+        res = res * ax + _GGW_POLY[j][2]
+        res = res * ax + _GGW_POLY[j][1]
+        return res
+    if ax <= end:
+        res = _GGW_POLY[j][19]
+        res = res * ax + _GGW_POLY[j][18]
+        res = res * ax + _GGW_POLY[j][17]
+        res = res * ax + _GGW_POLY[j][16]
+        res = res * ax + _GGW_POLY[j][15]
+        res = res * ax + _GGW_POLY[j][14]
+        res = res * ax + _GGW_POLY[j][13]
+        res = res * ax + _GGW_POLY[j][12]
+        res = res * ax + _GGW_POLY[j][11]
+        res = res * ax + _GGW_POLY[j][10]
+        return res
+    return 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -47,6 +194,7 @@ cdef inline double _chi_sum(
     cdef double a, ax, t, xi, u
     cdef double k, a_t, b_t, r_t, c, b_l, s_l, k01, denom, s5, s6, k01_2, end3, s0, dx
     cdef double R1h, R2h, R3h, R4h, ac, a2, nc, inv_nc, bma_inv_half
+    cdef int j  # ggw polynomial case index
 
     if family == FAM_BISQUARE:
         k = tuning[0]
@@ -92,7 +240,7 @@ cdef inline double _chi_sum(
                 total += (a2 * (R1h + a2 * (R2h + a2 * (R3h + a2 * R4h))) + 1.792) / 3.25
             else:
                 total += (ac * ac) / 6.5
-    else:  # FAM_LQQ
+    elif family == FAM_LQQ:
         b_l = tuning[0]; c = tuning[1]; s_l = tuning[2]
         k01 = b_l + c
         s5 = s_l - 1.0
@@ -119,6 +267,16 @@ cdef inline double _chi_sum(
                 )
             else:
                 total += 1.0
+    else:  # FAM_GGW
+        # tuning[0] holds the case index (1..6). Tables initialised at the
+        # top-level entry point before we drop the GIL.
+        j = <int>(tuning[0]) - 1
+        if j < 0:
+            j = 0
+        elif j > 5:
+            j = 5
+        for i in range(n):
+            total += _ggw_rho_one(r[i] / s, j)
     return total
 
 
@@ -140,6 +298,7 @@ cdef inline void _wgt_zinv(
     cdef double R1, R2, R3, R4
     cdef double b_l, c, s_l, k01, denom, s5, s6, k01_2, end3, s0, dx
     cdef double rho_p
+    cdef int j  # ggw case index
 
     if family == FAM_BISQUARE:
         k = tuning[0]
@@ -182,7 +341,7 @@ cdef inline void _wgt_zinv(
                 out[i] = rho_p / 3.25
             else:
                 out[i] = 1.0 / 3.25
-    else:  # FAM_LQQ
+    elif family == FAM_LQQ:
         b_l = tuning[0]; c = tuning[1]; s_l = tuning[2]
         k01 = b_l + c
         s5 = s_l - 1.0
@@ -217,6 +376,29 @@ cdef inline void _wgt_zinv(
                     out[i] = 0.0
             else:
                 out[i] = 0.0
+    else:  # FAM_GGW
+        # tuning[0] = case index (1..6); we look up (a, b, c) and apply
+        # the analytical wgt = exp(-((|x|-c)^b)/(2a)).
+        j = <int>(tuning[0])
+        if j < 1:
+            j = 1
+        elif j > 6:
+            j = 6
+        a_t = _GGW_ABC_A[j]
+        b_t = _GGW_ABC_B[j]
+        r_t = _GGW_ABC_C[j]  # c
+        for i in range(n):
+            xi = r[i] / s
+            ax = xi if xi >= 0 else -xi
+            if ax <= r_t:
+                out[i] = 1.0
+            else:
+                # cpow(diff, b_t) / (2 * a_t)
+                dx = ax - r_t
+                ac = cpow(dx, b_t) / (2.0 * a_t)
+                if ac > _MAX_EX2_SQR_HALF:
+                    ac = _MAX_EX2_SQR_HALF
+                out[i] = exp(-ac)
 
 
 @cython.boundscheck(False)
@@ -293,6 +475,10 @@ def cy_resample_iter(
     cdef int p_int = <int>p
     cdef int one = 1
     cdef int info = 0
+
+    # Initialise ggw tables once (with the GIL). Cheap if already done.
+    if family == FAM_GGW and not _ggw_tables_init:
+        _init_ggw_tables()
 
     cdef double* sub_X = <double*>malloc(p * p * sizeof(double))
     cdef double* sub_y = <double*>malloc(p * sizeof(double))
