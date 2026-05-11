@@ -171,8 +171,16 @@ def lmrob(
         rng_e = np.random.default_rng(s_seed)
         # X and y are already float64 C-contiguous coming from the design
         # builder; skip np.ascontiguousarray if so to avoid a Python call.
-        X_c = X if (X.dtype == np.float64 and X.flags.c_contiguous) else np.ascontiguousarray(X, dtype=np.float64)
-        y_c = y if (y.dtype == np.float64 and y.flags.c_contiguous) else np.ascontiguousarray(y, dtype=np.float64)
+        X_c = (
+            X
+            if (X.dtype == np.float64 and X.flags.c_contiguous)
+            else np.ascontiguousarray(X, dtype=np.float64)
+        )
+        y_c = (
+            y
+            if (y.dtype == np.float64 and y.flags.c_contiguous)
+            else np.ascontiguousarray(y, dtype=np.float64)
+        )
         scale_e, status_e, n_iter_s, _conv_s, n_iter_mm, conv_mm = _CY_LMROB_FIT(
             X_c,
             y_c,
@@ -208,9 +216,7 @@ def lmrob(
         }
         from types import SimpleNamespace
 
-        _engine_mm = SimpleNamespace(
-            coef=beta_out, converged=bool(conv_mm), n_iter=int(n_iter_mm)
-        )
+        _engine_mm = SimpleNamespace(coef=beta_out, converged=bool(conv_mm), n_iter=int(n_iter_mm))
         _engine_c_done = True
         _engine_residuals = residuals_out
         _engine_rweights = rweights_out
