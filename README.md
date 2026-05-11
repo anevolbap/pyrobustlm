@@ -1,12 +1,15 @@
 # pyrobustlm
 
 [![CI](https://github.com/anevolbap/pyrobustlm/actions/workflows/ci.yml/badge.svg)](https://github.com/anevolbap/pyrobustlm/actions/workflows/ci.yml)
+[![Docs](https://readthedocs.org/projects/pyrobustlm/badge/?version=latest)](https://pyrobustlm.readthedocs.io/)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
 
 Python port of the `lmrob` MM-estimator from R's
 [`robustbase`](https://cran.r-project.org/package=robustbase) package.
 
-Status: v0.1.0 (alpha). End-to-end pipeline matches R's `lmrob` element-wise
+Documentation: [pyrobustlm.readthedocs.io](https://pyrobustlm.readthedocs.io/).
+
+Status: v0.4.0 (alpha). End-to-end pipeline matches R's `lmrob` element-wise
 on the classical robust regression datasets (`stackloss`, `coleman`,
 `delivery`, `aircraft`, `phosphor`, etc.) within `rtol=1e-3` for both
 coefficients and covariance. See [`plan.md`](plan.md) for the full roadmap
@@ -84,8 +87,10 @@ fit.confint(level=0.95)
 
 ## Documentation
 
-The Sphinx docs are built via Read the Docs (config in
-[`.readthedocs.yaml`](.readthedocs.yaml)). To build locally:
+The Sphinx docs are hosted at
+[pyrobustlm.readthedocs.io](https://pyrobustlm.readthedocs.io/) and
+built on every push (config in [`.readthedocs.yaml`](.readthedocs.yaml)).
+To build locally:
 
 ```bash
 uv pip install -e ".[docs]" --no-build-isolation
