@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-05-11
+
 ### Added
 
 - **``vcov_avar1`` in the monolithic Cython kernel.** New function
@@ -300,7 +302,8 @@ First public release. End-to-end MM regression that matches R's
 See [`docs/numerical-notes.md`](docs/numerical-notes.md) for the full list
 of documented divergences from R.
 
-[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/anevolbap/pyrobustlm/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/anevolbap/pyrobustlm/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/anevolbap/pyrobustlm/compare/v0.3.0...v0.4.0
