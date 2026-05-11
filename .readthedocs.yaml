@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Read the Docs config for pyrobustlm. Build the Sphinx site from docs/.
+
+version: 2
+
+build:
+  os: ubuntu-22.04
+  tools:
+    python: "3.11"
+  apt_packages:
+    - libopenblas-dev
+    - liblapack-dev
+  jobs:
+    # meson-python needs the package built before Sphinx can autodoc it.
+    # Install the build chain explicitly so --no-build-isolation works.
+    post_install:
+      - pip install "meson-python>=0.16" "meson>=1.4" ninja "Cython>=3" "numpy>=2"
+      - pip install -e ".[docs]" --no-build-isolation
+
+sphinx:
+  configuration: docs/conf.py
+  builder: html
+  fail_on_warning: true
+
+# Don't ship epub/pdf builders; HTML only.
+formats: []

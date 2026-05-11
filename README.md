@@ -84,7 +84,8 @@ fit.confint(level=0.95)
 
 ## Documentation
 
-The Sphinx docs build locally with:
+The Sphinx docs are built via Read the Docs (config in
+[`.readthedocs.yaml`](.readthedocs.yaml)). To build locally:
 
 ```bash
 uv pip install -e ".[docs]" --no-build-isolation
