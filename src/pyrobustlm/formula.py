@@ -74,15 +74,22 @@ def _try_simple_parse(
     for c in [lhs, *cols]:
         if data[c].dtype.kind not in ("f", "i", "u"):
             return None
+    # Pull arrays column-by-column. ``Series.to_numpy()`` is much cheaper
+    # than ``DataFrame.loc[:, cols].to_numpy()`` because it avoids
+    # building an intermediate DataFrame and its block manager.
     y = np.ascontiguousarray(data[lhs].to_numpy(), dtype=np.float64)
-    feat = np.ascontiguousarray(
-        data.loc[:, cols].to_numpy(), dtype=np.float64
-    )
+    n_rows = y.shape[0]
+    p_feat = len(cols)
     if has_intercept:
-        X = np.ascontiguousarray(np.column_stack([np.ones(len(y)), feat]))
+        X = np.empty((n_rows, p_feat + 1), dtype=np.float64)
+        X[:, 0] = 1.0
+        for i, c in enumerate(cols):
+            X[:, i + 1] = data[c].to_numpy()
         term_names = ["Intercept", *cols]
     else:
-        X = feat
+        X = np.empty((n_rows, p_feat), dtype=np.float64)
+        for i, c in enumerate(cols):
+            X[:, i] = data[c].to_numpy()
         term_names = list(cols)
     is_factor = np.zeros(X.shape[1], dtype=bool)
     return DesignMatrix(

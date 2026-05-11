@@ -108,7 +108,11 @@ def lmrob(
     # Design matrix
     # ------------------------------------------------------------------
     if na_action == "drop":
-        data = data.dropna()
+        # ``dropna`` always allocates a new DataFrame even when no rows
+        # are dropped. Check for NAs first; the check is much cheaper than
+        # the copy for the typical NA-free path.
+        if data.isna().any(axis=None):
+            data = data.dropna()
     elif na_action == "raise":
         if data.isna().any().any():
             raise ValueError("data contains NA values; pass na_action='drop' to skip them")
