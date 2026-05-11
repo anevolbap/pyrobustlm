@@ -1,7 +1,7 @@
 project(
   'pyrobustlm',
   'c', 'cython',
-  version: '0.5.3',
+  version: '0.5.4',
   license: 'GPL-3.0-or-later',
   meson_version: '>=1.4.0',
   default_options: [

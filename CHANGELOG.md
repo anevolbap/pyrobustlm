@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-05-11
+
+### Added
+
+- **vcov_avar1 folded into ``cy_lmrob_fit``.** The fast-S kernel now
+  optionally takes ``cov_out`` and computes the sandwich covariance
+  inline using the same workspace it just used for fast-S + MM. The
+  per-element ``psi_prime`` / ``psi`` / ``chi`` / ``chi_prime``
+  kernels and the ``X' diag(w_pp) X`` build + ``dgesv`` inversion are
+  factored into a shared ``cdef`` helper used by both
+  ``cy_lmrob_vcov_avar1`` and the new ``cov_out`` parameter.
+  Removes one Python/C boundary cross and one extra
+  ``np.zeros((p, p))`` per fit. Small absolute gain (~25-30 µs) but
+  the architecture is cleaner: a single Cython call now produces
+  beta, scale, residuals, rweights, init residuals (beta_init_out),
+  and (optionally) cov.
+
+### Build / dev experience
+
+- Pin ``ruff>=0.15,<0.16`` in ``[dev]``. Each ruff minor can subtly
+  change format rules; pinning keeps local dev and CI agreeing on
+  ``ruff format --check``.
+
+### Perf misc
+
+- ``model_matrix`` simple-formula fast path: batch dtype lookup via
+  ``data.dtypes`` (one call) instead of ``data[c].dtype`` per column
+  (N calls), and use ``Series.values`` (~25% faster than
+  ``.to_numpy()``).
+- Tighter engine_c block in ``lmrob.py``: drop unneeded
+  ``np.atleast_1d`` round-trips, skip ``np.ascontiguousarray`` when
+  the arrays are already C-contig float64, drop unnecessary copies.
+
 ## [0.5.3] - 2026-05-11
 
 ### Fixed
@@ -352,7 +385,8 @@ First public release. End-to-end MM regression that matches R's
 See [`docs/numerical-notes.md`](docs/numerical-notes.md) for the full list
 of documented divergences from R.
 
-[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.3...HEAD
+[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.4...HEAD
+[0.5.4]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.0...v0.5.1

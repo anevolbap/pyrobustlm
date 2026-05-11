@@ -181,7 +181,13 @@ def lmrob(
             if (y.dtype == np.float64 and y.flags.c_contiguous)
             else np.ascontiguousarray(y, dtype=np.float64)
         )
-        scale_e, status_e, n_iter_s, _conv_s, n_iter_mm, conv_mm = _CY_LMROB_FIT(
+        # When we'll also need vcov_avar1, ask the kernel to compute it
+        # inline (saves a Python call + a separate np.zeros + a re-pass
+        # through the LAPACK setup). Only useful for cov=".vcov.avar1"
+        # which is the default MM path.
+        _want_inline_vcov = cov_kind == ".vcov.avar1"
+        _cov_buf = np.zeros((p, p), dtype=np.float64) if _want_inline_vcov else None
+        scale_e, status_e, n_iter_s, _conv_s, n_iter_mm, conv_mm, _vcov_status = _CY_LMROB_FIT(
             X_c,
             y_c,
             rng_e.bit_generator.capsule,
@@ -203,6 +209,9 @@ def lmrob(
             residuals_out,
             rweights_out,
             beta_init_out,
+            _cov_buf,
+            _tuning_chi,
+            control.bb,
         )
         if status_e == 1:
             raise RuntimeError("lmrob: no non-singular subsamples found")
@@ -220,6 +229,9 @@ def lmrob(
         _engine_c_done = True
         _engine_residuals = residuals_out
         _engine_rweights = rweights_out
+        # Stash the inline-computed vcov (if any) so the vcov block below
+        # can skip its own call to cy_lmrob_vcov_avar1.
+        _engine_cov_buf = _cov_buf if (_cov_buf is not None and _vcov_status == 0) else None
 
     if _engine_c_done:
         pass  # cy_lmrob_fit already populated beta_init / sigma_init / init_info
@@ -412,8 +424,18 @@ def lmrob(
     init_residuals = y - X @ beta_init
     cov = None
     if cov_kind == ".vcov.avar1":
-        # Cython vcov fast path when engine_c is on.
-        if control.engine_c and _CY_LMROB_VCOV is not None and psi_family in _CY_FAMILY_IDS:
+        # If the monolithic engine already produced the cov inline, use
+        # it directly (just posdefify).
+        if _engine_c_done and _engine_cov_buf is not None:
+            cov_buf = _engine_cov_buf
+            eigvals, eigvecs = np.linalg.eigh(cov_buf)
+            if (eigvals < 0).any():
+                eigvals = np.where(eigvals < 0, 0.0, eigvals)
+                cov_buf = (eigvecs * eigvals) @ eigvecs.T
+                cov_buf = 0.5 * (cov_buf + cov_buf.T)
+            cov = cov_buf
+        # Otherwise Cython vcov fast path when engine_c is on.
+        elif control.engine_c and _CY_LMROB_VCOV is not None and psi_family in _CY_FAMILY_IDS:
             _cy_vcov = _CY_LMROB_VCOV
             if True:
                 _tuning_psi = np.zeros(3, dtype=np.float64)

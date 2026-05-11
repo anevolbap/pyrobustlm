@@ -1049,6 +1049,220 @@ cdef inline double _chi_prime_factor(int family, const double* tuning) nogil:
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+cdef int _compute_vcov_avar1_body(
+    const double* X_data,
+    const double* r_data,
+    const double* r0_data,
+    double sigma,
+    int family,
+    const double* tpsi_data,
+    const double* tchi_data,
+    double bb,
+    Py_ssize_t n,
+    Py_ssize_t p,
+    double* cov_data,
+) nogil except 3:
+    """Shared implementation of vcov_avar1. Allocates its own scratch,
+    fills ``cov_data`` (C-contiguous p*p), returns status: 0 ok,
+    3 LAPACK error / out of memory.
+    """
+    cdef int n_int = <int>n
+    cdef int p_int = <int>p
+    cdef int one = 1
+    cdef int info = 0
+
+    cdef double sgma = sigma
+    if sgma < 1e-300:
+        sgma = 1e-300
+
+    cdef double* r_s = <double*>malloc(n * sizeof(double))
+    cdef double* r0_s = <double*>malloc(n * sizeof(double))
+    cdef double* w_pp = <double*>malloc(n * sizeof(double))
+    cdef double* w0_pp = <double*>malloc(n * sizeof(double))
+    cdef double* psi_rs = <double*>malloc(n * sizeof(double))
+    cdef double* chi_r0s = <double*>malloc(n * sizeof(double))
+    cdef double* A = <double*>malloc(p * p * sizeof(double))
+    cdef double* rhs = <double*>malloc(p * p * sizeof(double))
+    cdef double* tmp_pv = <double*>malloc(p * sizeof(double))
+    cdef double* a_vec = <double*>malloc(p * sizeof(double))
+    cdef double* Xww = <double*>malloc(p * sizeof(double))
+    cdef double* u_mat = <double*>malloc(p * p * sizeof(double))
+    cdef double* outer_buf = <double*>malloc(p * p * sizeof(double))
+    cdef int* ipiv = <int*>malloc(p * sizeof(int))
+    if (r_s == NULL or r0_s == NULL or w_pp == NULL or w0_pp == NULL or
+            psi_rs == NULL or chi_r0s == NULL or A == NULL or rhs == NULL or
+            tmp_pv == NULL or a_vec == NULL or Xww == NULL or
+            u_mat == NULL or outer_buf == NULL or ipiv == NULL):
+        free(r_s); free(r0_s); free(w_pp); free(w0_pp)
+        free(psi_rs); free(chi_r0s); free(A); free(rhs)
+        free(tmp_pv); free(a_vec); free(Xww)
+        free(u_mat); free(outer_buf); free(ipiv)
+        return 3
+
+    cdef double cp_factor = _chi_prime_factor(family, tchi_data)
+    cdef Py_ssize_t i, j, k
+    cdef double denom, dot, scalar
+    cdef int status = 0
+
+    # Scaled residuals.
+    for i in range(n):
+        r_s[i] = r_data[i] / sgma
+        r0_s[i] = r0_data[i] / sgma
+
+    # w_pp = psi'(r_s) (using psi-tuning), psi_rs = psi(r_s).
+    _psi_prime_eval(r_s, w_pp, n, family, tpsi_data)
+    _psi_eval(r_s, psi_rs, n, family, tpsi_data)
+
+    # chi(r0_s) (chi-tuning); chi'(r0_s) = chi_prime_factor * psi(r0_s).
+    # Use _chi_sum logic per-element by exploiting _chi_eval indirectly.
+    # Instead, compute psi(r0_s) into chi_r0s as a scratch then scale
+    # for w0_pp; compute chi via a separate loop.
+    _psi_eval(r0_s, w0_pp, n, family, tchi_data)  # w0_pp = psi(r0_s)
+    for i in range(n):
+        w0_pp[i] = w0_pp[i] * cp_factor  # chi' = factor * psi
+
+    # chi(r0_s) per-element: ax/k via _chi_sum equivalent. The
+    # cleanest is to inline the bisquare/optimal/lqq/hampel/ggw rho.
+    # Use the fact that chi(x) = rho_unnormalised(x) / rho_inf,
+    # and we have ``cp_factor = 1/rho_inf``, so chi(x) = cp_factor *
+    # integral psi from 0 to |x|. For ggw and the others, we'd need
+    # the closed-form rho. For now compute via inlining of the
+    # family-specific rho.
+
+    # Build chi(r0_s) by re-using _chi_sum logic per element. Easiest:
+    # call _chi_sum on each single-element slice. That's awkward; we
+    # write a per-family chi_eval below in tandem.
+    _chi_eval(r0_s, chi_r0s, n, family, tchi_data)
+
+    # XwX = X^T diag(w_pp) X, column-major (we use it for dgesv).
+    for j in range(p):
+        for k in range(p):
+            dot = 0.0
+            for i in range(n):
+                dot += X_data[i * p + j] * w_pp[i] * X_data[i * p + k]
+            A[j + k * p] = dot
+            rhs[j + k * p] = 1.0 if j == k else 0.0
+
+    dgesv(&p_int, &p_int, A, &p_int, ipiv, rhs, &p_int, &info)
+    if info != 0:
+        status = 3
+    else:
+        # A = sigma * (X'WX)^{-1}. rhs holds the inverse; multiply by sgma.
+        for i in range(p * p):
+            A[i] = rhs[i] * sgma
+
+        # denom = mean(w0_pp * r0_s)
+        denom = 0.0
+        for i in range(n):
+            denom += w0_pp[i] * r0_s[i]
+        denom /= <double>n
+        if denom == 0.0:
+            status = 3
+        else:
+            # tmp_pv = X^T (w_pp * r_s)
+            for j in range(p):
+                dot = 0.0
+                for i in range(n):
+                    dot += X_data[i * p + j] * (w_pp[i] * r_s[i])
+                tmp_pv[j] = dot
+
+            # a_vec = A @ tmp_pv / denom (A is column-major p×p)
+            for j in range(p):
+                dot = 0.0
+                for k in range(p):
+                    dot += A[j + k * p] * tmp_pv[k]
+                a_vec[j] = dot / denom
+
+            # Xww = X^T (psi_rs * chi_r0s)
+            for j in range(p):
+                dot = 0.0
+                for i in range(n):
+                    dot += X_data[i * p + j] * psi_rs[i] * chi_r0s[i]
+                Xww[j] = dot
+
+            # u1 = A @ (X^T diag(psi_rs^2) X) @ (n * A)
+            # Step 1: u_mat = X^T diag(psi_rs^2) X (column-major)
+            for j in range(p):
+                for k in range(p):
+                    dot = 0.0
+                    for i in range(n):
+                        dot += X_data[i * p + j] * (psi_rs[i] * psi_rs[i]) * X_data[i * p + k]
+                    u_mat[j + k * p] = dot
+            # Step 2: outer_buf = A @ u_mat (column-major p×p)
+            for j in range(p):
+                for k in range(p):
+                    dot = 0.0
+                    for i in range(p):
+                        dot += A[j + i * p] * u_mat[i + k * p]
+                    outer_buf[j + k * p] = dot
+            # Step 3: u_mat = outer_buf @ (n * A) = n * outer_buf @ A
+            for j in range(p):
+                for k in range(p):
+                    dot = 0.0
+                    for i in range(p):
+                        dot += outer_buf[j + i * p] * A[i + k * p]
+                    u_mat[j + k * p] = <double>n * dot
+
+            # u2 = outer(a_vec, Xww) @ A. outer(a, Xww)[j,k] = a[j] * Xww[k].
+            # (outer_a_Xww @ A)[j, k] = sum_i a[j] * Xww[i] * A[i + k*p]
+            #                        = a[j] * (Xww^T @ A_col_k)
+            # Pre-compute Xww^T @ A → row vector of length p.
+            # tmp_pv reused: tmp_pv[k] = sum_i Xww[i] * A[i + k*p]
+            for k in range(p):
+                dot = 0.0
+                for i in range(p):
+                    dot += Xww[i] * A[i + k * p]
+                tmp_pv[k] = dot
+            # Subtract u2 = a_vec[j] * tmp_pv[k] from u_mat in row j, col k.
+            for j in range(p):
+                for k in range(p):
+                    u_mat[j + k * p] -= a_vec[j] * tmp_pv[k]
+
+            # u3 = A @ outer(Xww, a_vec). outer(Xww, a_vec)[j,k] = Xww[j] * a[k].
+            # (A @ outer)[j, k] = sum_i A[j + i*p] * Xww[i] * a[k]
+            #                  = (A @ Xww)[j] * a[k]
+            for j in range(p):
+                dot = 0.0
+                for i in range(p):
+                    dot += A[j + i * p] * Xww[i]
+                outer_buf[j] = dot  # store A @ Xww in first p entries
+            for j in range(p):
+                for k in range(p):
+                    u_mat[j + k * p] -= outer_buf[j] * a_vec[k]
+
+            # u4 = mean(chi_r0s^2 - bb^2) * outer(a_vec, a_vec)
+            scalar = 0.0
+            for i in range(n):
+                scalar += chi_r0s[i] * chi_r0s[i] - bb * bb
+            scalar /= <double>n
+            for j in range(p):
+                for k in range(p):
+                    u_mat[j + k * p] += scalar * a_vec[j] * a_vec[k]
+
+            # cov = u_mat / n. cov_out is C-contiguous (row-major), while
+            # u_mat is column-major. Convert during the write.
+            for j in range(p):
+                for k in range(p):
+                    cov_data[j * p + k] = u_mat[j + k * p] / <double>n
+
+            # Symmetrize (the math should already give a symmetric matrix
+            # up to floating-point error).
+            for j in range(p):
+                for k in range(j + 1, p):
+                    scalar = 0.5 * (cov_data[j * p + k] + cov_data[k * p + j])
+                    cov_data[j * p + k] = scalar
+                    cov_data[k * p + j] = scalar
+
+    free(r_s); free(r0_s); free(w_pp); free(w0_pp)
+    free(psi_rs); free(chi_r0s); free(A); free(rhs)
+    free(tmp_pv); free(a_vec); free(Xww)
+    free(u_mat); free(outer_buf); free(ipiv)
+    return status
+
+
 def cy_lmrob_vcov_avar1(
     cnp.ndarray[double, ndim=2, mode="c"] X,
     cnp.ndarray[double, ndim=1, mode="c"] residuals,
@@ -1072,206 +1286,18 @@ def cy_lmrob_vcov_avar1(
 
     cdef Py_ssize_t n = X.shape[0]
     cdef Py_ssize_t p = X.shape[1]
-    cdef int n_int = <int>n
-    cdef int p_int = <int>p
-    cdef int one = 1
-    cdef int info = 0
-
-    cdef double sgma = sigma
-    if sgma < 1e-300:
-        sgma = 1e-300
-
-    # Scratch.
-    cdef double* X_data = <double*>cnp.PyArray_DATA(X)
-    cdef double* r_data = <double*>cnp.PyArray_DATA(residuals)
-    cdef double* r0_data = <double*>cnp.PyArray_DATA(init_residuals)
-    cdef double* tpsi_data = <double*>cnp.PyArray_DATA(tuning_psi)
-    cdef double* tchi_data = <double*>cnp.PyArray_DATA(tuning_chi)
-    cdef double* cov_data = <double*>cnp.PyArray_DATA(cov_out)
-
-    cdef double* r_s = <double*>malloc(n * sizeof(double))
-    cdef double* r0_s = <double*>malloc(n * sizeof(double))
-    cdef double* w_pp = <double*>malloc(n * sizeof(double))
-    cdef double* w0_pp = <double*>malloc(n * sizeof(double))
-    cdef double* psi_rs = <double*>malloc(n * sizeof(double))
-    cdef double* chi_r0s = <double*>malloc(n * sizeof(double))
-    cdef double* A = <double*>malloc(p * p * sizeof(double))
-    cdef double* rhs = <double*>malloc(p * p * sizeof(double))
-    cdef double* tmp_pv = <double*>malloc(p * sizeof(double))  # p-vector
-    cdef double* a_vec = <double*>malloc(p * sizeof(double))
-    cdef double* Xww = <double*>malloc(p * sizeof(double))
-    cdef double* u_mat = <double*>malloc(p * p * sizeof(double))
-    cdef double* outer_buf = <double*>malloc(p * p * sizeof(double))
-    cdef int* ipiv = <int*>malloc(p * sizeof(int))
-    if (r_s == NULL or r0_s == NULL or w_pp == NULL or w0_pp == NULL or
-            psi_rs == NULL or chi_r0s == NULL or A == NULL or rhs == NULL or
-            tmp_pv == NULL or a_vec == NULL or Xww == NULL or
-            u_mat == NULL or outer_buf == NULL or ipiv == NULL):
-        free(r_s); free(r0_s); free(w_pp); free(w0_pp)
-        free(psi_rs); free(chi_r0s); free(A); free(rhs)
-        free(tmp_pv); free(a_vec); free(Xww)
-        free(u_mat); free(outer_buf); free(ipiv)
-        raise MemoryError("cy_lmrob_vcov_avar1: out of memory")
-
-    cdef double cp_factor = _chi_prime_factor(family, tchi_data)
-    cdef Py_ssize_t i, j, k
-    cdef double denom, dot, scalar
-    cdef int status = 0
-
+    cdef int status
     with nogil:
-        # Scaled residuals.
-        for i in range(n):
-            r_s[i] = r_data[i] / sgma
-            r0_s[i] = r0_data[i] / sgma
-
-        # w_pp = psi'(r_s) (using psi-tuning), psi_rs = psi(r_s).
-        _psi_prime_eval(r_s, w_pp, n, family, tpsi_data)
-        _psi_eval(r_s, psi_rs, n, family, tpsi_data)
-
-        # chi(r0_s) (chi-tuning); chi'(r0_s) = chi_prime_factor * psi(r0_s).
-        # Use _chi_sum logic per-element by exploiting _chi_eval indirectly.
-        # Instead, compute psi(r0_s) into chi_r0s as a scratch then scale
-        # for w0_pp; compute chi via a separate loop.
-        _psi_eval(r0_s, w0_pp, n, family, tchi_data)  # w0_pp = psi(r0_s)
-        for i in range(n):
-            w0_pp[i] = w0_pp[i] * cp_factor  # chi' = factor * psi
-
-        # chi(r0_s) per-element: ax/k via _chi_sum equivalent. The
-        # cleanest is to inline the bisquare/optimal/lqq/hampel/ggw rho.
-        # Use the fact that chi(x) = rho_unnormalised(x) / rho_inf,
-        # and we have ``cp_factor = 1/rho_inf``, so chi(x) = cp_factor *
-        # integral psi from 0 to |x|. For ggw and the others, we'd need
-        # the closed-form rho. For now compute via inlining of the
-        # family-specific rho.
-
-        # Build chi(r0_s) by re-using _chi_sum logic per element. Easiest:
-        # call _chi_sum on each single-element slice. That's awkward; we
-        # write a per-family chi_eval below in tandem.
-        _chi_eval(r0_s, chi_r0s, n, family, tchi_data)
-
-        # XwX = X^T diag(w_pp) X, column-major (we use it for dgesv).
-        for j in range(p):
-            for k in range(p):
-                dot = 0.0
-                for i in range(n):
-                    dot += X_data[i * p + j] * w_pp[i] * X_data[i * p + k]
-                A[j + k * p] = dot
-                rhs[j + k * p] = 1.0 if j == k else 0.0
-
-        dgesv(&p_int, &p_int, A, &p_int, ipiv, rhs, &p_int, &info)
-        if info != 0:
-            status = 3
-        else:
-            # A = sigma * (X'WX)^{-1}. rhs holds the inverse; multiply by sgma.
-            for i in range(p * p):
-                A[i] = rhs[i] * sgma
-
-            # denom = mean(w0_pp * r0_s)
-            denom = 0.0
-            for i in range(n):
-                denom += w0_pp[i] * r0_s[i]
-            denom /= <double>n
-            if denom == 0.0:
-                status = 3
-            else:
-                # tmp_pv = X^T (w_pp * r_s)
-                for j in range(p):
-                    dot = 0.0
-                    for i in range(n):
-                        dot += X_data[i * p + j] * (w_pp[i] * r_s[i])
-                    tmp_pv[j] = dot
-
-                # a_vec = A @ tmp_pv / denom (A is column-major p×p)
-                for j in range(p):
-                    dot = 0.0
-                    for k in range(p):
-                        dot += A[j + k * p] * tmp_pv[k]
-                    a_vec[j] = dot / denom
-
-                # Xww = X^T (psi_rs * chi_r0s)
-                for j in range(p):
-                    dot = 0.0
-                    for i in range(n):
-                        dot += X_data[i * p + j] * psi_rs[i] * chi_r0s[i]
-                    Xww[j] = dot
-
-                # u1 = A @ (X^T diag(psi_rs^2) X) @ (n * A)
-                # Step 1: u_mat = X^T diag(psi_rs^2) X (column-major)
-                for j in range(p):
-                    for k in range(p):
-                        dot = 0.0
-                        for i in range(n):
-                            dot += X_data[i * p + j] * (psi_rs[i] * psi_rs[i]) * X_data[i * p + k]
-                        u_mat[j + k * p] = dot
-                # Step 2: outer_buf = A @ u_mat (column-major p×p)
-                for j in range(p):
-                    for k in range(p):
-                        dot = 0.0
-                        for i in range(p):
-                            dot += A[j + i * p] * u_mat[i + k * p]
-                        outer_buf[j + k * p] = dot
-                # Step 3: u_mat = outer_buf @ (n * A) = n * outer_buf @ A
-                for j in range(p):
-                    for k in range(p):
-                        dot = 0.0
-                        for i in range(p):
-                            dot += outer_buf[j + i * p] * A[i + k * p]
-                        u_mat[j + k * p] = <double>n * dot
-
-                # u2 = outer(a_vec, Xww) @ A. outer(a, Xww)[j,k] = a[j] * Xww[k].
-                # (outer_a_Xww @ A)[j, k] = sum_i a[j] * Xww[i] * A[i + k*p]
-                #                        = a[j] * (Xww^T @ A_col_k)
-                # Pre-compute Xww^T @ A → row vector of length p.
-                # tmp_pv reused: tmp_pv[k] = sum_i Xww[i] * A[i + k*p]
-                for k in range(p):
-                    dot = 0.0
-                    for i in range(p):
-                        dot += Xww[i] * A[i + k * p]
-                    tmp_pv[k] = dot
-                # Subtract u2 = a_vec[j] * tmp_pv[k] from u_mat in row j, col k.
-                for j in range(p):
-                    for k in range(p):
-                        u_mat[j + k * p] -= a_vec[j] * tmp_pv[k]
-
-                # u3 = A @ outer(Xww, a_vec). outer(Xww, a_vec)[j,k] = Xww[j] * a[k].
-                # (A @ outer)[j, k] = sum_i A[j + i*p] * Xww[i] * a[k]
-                #                  = (A @ Xww)[j] * a[k]
-                for j in range(p):
-                    dot = 0.0
-                    for i in range(p):
-                        dot += A[j + i * p] * Xww[i]
-                    outer_buf[j] = dot  # store A @ Xww in first p entries
-                for j in range(p):
-                    for k in range(p):
-                        u_mat[j + k * p] -= outer_buf[j] * a_vec[k]
-
-                # u4 = mean(chi_r0s^2 - bb^2) * outer(a_vec, a_vec)
-                scalar = 0.0
-                for i in range(n):
-                    scalar += chi_r0s[i] * chi_r0s[i] - bb * bb
-                scalar /= <double>n
-                for j in range(p):
-                    for k in range(p):
-                        u_mat[j + k * p] += scalar * a_vec[j] * a_vec[k]
-
-                # cov = u_mat / n. cov_out is C-contiguous (row-major), while
-                # u_mat is column-major. Convert during the write.
-                for j in range(p):
-                    for k in range(p):
-                        cov_data[j * p + k] = u_mat[j + k * p] / <double>n
-
-                # Symmetrize (the math should already give a symmetric matrix
-                # up to floating-point error).
-                for j in range(p):
-                    for k in range(j + 1, p):
-                        scalar = 0.5 * (cov_data[j * p + k] + cov_data[k * p + j])
-                        cov_data[j * p + k] = scalar
-                        cov_data[k * p + j] = scalar
-
-    free(r_s); free(r0_s); free(w_pp); free(w0_pp)
-    free(psi_rs); free(chi_r0s); free(A); free(rhs)
-    free(tmp_pv); free(a_vec); free(Xww)
-    free(u_mat); free(outer_buf); free(ipiv)
+        status = _compute_vcov_avar1_body(
+            <double*>cnp.PyArray_DATA(X),
+            <double*>cnp.PyArray_DATA(residuals),
+            <double*>cnp.PyArray_DATA(init_residuals),
+            sigma, family,
+            <double*>cnp.PyArray_DATA(tuning_psi),
+            <double*>cnp.PyArray_DATA(tuning_chi),
+            bb, n, p,
+            <double*>cnp.PyArray_DATA(cov_out),
+        )
     return status
 
 
@@ -1799,6 +1825,9 @@ def cy_lmrob_fit(
     cnp.ndarray[double, ndim=1, mode="c"] residuals_out,
     cnp.ndarray[double, ndim=1, mode="c"] rweights_out,
     cnp.ndarray[double, ndim=1, mode="c"] beta_init_out=None,
+    cnp.ndarray[double, ndim=2, mode="c"] cov_out=None,
+    cnp.ndarray[double, ndim=1, mode="c"] tuning_chi_for_cov=None,
+    double bb_for_cov=0.5,
 ):
     """Full fast-S + MM fit in a single nogil block.
 
@@ -1999,6 +2028,44 @@ def cy_lmrob_fit(
                 for i in range(n):
                     w_out_data[i] = 1.0
 
+    # ------------------------------------------------------------------
+    # Optional vcov_avar1 computed in the same call. Needs init_residuals
+    # = y - X @ beta_init (reconstructed from beta_init_out). Uses the
+    # caller-provided tuning_chi_for_cov; if not provided we fall back
+    # to the same tuning the S-step used.
+    # ------------------------------------------------------------------
+    cdef double* tuning_chi_ptr
+    cdef double* init_res = NULL
+    cdef double dot2
+    cdef int vcov_status = 0
+    if (
+        cov_out is not None and beta_init_out is not None
+        and status == 0 and scale > 0.0
+    ):
+        init_res = <double*>malloc(n * sizeof(double))
+        if init_res == NULL:
+            free(best_scales); free(best_betas)
+            _free_scratch(&scr)
+            raise MemoryError("cy_lmrob_fit: out of memory for init_residuals")
+        if tuning_chi_for_cov is not None:
+            tuning_chi_ptr = <double*>cnp.PyArray_DATA(tuning_chi_for_cov)
+        else:
+            tuning_chi_ptr = tuning_chi_data
+        with nogil:
+            for i in range(n):
+                dot2 = 0.0
+                for j in range(p):
+                    dot2 += X_data[i * p + j] * (<double*>cnp.PyArray_DATA(beta_init_out))[j]
+                init_res[i] = y_data[i] - dot2
+            vcov_status = _compute_vcov_avar1_body(
+                X_data, r_out_data, init_res, scale, family,
+                tuning_psi_data, tuning_chi_ptr, bb_for_cov,
+                n, p, <double*>cnp.PyArray_DATA(cov_out),
+            )
+        free(init_res)
+    else:
+        vcov_status = -1  # not computed
+
     free(best_scales); free(best_betas)
     _free_scratch(&scr)
-    return scale, status, n_iter_s, conv_s, n_iter_mm, conv_mm
+    return scale, status, n_iter_s, conv_s, n_iter_mm, conv_mm, vcov_status
