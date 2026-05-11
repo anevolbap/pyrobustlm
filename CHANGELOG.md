@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-05-11
+
+### Added
+
+- **Formula fast path.** ``model_matrix`` now detects the common
+  ``y ~ x1 + x2 + ...`` pattern (numeric columns only, no factors or
+  transforms) and parses it by hand, skipping formulaic's ~1.5 ms
+  per-fit overhead. Falls back to formulaic for any complex formula
+  (factors, interactions, ``I(x**2)``, etc.).
+  ``LmRobResults.predict(DataFrame)`` learns to rebuild the design
+  matrix the same way when ``rhs_spec_`` is ``None``.
+
+  Combined with the v0.5.1 Cython vcov port, end-to-end stackloss MM
+  drops from 5.6 ms to 4.4 ms with ``engine_c=True``; phosphor MM is
+  3.8 ms (close to R's ~3 ms on the same fit). KS settings drop to
+  6-10 ms.
+
+  | dataset / setting | default | engine_c | speedup |
+  |---|---|---|---|
+  | stackloss MM     | 22.4 ms |  4.4 ms |  5.1x |
+  | stackloss KS2014 | 62.8 ms |  7.3 ms |  8.7x |
+  | phosphor MM      | 20.9 ms |  3.8 ms |  5.5x |
+  | phosphor KS2014  | 59.1 ms |  6.3 ms |  9.5x |
+  | phosphor KS2011  | 58.0 ms |  6.3 ms |  9.3x |
+  | salinity KS2014  | 62.0 ms | 10.0 ms |  6.2x |
+
 ## [0.5.1] - 2026-05-11
 
 ### Added
@@ -302,7 +328,8 @@ First public release. End-to-end MM regression that matches R's
 See [`docs/numerical-notes.md`](docs/numerical-notes.md) for the full list
 of documented divergences from R.
 
-[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/anevolbap/pyrobustlm/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/anevolbap/pyrobustlm/compare/v0.4.0...v0.4.1

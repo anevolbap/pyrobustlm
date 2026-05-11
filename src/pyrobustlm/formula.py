@@ -30,15 +30,85 @@ class DesignMatrix:
     rhs_spec: object | None = None
 
 
+_SIMPLE_FORMULA_CHARS = set(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_. +~"
+)
+
+
+def _try_simple_parse(
+    formula: str, data: pd.DataFrame
+) -> DesignMatrix | None:
+    """Fast path for ``y ~ x1 + x2 + ...`` formulas with bare numeric
+    variables. Skips formulaic entirely. Returns ``None`` if the formula
+    doesn't match this pattern.
+    """
+    if not set(formula).issubset(_SIMPLE_FORMULA_CHARS):
+        return None
+    if formula.count("~") != 1:
+        return None
+    lhs_str, rhs_str = formula.split("~", 1)
+    lhs = lhs_str.strip()
+    if not lhs or " " in lhs:
+        return None
+    rhs_terms = [t.strip() for t in rhs_str.split("+")]
+    if not all(rhs_terms):
+        return None
+    has_intercept = True
+    cols: list[str] = []
+    for t in rhs_terms:
+        if t == "1":
+            has_intercept = True
+            continue
+        if t == "0" or t == "-1":
+            has_intercept = False
+            continue
+        # Plain variable name? (allow dots in names like ``stack.loss``)
+        if any(ch in t for ch in " ()[]:*"):
+            return None
+        cols.append(t)
+    if lhs not in data.columns:
+        return None
+    if not all(c in data.columns for c in cols):
+        return None
+    # All columns must be numeric (skip categorical fast path).
+    for c in [lhs, *cols]:
+        if data[c].dtype.kind not in ("f", "i", "u"):
+            return None
+    y = np.ascontiguousarray(data[lhs].to_numpy(), dtype=np.float64)
+    feat = np.ascontiguousarray(
+        data.loc[:, cols].to_numpy(), dtype=np.float64
+    )
+    if has_intercept:
+        X = np.ascontiguousarray(np.column_stack([np.ones(len(y)), feat]))
+        term_names = ["Intercept", *cols]
+    else:
+        X = feat
+        term_names = list(cols)
+    is_factor = np.zeros(X.shape[1], dtype=bool)
+    return DesignMatrix(
+        y=y,
+        X=X,
+        term_names=term_names,
+        is_factor_col=is_factor,
+        rhs_spec=None,
+    )
+
+
 def model_matrix(
     formula: str,
     data: pd.DataFrame,
 ) -> DesignMatrix:
     """Return a :class:`DesignMatrix` from a formula and a DataFrame.
 
-    formulaic encodes factor levels as ``Var[T.level]``; we use that
-    bracket pattern to flag categorical columns.
+    Routes simple formulas (``y ~ x1 + x2 + ...`` with numeric columns)
+    through a fast hand-parser to avoid formulaic's ~1.5 ms overhead.
+    Otherwise falls back to formulaic, which handles factor encoding,
+    interactions, ``I(x**2)``, etc.
     """
+    simple = _try_simple_parse(formula, data)
+    if simple is not None:
+        return simple
+
     from formulaic import Formula
 
     parsed = Formula(formula)

@@ -78,13 +78,33 @@ class LmRobResults:
         arr: np.ndarray
         if is_dataframe:
             if self.rhs_spec_ is None:
-                raise RuntimeError(
-                    "predict(DataFrame) requires the result to carry a "
-                    "formula spec; pass a NumPy array instead."
-                )
-            from pyrobustlm.formula import apply_spec
+                # Fit used the simple-formula fast path; rebuild the design
+                # by selecting term columns from new_data directly. Cast to
+                # ``Any`` because we duck-typed ``new_data`` as a DataFrame
+                # without importing pandas.
+                from typing import Any
 
-            arr = apply_spec(self.rhs_spec_, new_data)
+                df: Any = new_data
+                cols = [c for c in self.term_names_ if c not in ("Intercept", "(Intercept)")]
+                missing = [c for c in cols if c not in df.columns]
+                if missing:
+                    raise ValueError(
+                        f"predict(DataFrame): missing columns in new_data: {missing!r}"
+                    )
+                feat = np.asarray(df.loc[:, cols].to_numpy(), dtype=np.float64)
+                has_intercept = bool(
+                    self.term_names_
+                    and self.term_names_[0] in ("Intercept", "(Intercept)")
+                )
+                arr = (
+                    np.column_stack([np.ones(feat.shape[0]), feat])
+                    if has_intercept
+                    else feat
+                )
+            else:
+                from pyrobustlm.formula import apply_spec
+
+                arr = apply_spec(self.rhs_spec_, new_data)
         else:
             arr = np.asarray(new_data, dtype=np.float64)
 
