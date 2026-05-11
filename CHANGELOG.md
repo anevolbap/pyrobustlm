@@ -7,37 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-11
+
 ### Added
 
 - **``Control(engine_c=True)``: monolithic Cython lmrob engine.** New
   module ``pyrobustlm._core._lmrob`` runs the whole fast-S + survivor
-  refinement + MM iteration in one nogil C block with a single
-  workspace allocation. Mirrors the structure of
-  ``robustbase/src/lmrob.c::R_lmrob_S`` and ``rwls``. Subset draws use
-  numpy's ``bitgen_t`` capsule (Floyd's combination algorithm);
-  LAPACK via ``scipy.linalg.cython_lapack`` (``dgesv`` for the
-  p-subset solve, ``dgels`` for IRWLS). All five lmrob-supported psi
-  families dispatch via a family enum.
+  refinement + MM iteration + D-scale (KS2014/KS2011) in one nogil C
+  block with a single workspace allocation. Mirrors the structure of
+  ``robustbase/src/lmrob.c::R_lmrob_S``, ``rwls``, and
+  ``R_find_D_scale``. Subset draws use numpy's ``bitgen_t`` capsule
+  (Floyd's combination algorithm); LAPACK via
+  ``scipy.linalg.cython_lapack`` (``dgesv`` for the p-subset solve and
+  the (X'WX) inverse, ``dgels`` for IRWLS). All five lmrob-supported
+  psi families dispatch via a family enum. D-step uses tabulated
+  ``kappa`` and ``(tfact, tcorr)`` per family at default tuning;
+  non-default tuning falls back to the NumPy path.
 
-  Stackloss seed=0 timing (Default MM, n=21, p=4):
+  Side-by-side timing on classical datasets
+  (single-threaded BLAS, 7-rep median):
 
-  | family   | default   | engine_c   | speedup |
-  |----------|-----------|------------|---------|
-  | bisquare | 22.4 ms   | 6.8 ms     | 3.3x    |
-  | hampel   | 22.4 ms   | 5.3 ms     | 4.2x    |
-  | optimal  | 23.4 ms   | 6.5 ms     | 3.6x    |
-  | lqq      | 26.3 ms   | 8.2 ms     | 3.2x    |
-  | ggw      | 25.5 ms   | 7.2 ms     | 3.5x    |
+  | dataset / setting | default | engine_c | speedup |
+  |---|---|---|---|
+  | stackloss MM       | 27.7 ms |  6.9 ms |  4.0x |
+  | stackloss KS2014   | 69.2 ms |  9.5 ms |  7.3x |
+  | stackloss KS2011   | 70.4 ms |  9.3 ms |  7.6x |
+  | delivery MM        | 24.7 ms |  7.1 ms |  3.5x |
+  | delivery KS2014    | 68.8 ms | 10.9 ms |  6.3x |
+  | phosphor MM        | 23.5 ms |  5.8 ms |  4.0x |
+  | phosphor KS2014    | 69.5 ms |  8.1 ms |  8.6x |
+  | phosphor KS2011    | 74.2 ms |  8.1 ms |  9.2x |
+  | salinity MM        | 26.8 ms |  8.8 ms |  3.0x |
+  | salinity KS2014    | 76.0 ms | 13.2 ms |  5.7x |
 
-  R baseline on the same fit is 3-5 ms, so engine_c lands at 1.3-2.0x
-  R end-to-end for the default MM pipeline.
+  R baseline on these fits is 3-7 ms, so engine_c lands at 1.3-2x R
+  wall-clock for both the default MM and KS pipelines.
 
   Off by default because the bitgen draw sequence is not byte-identical
   with ``np.random.Generator.choice``; basin-of-attraction drift can
-  occasionally produce a degenerate vcov on tiny-n problems. The
-  remaining stages of the monolithic port (D-scale, vcov_avar1,
-  vcov_w) stay on the NumPy path for now, so ``setting="KS2014"`` /
-  ``"KS2011"`` still pays the Python cost there.
+  occasionally produce a degenerate vcov on tiny-n problems.
+  ``vcov_avar1`` and ``vcov_w`` stay on the NumPy path; they're ~1 ms
+  even at n=5000, so the remaining win is small.
+
+- **``scripts/bench_engine_c.py``** for side-by-side timing of the two
+  engines across the classical datasets and KS settings.
 
 ## [0.4.1] - 2026-05-11
 
@@ -261,7 +274,8 @@ First public release. End-to-end MM regression that matches R's
 See [`docs/numerical-notes.md`](docs/numerical-notes.md) for the full list
 of documented divergences from R.
 
-[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/anevolbap/pyrobustlm/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/anevolbap/pyrobustlm/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/anevolbap/pyrobustlm/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/anevolbap/pyrobustlm/compare/v0.2.0...v0.3.0
