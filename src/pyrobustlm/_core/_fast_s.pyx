@@ -440,7 +440,7 @@ cdef inline double _mscale_generic(
 def cy_resample_iter(
     cnp.ndarray[double, ndim=2, mode="c"] X,
     cnp.ndarray[double, ndim=1, mode="c"] y,
-    cnp.ndarray[long, ndim=1, mode="c"] idx,
+    cnp.ndarray[cnp.int64_t, ndim=1, mode="c"] idx,
     int family,
     cnp.ndarray[double, ndim=1, mode="c"] tuning,
     double b0,
@@ -495,7 +495,7 @@ def cy_resample_iter(
 
     cdef double* X_data = <double*>cnp.PyArray_DATA(X)
     cdef double* y_data = <double*>cnp.PyArray_DATA(y)
-    cdef long* idx_data = <long*>cnp.PyArray_DATA(idx)
+    cdef cnp.int64_t* idx_data = <cnp.int64_t*>cnp.PyArray_DATA(idx)
     cdef double* beta_data = <double*>cnp.PyArray_DATA(beta_out)
     cdef double* tuning_data = <double*>cnp.PyArray_DATA(tuning)
 
@@ -922,7 +922,7 @@ def cy_draw_and_iter(
 def cy_resample_iter_bisquare(
     cnp.ndarray[double, ndim=2, mode="c"] X,
     cnp.ndarray[double, ndim=1, mode="c"] y,
-    cnp.ndarray[long, ndim=1, mode="c"] idx,
+    cnp.ndarray[cnp.int64_t, ndim=1, mode="c"] idx,
     double k_chi,
     double b0,
     int k_fast_s,

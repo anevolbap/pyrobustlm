@@ -7,6 +7,7 @@ iteration -> covariance -> :class:`pyrobustlm.results.LmRobResults`.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -32,7 +33,13 @@ def _to_chi_psi_family(psi_family: str) -> str:
 
 # Cache Cython kernel handles at module load. Avoids per-call importlib
 # overhead. Each handle is ``None`` if the compiled module is unavailable.
-def _load_cy() -> tuple[object | None, object | None, object | None]:
+# ``Callable[..., Any]`` is loose on purpose: the Cython signatures are
+# more complex than what's worth replicating in Python type hints, and
+# the actual checking happens at call time.
+_CyFn = Callable[..., Any]
+
+
+def _load_cy() -> tuple[_CyFn | None, _CyFn | None, _CyFn | None]:
     try:
         import importlib
 

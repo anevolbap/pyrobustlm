@@ -73,6 +73,10 @@ def test_find_d_scale_idempotent_at_fixed_point():
     np.testing.assert_allclose(sgma2, sgma, rtol=1e-6)
 
 
+@pytest.mark.skipif(
+    not __import__("shutil").which("Rscript"),
+    reason="Rscript not installed (test drives R's R_find_D_scale C kernel)",
+)
 def test_d_iteration_matches_r_kernel(stackloss_df):
     """Our D-iteration matches R's ``R_find_D_scale`` C kernel to 5 decimals
     when given identical (r, w_MM, h, tau, kappa) inputs.
