@@ -71,7 +71,18 @@ def _try_import_cy_iter() -> _CyIterFn | None:
         return None
 
 
+def _try_import_cy_refine() -> Callable[..., tuple[float, int, int, int]] | None:
+    try:
+        import importlib
+
+        mod = importlib.import_module("pyrobustlm._core._fast_s")
+        return mod.cy_refine_to_convergence  # type: ignore[attr-defined,no-any-return]
+    except Exception:
+        return None
+
+
 _CY_ITER: _CyIterFn | None = _try_import_cy_iter()
+_CY_REFINE: Callable[..., tuple[float, int, int, int]] | None = _try_import_cy_refine()
 
 
 @dataclass(frozen=True)
@@ -387,6 +398,28 @@ def _refine_to_convergence(
     cfg: FastSConfig,
 ) -> tuple[NDArray[np.float64], float, bool, int]:
     """Iterate (M-scale, IRWLS) until ||beta_{k+1} - beta_k|| / ||beta_k|| < tol."""
+    # Cython fast path for the supported families.
+    if _CY_REFINE is not None and cfg.psi_chi in _FAMILY_IDS:
+        family_id = _FAMILY_IDS[cfg.psi_chi]
+        tuning = np.zeros(3, dtype=np.float64)
+        for i, v in enumerate(cfg.k_chi[:3]):
+            tuning[i] = float(v)
+        beta_cur = np.ascontiguousarray(beta, dtype=np.float64).copy()
+        scale, converged_int, n_iter, _status = _CY_REFINE(
+            X,
+            y,
+            beta_cur,
+            float(sigma),
+            family_id,
+            tuning,
+            cfg.b0,
+            cfg.max_it,
+            cfg.refine_tol,
+            cfg.max_iter_scale,
+            cfg.scale_tol,
+        )
+        return beta_cur, float(scale), bool(converged_int), int(n_iter)
+
     p = X.shape[1]
     beta_cur = beta.copy()
     s_cur = sigma

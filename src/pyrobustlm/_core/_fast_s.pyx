@@ -324,30 +324,26 @@ cdef inline void _wgt_zinv(
             else:
                 out[i] = 0.0
     elif family == FAM_OPTIMAL:
+        # Mirrors optimal_wgt in _psi.pyx (line 616).
         k = tuning[0]
         R1 = -1.944; R2 = 1.728; R3 = -0.312; R4 = 0.016
         for i in range(n):
-            xi = r[i] / s
-            ac = xi / k
+            ac = (r[i] / s) / k
             ax = ac if ac >= 0 else -ac
             if ax > 3.0:
                 out[i] = 0.0
             elif ax > 2.0:
                 a2 = ax * ax
-                # psi(x) = ac * (R1 + a2*(R2 + a2*(R3 + a2*R4)))
-                # wgt = psi(x)/x = (1/k) * (R1 + a2*(R2 + a2*(R3 + a2*R4)))
-                # IRWLS weight = wgt(r/s) / ((r/s)/c) where c absorbs into wgt
                 rho_p = R1 + a2 * (R2 + a2 * (R3 + a2 * R4))
-                out[i] = rho_p / 3.25
+                out[i] = rho_p if rho_p > 0.0 else 0.0
             else:
-                out[i] = 1.0 / 3.25
+                out[i] = 1.0
     elif family == FAM_LQQ:
+        # Mirrors lqq_wgt in _psi.pyx (line 712) exactly.
         b_l = tuning[0]; c = tuning[1]; s_l = tuning[2]
         k01 = b_l + c
         s5 = s_l - 1.0
         s6 = -2.0 * k01 + b_l * s_l
-        k01_2 = k01 * k01
-        denom = s_l * c * (3.0 * c + 2.0 * b_l) + k01_2
         if s5 == 0.0:
             end3 = k01
         else:
@@ -359,19 +355,16 @@ cdef inline void _wgt_zinv(
                 out[i] = 1.0
             elif ax <= k01:
                 s0 = ax - c
-                # psi_lqq(x)/x = 1 - (s_l/b_l) * ((ax-c)^2/2) * sign(x)/x simplified
-                # Equivalent: wgt = 1 - s_l * s0^2 / (b_l * ax) for ax in (c, k01]
                 if ax > 0:
-                    out[i] = 1.0 - s_l * s0 * s0 / (b_l * ax)
+                    out[i] = 1.0 - s_l * s0 * s0 / (2.0 * ax * b_l)
                 else:
                     out[i] = 1.0
             elif ax < end3:
                 dx = ax - k01
-                # psi_lqq on the outer plateau-decay branch
                 if ax > 0:
-                    out[i] = (k01 - dx * (s5 + dx * s5 * s5 / s6) - c) / ax
-                    if out[i] < 0:
-                        out[i] = 0.0
+                    out[i] = -(
+                        s6 * 0.5 + s5 * s5 / s6 * dx * (dx * 0.5 + s6 / s5)
+                    ) / ax
                 else:
                     out[i] = 0.0
             else:
@@ -589,6 +582,136 @@ def cy_resample_iter(
     free(r); free(w); free(ipiv); free(work)
 
     return scale, status
+
+
+# ---------------------------------------------------------------------------
+# Survivor refinement to convergence. Same iteration as cy_resample_iter
+# (m_scale -> IRWLS -> m_scale -> ...) but with a relative-tolerance
+# stopping criterion on beta, used after the resampling loop picks the
+# best candidates.
+# ---------------------------------------------------------------------------
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+def cy_refine_to_convergence(
+    cnp.ndarray[double, ndim=2, mode="c"] X,
+    cnp.ndarray[double, ndim=1, mode="c"] y,
+    cnp.ndarray[double, ndim=1, mode="c"] beta,
+    double sigma_init,
+    int family,
+    cnp.ndarray[double, ndim=1, mode="c"] tuning,
+    double b0,
+    int max_it,
+    double refine_tol,
+    int max_iter_scale,
+    double scale_tol,
+):
+    """Iterate (m_scale, IRWLS) on a single survivor candidate until
+    ``||beta_{k+1} - beta_k|| / ||beta_k||`` falls below ``refine_tol``
+    or ``max_it`` is exhausted.
+
+    The ``beta`` buffer is updated in place and also returned. Returns
+    ``(scale, converged_int, n_iter, status)`` where ``status`` is 0 on
+    success, 2 on exact fit, 3 on LAPACK error.
+    """
+    cdef Py_ssize_t n = X.shape[0]
+    cdef Py_ssize_t p = X.shape[1]
+    cdef int n_int = <int>n
+    cdef int p_int = <int>p
+    cdef int one = 1
+    cdef int info = 0
+
+    if family == FAM_GGW and not _ggw_tables_init:
+        _init_ggw_tables()
+
+    cdef double* X_w = <double*>malloc(n * p * sizeof(double))
+    cdef double* y_w = <double*>malloc(n * sizeof(double))
+    cdef double* r = <double*>malloc(n * sizeof(double))
+    cdef double* w = <double*>malloc(n * sizeof(double))
+    cdef double* beta_prev = <double*>malloc(p * sizeof(double))
+    cdef int lwork = max(1, n_int * p_int + 64 * (n_int + p_int))
+    cdef double* work = <double*>malloc(lwork * sizeof(double))
+
+    if (X_w == NULL or y_w == NULL or r == NULL or w == NULL
+            or beta_prev == NULL or work == NULL):
+        free(X_w); free(y_w); free(r); free(w); free(beta_prev); free(work)
+        raise MemoryError("cy_refine_to_convergence: out of memory")
+
+    cdef double* X_data = <double*>cnp.PyArray_DATA(X)
+    cdef double* y_data = <double*>cnp.PyArray_DATA(y)
+    cdef double* beta_data = <double*>cnp.PyArray_DATA(beta)
+    cdef double* tuning_data = <double*>cnp.PyArray_DATA(tuning)
+
+    cdef Py_ssize_t i, j, it
+    cdef double s = sigma_init
+    cdef double sw, dot, delta, denom, diff
+    cdef double scale = 0.0
+    cdef int converged = 0
+    cdef int status = 0
+    cdef int iters = 0
+
+    with nogil:
+        for it in range(max_it):
+            iters = it + 1
+            # residuals from current beta
+            for i in range(n):
+                dot = 0.0
+                for j in range(p):
+                    dot += X_data[i * p + j] * beta_data[j]
+                r[i] = y_data[i] - dot
+
+            s = _mscale_generic(r, n, s, p, family, tuning_data,
+                                b0, max_iter_scale, scale_tol)
+            if s == 0.0:
+                status = 2
+                scale = 0.0
+                converged = 1
+                break
+
+            # IRWLS weights
+            _wgt_zinv(r, w, n, s, family, tuning_data)
+            for i in range(n):
+                sw = sqrt(w[i]) if w[i] > 0 else 0.0
+                y_w[i] = y_data[i] * sw
+                for j in range(p):
+                    X_w[i + j * n] = X_data[i * p + j] * sw
+
+            # Save previous beta for the convergence check.
+            for j in range(p):
+                beta_prev[j] = beta_data[j]
+
+            dgels(b'N', &n_int, &p_int, &one,
+                  X_w, &n_int,
+                  y_w, &n_int,
+                  work, &lwork, &info)
+            if info != 0:
+                status = 3
+                scale = s
+                break
+            for j in range(p):
+                beta_data[j] = y_w[j]
+
+            # Relative L2 change on beta.
+            delta = 0.0
+            denom = 0.0
+            for j in range(p):
+                diff = beta_data[j] - beta_prev[j]
+                delta += diff * diff
+                denom += beta_prev[j] * beta_prev[j]
+            delta = sqrt(delta)
+            if denom < 1e-300:
+                denom = 1e-300
+            else:
+                denom = sqrt(denom)
+            if delta / denom < refine_tol:
+                converged = 1
+                scale = s
+                break
+            scale = s
+
+    free(X_w); free(y_w); free(r); free(w); free(beta_prev); free(work)
+    return scale, converged, iters, status
 
 
 # Backwards-compatible alias kept for the v0.3.0 API.

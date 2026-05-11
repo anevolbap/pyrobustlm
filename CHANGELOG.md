@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Cython survivor-refinement.** ``_refine_to_convergence``, which runs
+  ``best_r`` candidates from the resampling pool to convergence, now uses
+  the same nogil Cython kernel as the resampling loop
+  (``cy_refine_to_convergence``). Removes the Python overhead from the
+  IRWLS + m_scale iteration. Roughly 20-30% serial speedup end-to-end on
+  problems where refinement was a significant fraction of wall-clock
+  (n=100..2000).
+- **Read the Docs URL** wired into ``[project.urls]`` and a badge added
+  to the README.
+
+### Fixed
+
+- ``lqq`` IRWLS weight formula in the new Cython kernel matches
+  ``_psi.pyx::lqq_wgt`` exactly. Stackloss lqq coefficient drift seen
+  during the refinement port (rerr 1.7e-3) is gone.
+- ``optimal`` IRWLS weight no longer divides by the (cancelling)
+  constant ``3.25``; cosmetic match with ``_psi.pyx::optimal_wgt``.
+
 ## [0.4.0] - 2026-05-11
 
 ### Added
