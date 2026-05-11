@@ -30,6 +30,16 @@ incdir_numpy = run_command(
 # (e.g. with editable installs), which meson refuses for include_directories.
 np_inc_arg = '-I' + incdir_numpy
 
+# scipy is needed at build time because _fast_s.pyx and _lmrob.pyx
+# ``cimport`` from ``scipy.linalg.cython_lapack``. We pass the parent of
+# the scipy package dir (i.e. site-packages) to Cython via ``-I`` so
+# that ``from scipy.linalg.cython_lapack cimport ...`` resolves.
+incdir_scipy_parent = run_command(
+  py,
+  ['-c', 'import os, scipy; print(os.path.dirname(os.path.dirname(scipy.__file__)))'],
+  check: true,
+).stdout().strip()
+
 # -----------------------------------------------------------------------------
 # OpenMP (best-effort; falls back to no-op on platforms without it)
 # -----------------------------------------------------------------------------
@@ -49,6 +59,8 @@ cython_args = [
   '-X', 'wraparound=False',
   '-X', 'cdivision=True',
   '-X', 'initializedcheck=False',
+  # Let Cython find scipy.linalg.cython_lapack.pxd.
+  '-I', incdir_scipy_parent,
 ]
 
 # Suppress NumPy deprecated API warnings raised by Cython-generated C.

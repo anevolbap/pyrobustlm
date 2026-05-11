@@ -5,6 +5,10 @@ requires = [
     "ninja",
     "Cython>=3.0",
     "numpy>=2.0; python_version>='3.10'",
+    # The _fast_s and _lmrob Cython modules cimport from
+    # scipy.linalg.cython_lapack; scipy must be available at build time
+    # for Cython to find the .pxd.
+    "scipy>=1.11",
 ]
 build-backend = "mesonpy"
 
