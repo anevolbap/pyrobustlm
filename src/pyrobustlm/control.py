@@ -101,6 +101,12 @@ class Control:
     # small-n datasets. Opt in when you want raw speed and can tolerate
     # the drift; not recommended for reproducibility-sensitive workloads.
     fast_rng: bool = False
+    # Use the monolithic Cython engine (pyrobustlm._core._lmrob). When True,
+    # fast-S + survivor refinement run in one nogil C block with one
+    # workspace allocation. Currently bisquare only; ignored for other
+    # families. Off by default while stages 2-6 of the monolithic port
+    # are in flight (MM, D-scale, vcov still come from the Python path).
+    engine_c: bool = False
 
     bb: float = 0.5  # consistency constant (target value of mean(chi))
 

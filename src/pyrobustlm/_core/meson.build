@@ -43,3 +43,13 @@ py.extension_module(
   install: true,
   subdir: 'pyrobustlm/_core',
 )
+
+py.extension_module(
+  '_lmrob',
+  '_lmrob.pyx',
+  c_args: c_args_common,
+  cython_args: cython_args,
+  dependencies: cython_deps,
+  install: true,
+  subdir: 'pyrobustlm/_core',
+)

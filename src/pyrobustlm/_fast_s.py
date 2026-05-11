@@ -91,9 +91,22 @@ def _try_import_cy_draw_and_iter() -> Callable[..., tuple[float, int]] | None:
         return None
 
 
+def _try_import_cy_lmrob_fast_s() -> Callable[..., tuple[float, int, int, int]] | None:
+    try:
+        import importlib
+
+        mod = importlib.import_module("pyrobustlm._core._lmrob")
+        return mod.cy_lmrob_fast_s  # type: ignore[attr-defined,no-any-return]
+    except Exception:
+        return None
+
+
 _CY_ITER: _CyIterFn | None = _try_import_cy_iter()
 _CY_REFINE: Callable[..., tuple[float, int, int, int]] | None = _try_import_cy_refine()
 _CY_DRAW_AND_ITER: Callable[..., tuple[float, int]] | None = _try_import_cy_draw_and_iter()
+_CY_LMROB_FAST_S: Callable[..., tuple[float, int, int, int]] | None = (
+    _try_import_cy_lmrob_fast_s()
+)
 
 
 @dataclass(frozen=True)
@@ -121,6 +134,13 @@ class FastSConfig:
     # different sequence of subsets than ``np.random.Generator.choice``,
     # so the basin of attraction can shift.
     fast_rng: bool = False
+    # Bisquare-only end-to-end Cython fast-S engine
+    # (``pyrobustlm._core._lmrob``). When True, the entire resampling +
+    # survivor refinement runs in one nogil C block with all workspace
+    # pre-allocated. Currently bisquare only; other families fall back.
+    # Off by default while stages 2-6 of the monolithic port are in
+    # progress.
+    engine_c: bool = False
 
 
 @dataclass
@@ -546,6 +566,43 @@ def fast_s(
         raise ValueError(f"y shape {y.shape} incompatible with X shape {X.shape}")
     if n <= p:
         raise ValueError(f"fast_s requires n > p; got n={n}, p={p}")
+
+    # ------------------------------------------------------------------
+    # Monolithic Cython engine (opt-in, bisquare only for now)
+    # ------------------------------------------------------------------
+    if (
+        cfg.engine_c
+        and _CY_LMROB_FAST_S is not None
+        and cfg.psi_chi in ("bisquare", "biweight")
+        and len(cfg.k_chi) == 1
+    ):
+        rng_e = np.random.default_rng(seed)
+        beta_out = np.empty(p, dtype=np.float64)
+        scale, status, n_iter, converged = _CY_LMROB_FAST_S(
+            X,
+            y,
+            rng_e.bit_generator.capsule,
+            float(cfg.k_chi[0]),
+            cfg.b0,
+            cfg.nResample,
+            cfg.mts,
+            cfg.k_fast_s,
+            cfg.best_r,
+            cfg.max_it,
+            cfg.refine_tol,
+            cfg.max_iter_scale,
+            cfg.scale_tol,
+            beta_out,
+        )
+        if status == 1:
+            raise RuntimeError("fast_s: no non-singular subsamples were found")
+        return FastSResult(
+            coef=beta_out,
+            scale=float(scale),
+            converged=bool(converged),
+            n_iter=int(n_iter),
+            n_candidates_kept=cfg.best_r,
+        )
 
     # ------------------------------------------------------------------
     # Resampling loop (optionally parallel via a thread pool)
