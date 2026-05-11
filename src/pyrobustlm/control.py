@@ -92,6 +92,15 @@ class Control:
     # for problems large enough that BLAS dominates Python/GIL overhead).
     # Any positive integer = explicit worker count.
     n_workers: int = 1
+    # When True, draw resampling subsets inside the Cython kernel using
+    # numpy's BitGenerator C API (Floyd's combination algorithm). About
+    # 1.4-2x faster at n<=500 because the rank-check SVD goes away.
+    # Off by default: the draw sequence is not byte-identical with
+    # ``np.random.Generator.choice`` so the basin of attraction can shift
+    # slightly, which changes which fits beyond rtol=1e-3 vs R on some
+    # small-n datasets. Opt in when you want raw speed and can tolerate
+    # the drift; not recommended for reproducibility-sensitive workloads.
+    fast_rng: bool = False
 
     bb: float = 0.5  # consistency constant (target value of mean(chi))
 

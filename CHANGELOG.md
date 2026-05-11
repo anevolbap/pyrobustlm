@@ -7,8 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-05-11
+
 ### Added
 
+- **``Control(fast_rng=True)``** (opt-in). Routes resampling subset
+  draws through a Cython BitGenerator path (Floyd's combination
+  algorithm via numpy's ``bitgen_t`` C API) and replaces the SVD-based
+  singularity check with ``dgesv`` info inspection. End-to-end speedup
+  on serial fits: 2.3x at n=100/p=5/nR=500, 1.3-1.4x at n=500-2000.
+  Off by default because the draw sequence is not byte-identical with
+  ``np.random.Generator.choice``, so the basin of attraction can shift
+  slightly. See the field docstring for the trade-off.
 - **Cython survivor-refinement.** ``_refine_to_convergence``, which runs
   ``best_r`` candidates from the resampling pool to convergence, now uses
   the same nogil Cython kernel as the resampling loop
@@ -219,7 +229,8 @@ First public release. End-to-end MM regression that matches R's
 See [`docs/numerical-notes.md`](docs/numerical-notes.md) for the full list
 of documented divergences from R.
 
-[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/anevolbap/pyrobustlm/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/anevolbap/pyrobustlm/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/anevolbap/pyrobustlm/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/anevolbap/pyrobustlm/compare/v0.1.0...v0.2.0

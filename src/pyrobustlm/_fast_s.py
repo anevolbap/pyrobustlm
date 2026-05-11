@@ -81,8 +81,19 @@ def _try_import_cy_refine() -> Callable[..., tuple[float, int, int, int]] | None
         return None
 
 
+def _try_import_cy_draw_and_iter() -> Callable[..., tuple[float, int]] | None:
+    try:
+        import importlib
+
+        mod = importlib.import_module("pyrobustlm._core._fast_s")
+        return mod.cy_draw_and_iter  # type: ignore[attr-defined,no-any-return]
+    except Exception:
+        return None
+
+
 _CY_ITER: _CyIterFn | None = _try_import_cy_iter()
 _CY_REFINE: Callable[..., tuple[float, int, int, int]] | None = _try_import_cy_refine()
+_CY_DRAW_AND_ITER: Callable[..., tuple[float, int]] | None = _try_import_cy_draw_and_iter()
 
 
 @dataclass(frozen=True)
@@ -105,6 +116,11 @@ class FastSConfig:
     # Each worker draws from a SeedSequence-spawned PCG64, so results are
     # deterministic for a given (seed, n_workers, nResample).
     n_workers: int = 1
+    # When True, route subset draws through the Cython BitGenerator path
+    # (Floyd's combination algorithm). Faster at small n but produces a
+    # different sequence of subsets than ``np.random.Generator.choice``,
+    # so the basin of attraction can shift.
+    fast_rng: bool = False
 
 
 @dataclass
@@ -179,11 +195,12 @@ def _resample_chunk_cython(
 ) -> _ChunkResult:
     """Cython fast path. Dispatches on the psi family.
 
-    Pre-draws subsets in Python (the RNG isn't easily callable from nogil
-    yet), then dispatches each iteration body into ``cy_resample_iter``
-    where the LAPACK calls and m_scale iteration run without the GIL.
+    Prefers ``cy_draw_and_iter`` (subset draw + iter, all in nogil C using
+    numpy's BitGenerator capsule) when available; falls back to
+    ``cy_resample_iter`` with a Python-side subset draw.
     """
     cy_iter = _CY_ITER
+    cy_draw = _CY_DRAW_AND_ITER
     assert cy_iter is not None  # caller already checked
     p = X.shape[1]
     family_id = _FAMILY_IDS[cfg.psi_chi]
@@ -194,6 +211,49 @@ def _resample_chunk_cython(
     best_scales: list[float] = []
 
     beta_buf = np.empty(p, dtype=np.float64)
+
+    if cy_draw is not None and cfg.fast_rng:
+        bg_capsule = rng.bit_generator.capsule
+        for _ in range(n_iter):
+            scale, status = cy_draw(
+                X,
+                y,
+                bg_capsule,
+                cfg.mts,
+                family_id,
+                tuning,
+                cfg.b0,
+                cfg.k_fast_s,
+                cfg.max_iter_scale,
+                cfg.scale_tol,
+                beta_buf,
+            )
+            if status == 1 or status == 3:
+                continue
+            if status == 2:
+                return _ChunkResult(
+                    [],
+                    [],
+                    FastSResult(
+                        coef=beta_buf.copy(),
+                        scale=0.0,
+                        converged=True,
+                        n_iter=0,
+                        n_candidates_kept=1,
+                    ),
+                )
+            beta_t = beta_buf.copy()
+            s_t = float(scale)
+            if len(best_scales) < cfg.best_r:
+                best_betas.append(beta_t)
+                best_scales.append(s_t)
+            else:
+                worst_i = int(np.argmax(best_scales))
+                if s_t < best_scales[worst_i]:
+                    best_betas[worst_i] = beta_t
+                    best_scales[worst_i] = s_t
+        return _ChunkResult(best_betas, best_scales, None)
+
     for _ in range(n_iter):
         idx = _draw_nonsingular_subset(X, rng, p, cfg.mts)
         if idx is None:

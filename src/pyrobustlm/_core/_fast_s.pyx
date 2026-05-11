@@ -7,9 +7,12 @@
 # the kernel stays self-contained and nogil).
 
 cimport cython
+from cpython.pycapsule cimport PyCapsule_GetPointer
 from libc.math cimport fabs, sqrt, exp, pow as cpow
+from libc.stdint cimport uint64_t
 from libc.stdlib cimport malloc, free
 
+from numpy.random cimport bitgen_t
 from scipy.linalg.cython_lapack cimport dgesv, dgels
 
 import numpy as np
@@ -712,6 +715,207 @@ def cy_refine_to_convergence(
 
     free(X_w); free(y_w); free(r); free(w); free(beta_prev); free(work)
     return scale, converged, iters, status
+
+
+# ---------------------------------------------------------------------------
+# Bounded random integer in [0, bound), using numpy's bitgen. Lemire's debiased
+# method to avoid modulo bias for moderately-sized bounds.
+# ---------------------------------------------------------------------------
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+cdef inline uint64_t _bounded_uint64(bitgen_t* bg, uint64_t bound) nogil:
+    if bound <= 1:
+        return 0
+    cdef uint64_t threshold = (-bound) % bound  # (2^64 - bound) % bound
+    cdef uint64_t r
+    while True:
+        r = bg.next_uint64(bg.state)
+        if r >= threshold:
+            return r % bound
+
+
+# ---------------------------------------------------------------------------
+# Full per-iteration kernel: draw a p-subset from a bitgen, retry up to
+# mts times if the LU factorisation reports a singular pivot, then run the
+# same k-step refinement as cy_resample_iter.
+# ---------------------------------------------------------------------------
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+def cy_draw_and_iter(
+    cnp.ndarray[double, ndim=2, mode="c"] X,
+    cnp.ndarray[double, ndim=1, mode="c"] y,
+    object bitgen_capsule,
+    int mts,
+    int family,
+    cnp.ndarray[double, ndim=1, mode="c"] tuning,
+    double b0,
+    int k_fast_s,
+    int max_iter_scale,
+    double scale_tol,
+    cnp.ndarray[double, ndim=1, mode="c"] beta_out,
+):
+    """End-to-end nogil iter: subset draw + initial solve + k-step refinement.
+
+    ``bitgen_capsule`` is the ``BitGenerator.capsule`` of an
+    ``np.random.Generator`` whose state is owned by this call. The caller
+    must not use the same Generator from another thread concurrently.
+
+    Returns ``(scale, status)``. Status codes match :func:`cy_resample_iter`:
+    0 (ok), 1 (no non-singular subset in mts tries), 2 (exact fit),
+    3 (LAPACK error during dgels).
+    """
+    cdef bitgen_t* bg = <bitgen_t*>PyCapsule_GetPointer(
+        bitgen_capsule, "BitGenerator"
+    )
+
+    cdef Py_ssize_t n = X.shape[0]
+    cdef Py_ssize_t p = X.shape[1]
+    cdef int n_int = <int>n
+    cdef int p_int = <int>p
+    cdef int one = 1
+    cdef int info = 0
+
+    if family == FAM_GGW and not _ggw_tables_init:
+        _init_ggw_tables()
+
+    cdef double* sub_X = <double*>malloc(p * p * sizeof(double))
+    cdef double* sub_y = <double*>malloc(p * sizeof(double))
+    cdef double* X_w = <double*>malloc(n * p * sizeof(double))
+    cdef double* y_w = <double*>malloc(n * sizeof(double))
+    cdef double* r_buf = <double*>malloc(n * sizeof(double))
+    cdef double* w = <double*>malloc(n * sizeof(double))
+    cdef int* ipiv = <int*>malloc(p * sizeof(int))
+    cdef Py_ssize_t* perm = <Py_ssize_t*>malloc(n * sizeof(Py_ssize_t))
+
+    cdef int lwork = max(1, n_int * p_int + 64 * (n_int + p_int))
+    cdef double* work = <double*>malloc(lwork * sizeof(double))
+
+    if (sub_X == NULL or sub_y == NULL or X_w == NULL or y_w == NULL
+            or r_buf == NULL or w == NULL or ipiv == NULL or perm == NULL
+            or work == NULL):
+        free(sub_X); free(sub_y); free(X_w); free(y_w)
+        free(r_buf); free(w); free(ipiv); free(perm); free(work)
+        raise MemoryError("cy_draw_and_iter: out of memory")
+
+    cdef double* X_data = <double*>cnp.PyArray_DATA(X)
+    cdef double* y_data = <double*>cnp.PyArray_DATA(y)
+    cdef double* beta_data = <double*>cnp.PyArray_DATA(beta_out)
+    cdef double* tuning_data = <double*>cnp.PyArray_DATA(tuning)
+
+    cdef Py_ssize_t i, j, kk, row, swap
+    cdef uint64_t r
+    cdef double s, sw, dot
+    cdef int status = 0
+    cdef double scale = 0.0
+    cdef int got_subset = 0
+    cdef int try_i
+    cdef double k0 = tuning_data[0]
+
+    with nogil:
+        # Try up to mts times to draw a non-singular subset and solve it.
+        for try_i in range(mts):
+            # Floyd's combination algorithm, matching numpy's
+            # ``rng.choice(n, p, replace=False)`` for shared PCG64 state:
+            # for j in {n-p, n-p+1, ..., n-1} draw idx in [0, j+1); if
+            # idx already in result, substitute j. Result is insertion-
+            # ordered.
+            for i in range(p):
+                j = n - p + i
+                r = _bounded_uint64(bg, <uint64_t>(j + 1))
+                swap = <Py_ssize_t>r
+                # Linear scan over the current sample; p is small.
+                row = 0
+                for kk in range(i):
+                    if perm[kk] == swap:
+                        row = 1
+                        break
+                if row:
+                    perm[i] = j
+                else:
+                    perm[i] = swap
+
+            # Build column-major sub_X (p×p) and sub_y (p).
+            for i in range(p):
+                row = perm[i]
+                sub_y[i] = y_data[row]
+                for j in range(p):
+                    sub_X[i + j * p] = X_data[row * p + j]
+
+            dgesv(&p_int, &one, sub_X, &p_int, ipiv, sub_y, &p_int, &info)
+            if info == 0:
+                got_subset = 1
+                break
+
+        if not got_subset:
+            status = 1
+        else:
+            for i in range(p):
+                beta_data[i] = sub_y[i]
+
+            for i in range(n):
+                dot = 0.0
+                for j in range(p):
+                    dot += X_data[i * p + j] * beta_data[j]
+                r_buf[i] = y_data[i] - dot
+
+            s = 0.0
+            for i in range(n):
+                if r_buf[i] >= 0:
+                    if r_buf[i] > s:
+                        s = r_buf[i]
+                else:
+                    if -r_buf[i] > s:
+                        s = -r_buf[i]
+            if s <= 0.0:
+                status = 2
+                scale = 0.0
+            else:
+                s = s / k0 if k0 > 0 else s
+                if s <= 0.0:
+                    s = 1.0
+
+                for kk in range(k_fast_s):
+                    s = _mscale_generic(r_buf, n, s, p, family, tuning_data,
+                                        b0, max_iter_scale, scale_tol)
+                    if s == 0.0:
+                        status = 2
+                        scale = 0.0
+                        break
+
+                    _wgt_zinv(r_buf, w, n, s, family, tuning_data)
+                    for i in range(n):
+                        sw = sqrt(w[i]) if w[i] > 0 else 0.0
+                        y_w[i] = y_data[i] * sw
+                        for j in range(p):
+                            X_w[i + j * n] = X_data[i * p + j] * sw
+
+                    dgels(b'N', &n_int, &p_int, &one,
+                          X_w, &n_int,
+                          y_w, &n_int,
+                          work, &lwork, &info)
+                    if info != 0:
+                        status = 3
+                        break
+                    for i in range(p):
+                        beta_data[i] = y_w[i]
+                    for i in range(n):
+                        dot = 0.0
+                        for j in range(p):
+                            dot += X_data[i * p + j] * beta_data[j]
+                        r_buf[i] = y_data[i] - dot
+                else:
+                    s = _mscale_generic(r_buf, n, s, p, family, tuning_data,
+                                        b0, max_iter_scale, scale_tol)
+                    scale = s
+
+    free(sub_X); free(sub_y); free(X_w); free(y_w)
+    free(r_buf); free(w); free(ipiv); free(perm); free(work)
+
+    return scale, status
 
 
 # Backwards-compatible alias kept for the v0.3.0 API.
