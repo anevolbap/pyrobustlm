@@ -49,7 +49,7 @@ dev = [
     "pytest-cov",
     "pytest-xdist",
     "hypothesis>=6.100",
-    "ruff>=0.6",
+    "ruff>=0.15,<0.16",
     "pre-commit>=3.7",
     "Cython>=3.0",
 ]
