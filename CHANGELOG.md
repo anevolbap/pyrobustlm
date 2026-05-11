@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **``Control(engine_c=True)``: monolithic Cython lmrob engine.** New
+  module ``pyrobustlm._core._lmrob`` runs the whole fast-S + survivor
+  refinement + MM iteration in one nogil C block with a single
+  workspace allocation. Mirrors the structure of
+  ``robustbase/src/lmrob.c::R_lmrob_S`` and ``rwls``. Subset draws use
+  numpy's ``bitgen_t`` capsule (Floyd's combination algorithm);
+  LAPACK via ``scipy.linalg.cython_lapack`` (``dgesv`` for the
+  p-subset solve, ``dgels`` for IRWLS). All five lmrob-supported psi
+  families dispatch via a family enum.
+
+  Stackloss seed=0 timing (Default MM, n=21, p=4):
+
+  | family   | default   | engine_c   | speedup |
+  |----------|-----------|------------|---------|
+  | bisquare | 22.4 ms   | 6.8 ms     | 3.3x    |
+  | hampel   | 22.4 ms   | 5.3 ms     | 4.2x    |
+  | optimal  | 23.4 ms   | 6.5 ms     | 3.6x    |
+  | lqq      | 26.3 ms   | 8.2 ms     | 3.2x    |
+  | ggw      | 25.5 ms   | 7.2 ms     | 3.5x    |
+
+  R baseline on the same fit is 3-5 ms, so engine_c lands at 1.3-2.0x
+  R end-to-end for the default MM pipeline.
+
+  Off by default because the bitgen draw sequence is not byte-identical
+  with ``np.random.Generator.choice``; basin-of-attraction drift can
+  occasionally produce a degenerate vcov on tiny-n problems. The
+  remaining stages of the monolithic port (D-scale, vcov_avar1,
+  vcov_w) stay on the NumPy path for now, so ``setting="KS2014"`` /
+  ``"KS2011"`` still pays the Python cost there.
+
 ## [0.4.1] - 2026-05-11
 
 ### Added
