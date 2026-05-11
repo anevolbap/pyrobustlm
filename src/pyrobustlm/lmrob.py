@@ -30,6 +30,35 @@ def _to_chi_psi_family(psi_family: str) -> str:
     return psi_family
 
 
+# Cache Cython kernel handles at module load. Avoids per-call importlib
+# overhead. Each handle is ``None`` if the compiled module is unavailable.
+def _load_cy() -> tuple[object | None, object | None, object | None]:
+    try:
+        import importlib
+
+        mod = importlib.import_module("pyrobustlm._core._lmrob")
+        return (
+            getattr(mod, "cy_lmrob_fit", None),
+            getattr(mod, "cy_lmrob_d_scale", None),
+            getattr(mod, "cy_lmrob_vcov_avar1", None),
+        )
+    except Exception:
+        return None, None, None
+
+
+_CY_LMROB_FIT, _CY_LMROB_D_SCALE, _CY_LMROB_VCOV = _load_cy()
+
+# Map family names to the integer enum used by the Cython kernel.
+_CY_FAMILY_IDS = {
+    "bisquare": 0,
+    "biweight": 0,
+    "hampel": 1,
+    "optimal": 2,
+    "lqq": 3,
+    "ggw": 4,
+}
+
+
 def lmrob(
     formula: str,
     data: pd.DataFrame,
@@ -109,19 +138,14 @@ def lmrob(
     # themselves.
     # ------------------------------------------------------------------
     _engine_c_done = False
-    if control.engine_c and init_method == "S":
-        _FAM_IDS = {"bisquare": 0, "biweight": 0, "hampel": 1,
-                    "optimal": 2, "lqq": 3, "ggw": 4}
-        if psi_family in _FAM_IDS:
-            try:
-                import importlib
-
-                _cy_lmrob_fit = importlib.import_module(
-                    "pyrobustlm._core._lmrob"
-                ).cy_lmrob_fit
-            except (ImportError, AttributeError):
-                _cy_lmrob_fit = None
-            if _cy_lmrob_fit is not None:
+    if (
+        control.engine_c
+        and init_method == "S"
+        and psi_family in _CY_FAMILY_IDS
+        and _CY_LMROB_FIT is not None
+    ):
+        _cy_lmrob_fit = _CY_LMROB_FIT
+        if True:
                 _psi_k_eff = tuple(
                     np.atleast_1d(np.asarray(control.tuning_psi, dtype=float)).ravel()
                 )
@@ -140,7 +164,7 @@ def lmrob(
                     np.ascontiguousarray(X, dtype=np.float64),
                     np.ascontiguousarray(y, dtype=np.float64),
                     rng_e.bit_generator.capsule,
-                    _FAM_IDS[psi_family],
+                    _CY_FAMILY_IDS[psi_family],
                     _tuning_chi,
                     _tuning_psi,
                     control.bb,
@@ -306,18 +330,13 @@ def lmrob(
         sigma_d = None
         d_converged = False
         # Cython D-step when engine_c is on and tabulated coefficients exist.
-        if control.engine_c:
-            try:
-                import importlib
-
-                _cy_d = importlib.import_module(
-                    "pyrobustlm._core._lmrob"
-                ).cy_lmrob_d_scale
-            except (ImportError, AttributeError):
-                _cy_d = None
-            _FAM_IDS = {"bisquare": 0, "biweight": 0, "hampel": 1,
-                        "optimal": 2, "lqq": 3, "ggw": 4}
-            if _cy_d is not None and psi_family in _FAM_IDS:
+        if (
+            control.engine_c
+            and _CY_LMROB_D_SCALE is not None
+            and psi_family in _CY_FAMILY_IDS
+        ):
+            _cy_d = _CY_LMROB_D_SCALE
+            if True:
                 _tau_buf = np.empty(n, dtype=np.float64)
                 _tuning_psi = np.zeros(3, dtype=np.float64)
                 for _i, _v in enumerate(
@@ -329,7 +348,7 @@ def lmrob(
                     np.ascontiguousarray(residuals, dtype=np.float64),
                     np.ascontiguousarray(rweights, dtype=np.float64),
                     float(sigma),
-                    _FAM_IDS[psi_family],
+                    _CY_FAMILY_IDS[psi_family],
                     _tuning_psi,
                     control.k_max,
                     control.rel_tol,
@@ -379,19 +398,13 @@ def lmrob(
     cov = None
     if cov_kind == ".vcov.avar1":
         # Cython vcov fast path when engine_c is on.
-        if control.engine_c:
-            _FAM_IDS = {"bisquare": 0, "biweight": 0, "hampel": 1,
-                        "optimal": 2, "lqq": 3, "ggw": 4}
-            if psi_family in _FAM_IDS:
-                try:
-                    import importlib
-
-                    _cy_vcov = importlib.import_module(
-                        "pyrobustlm._core._lmrob"
-                    ).cy_lmrob_vcov_avar1
-                except (ImportError, AttributeError):
-                    _cy_vcov = None
-                if _cy_vcov is not None:
+        if (
+            control.engine_c
+            and _CY_LMROB_VCOV is not None
+            and psi_family in _CY_FAMILY_IDS
+        ):
+            _cy_vcov = _CY_LMROB_VCOV
+            if True:
                     _tuning_psi = np.zeros(3, dtype=np.float64)
                     _tuning_chi = np.zeros(3, dtype=np.float64)
                     for _i, _v in enumerate(psi_k_eff[:3]):
@@ -404,7 +417,7 @@ def lmrob(
                         np.ascontiguousarray(residuals, dtype=np.float64),
                         np.ascontiguousarray(init_residuals, dtype=np.float64),
                         float(sigma),
-                        _FAM_IDS[psi_family],
+                        _CY_FAMILY_IDS[psi_family],
                         _tuning_psi,
                         _tuning_chi,
                         control.bb,
