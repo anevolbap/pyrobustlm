@@ -885,3 +885,328 @@ def cy_lmrob_fast_s(
     free(best_scales); free(best_betas)
     _free_scratch(&scr)
     return scale, status, total_iters, converged
+
+
+# ---------------------------------------------------------------------------
+# MM iteration kernel. Port of robustbase/src/lmrob.c::rwls and the existing
+# pyrobustlm._mm.mm_iterate. IRWLS with fixed scale and the L1 convergence
+# test ``d_beta <= rel_tol * max(rel_tol, ||beta||_1)``.
+# ---------------------------------------------------------------------------
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+cdef inline int _mm_loop(
+    const double* X, const double* y,
+    double sigma, int family, const double* tuning,
+    int max_it, double rel_tol,
+    double* beta,
+    _Scratch* scr,
+    Py_ssize_t n, Py_ssize_t p,
+    int* converged_out, int* n_iter_out,
+) nogil:
+    """Returns 0 on success, 3 on LAPACK error."""
+    cdef int it, irwls_status
+    cdef Py_ssize_t j
+    cdef double d_beta, norm1_new, diff
+    if sigma == 0.0:
+        converged_out[0] = 1
+        n_iter_out[0] = 0
+        return 0
+    for it in range(max_it):
+        _residuals(X, y, beta, scr.r, n, p)
+        for j in range(p):
+            scr.beta_prev[j] = beta[j]
+        irwls_status = _irwls_step(X, y, scr.r, sigma, family, tuning,
+                                   beta, scr, n, p)
+        if irwls_status != 0:
+            converged_out[0] = 0
+            n_iter_out[0] = it + 1
+            return irwls_status
+        d_beta = 0.0
+        norm1_new = 0.0
+        for j in range(p):
+            diff = beta[j] - scr.beta_prev[j]
+            d_beta += diff if diff >= 0 else -diff
+            norm1_new += beta[j] if beta[j] >= 0 else -beta[j]
+        if d_beta <= rel_tol * (rel_tol if rel_tol > norm1_new else norm1_new):
+            converged_out[0] = 1
+            n_iter_out[0] = it + 1
+            return 0
+    converged_out[0] = 0
+    n_iter_out[0] = max_it
+    return 0
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+def cy_lmrob_mm(
+    cnp.ndarray[double, ndim=2, mode="c"] X,
+    cnp.ndarray[double, ndim=1, mode="c"] y,
+    cnp.ndarray[double, ndim=1, mode="c"] beta,
+    double sigma,
+    int family,
+    cnp.ndarray[double, ndim=1, mode="c"] tuning_psi,
+    int max_it,
+    double rel_tol,
+):
+    """Standalone MM IRWLS loop at a fixed scale.
+
+    ``beta`` is updated in place. ``tuning_psi`` is the 95%-efficiency
+    tuning (vs ``tuning_chi`` used for the S step).
+
+    Returns ``(n_iter, converged, status)``. Status 0 = ok, 3 = LAPACK.
+    """
+    if family == FAM_GGW and not _ggw_tables_init:
+        _init_ggw_tables()
+
+    cdef Py_ssize_t n = X.shape[0]
+    cdef Py_ssize_t p = X.shape[1]
+    cdef _Scratch scr
+    if _alloc_scratch(&scr, n, p) != 0:
+        _free_scratch(&scr)
+        raise MemoryError("cy_lmrob_mm: out of memory")
+
+    cdef double* X_data = <double*>cnp.PyArray_DATA(X)
+    cdef double* y_data = <double*>cnp.PyArray_DATA(y)
+    cdef double* beta_data = <double*>cnp.PyArray_DATA(beta)
+    cdef double* tuning_data = <double*>cnp.PyArray_DATA(tuning_psi)
+    cdef int converged = 0
+    cdef int n_iter = 0
+    cdef int status = 0
+
+    with nogil:
+        status = _mm_loop(
+            X_data, y_data, sigma, family, tuning_data,
+            max_it, rel_tol, beta_data, &scr, n, p,
+            &converged, &n_iter,
+        )
+
+    _free_scratch(&scr)
+    return n_iter, converged, status
+
+
+# ---------------------------------------------------------------------------
+# Combined fast-S + MM kernel. One nogil block, one workspace.
+# ---------------------------------------------------------------------------
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+def cy_lmrob_fit(
+    cnp.ndarray[double, ndim=2, mode="c"] X,
+    cnp.ndarray[double, ndim=1, mode="c"] y,
+    object bitgen_capsule,
+    int family,
+    cnp.ndarray[double, ndim=1, mode="c"] tuning_chi,
+    cnp.ndarray[double, ndim=1, mode="c"] tuning_psi,
+    double b0,
+    int nResample,
+    int mts,
+    int k_fast_s,
+    int best_r,
+    int max_it_s,
+    double refine_tol,
+    int max_it_mm,
+    double rel_tol_mm,
+    int max_iter_scale,
+    double scale_tol,
+    cnp.ndarray[double, ndim=1, mode="c"] beta_out,
+    cnp.ndarray[double, ndim=1, mode="c"] residuals_out,
+    cnp.ndarray[double, ndim=1, mode="c"] rweights_out,
+):
+    """Full fast-S + MM fit in a single nogil block.
+
+    Pipeline:
+      1. fast-S resampling (chi-tuning)
+      2. survivor refinement to convergence
+      3. MM IRWLS (psi-tuning) with the resulting scale held fixed
+      4. Compute final residuals and IRWLS weights (Mwgt at psi tuning)
+
+    Returns ``(scale, status, n_iter_s, conv_s, n_iter_mm, conv_mm)``.
+    """
+    if family == FAM_GGW and not _ggw_tables_init:
+        _init_ggw_tables()
+
+    cdef bitgen_t* bg = <bitgen_t*>PyCapsule_GetPointer(
+        bitgen_capsule, "BitGenerator"
+    )
+
+    cdef Py_ssize_t n = X.shape[0]
+    cdef Py_ssize_t p = X.shape[1]
+    cdef int n_int = <int>n
+    cdef int p_int = <int>p
+    cdef int one = 1
+    cdef int info = 0
+
+    cdef _Scratch scr
+    if _alloc_scratch(&scr, n, p) != 0:
+        _free_scratch(&scr)
+        raise MemoryError("cy_lmrob_fit: out of memory")
+    cdef double* best_scales = <double*>malloc(best_r * sizeof(double))
+    cdef double* best_betas = <double*>malloc(best_r * p * sizeof(double))
+    if best_scales == NULL or best_betas == NULL:
+        free(best_scales); free(best_betas)
+        _free_scratch(&scr)
+        raise MemoryError("cy_lmrob_fit: out of memory for best-r heap")
+
+    cdef double* X_data = <double*>cnp.PyArray_DATA(X)
+    cdef double* y_data = <double*>cnp.PyArray_DATA(y)
+    cdef double* beta_out_data = <double*>cnp.PyArray_DATA(beta_out)
+    cdef double* r_out_data = <double*>cnp.PyArray_DATA(residuals_out)
+    cdef double* w_out_data = <double*>cnp.PyArray_DATA(rweights_out)
+    cdef double* tuning_chi_data = <double*>cnp.PyArray_DATA(tuning_chi)
+    cdef double* tuning_psi_data = <double*>cnp.PyArray_DATA(tuning_psi)
+
+    cdef Py_ssize_t i, j, row, swap, try_i, kept
+    cdef double s, scale, max_abs, candidate_scale
+    cdef int got_subset, status, k_status
+    cdef int conv_s, n_iter_s
+    cdef int conv_mm, n_iter_mm
+    cdef int found
+    cdef uint64_t r_u
+
+    cdef double k0 = tuning_chi_data[0]
+    if family == FAM_GGW:
+        if k0 < 1: k0 = 1
+        elif k0 > 6: k0 = 6
+        k0 = _GGW_C0[<int>k0 - 1]
+    if k0 <= 0.0:
+        k0 = 1.0
+
+    status = 0
+    scale = 0.0
+    kept = 0
+    conv_s = 0
+    n_iter_s = 0
+    conv_mm = 0
+    n_iter_mm = 0
+
+    with nogil:
+        # fast-S resampling -------------------------------------------------
+        for try_i in range(nResample):
+            got_subset = 0
+            for _ in range(mts):
+                for i in range(p):
+                    j = n - p + i
+                    r_u = _bounded_uint64(bg, <uint64_t>(j + 1))
+                    swap = <Py_ssize_t>r_u
+                    found = 0
+                    for row in range(i):
+                        if scr.perm[row] == swap:
+                            found = 1
+                            break
+                    if found:
+                        scr.perm[i] = j
+                    else:
+                        scr.perm[i] = swap
+                for i in range(p):
+                    row = scr.perm[i]
+                    scr.sub_y[i] = y_data[row]
+                    for j in range(p):
+                        scr.sub_X[i + j * p] = X_data[row * p + j]
+                dgesv(&p_int, &one, scr.sub_X, &p_int, scr.ipiv,
+                      scr.sub_y, &p_int, &info)
+                if info == 0:
+                    got_subset = 1
+                    break
+
+            if not got_subset:
+                continue
+
+            for j in range(p):
+                scr.beta[j] = scr.sub_y[j]
+            _residuals(X_data, y_data, scr.beta, scr.r, n, p)
+
+            max_abs = 0.0
+            for i in range(n):
+                if scr.r[i] >= 0:
+                    if scr.r[i] > max_abs:
+                        max_abs = scr.r[i]
+                else:
+                    if -scr.r[i] > max_abs:
+                        max_abs = -scr.r[i]
+            if max_abs == 0.0:
+                for j in range(p):
+                    beta_out_data[j] = scr.beta[j]
+                scale = 0.0
+                status = 2
+                break
+            s = max_abs / k0
+            if s <= 0.0:
+                s = 1.0
+
+            candidate_scale = _k_step_refine(
+                X_data, y_data, s, family, tuning_chi_data, b0,
+                k_fast_s, max_iter_scale, scale_tol,
+                &scr, n, p, &k_status,
+            )
+            if k_status == 2:
+                for j in range(p):
+                    beta_out_data[j] = scr.beta[j]
+                scale = 0.0
+                status = 2
+                break
+            if k_status != 0:
+                continue
+
+            if kept < best_r:
+                best_scales[kept] = candidate_scale
+                for j in range(p):
+                    best_betas[kept * p + j] = scr.beta[j]
+                kept += 1
+            else:
+                row = 0  # repurposed as worst_i
+                for i in range(1, best_r):
+                    if best_scales[i] > best_scales[row]:
+                        row = i
+                if candidate_scale < best_scales[row]:
+                    best_scales[row] = candidate_scale
+                    for j in range(p):
+                        best_betas[row * p + j] = scr.beta[j]
+
+        # Survivor refinement and pick best ---------------------------------
+        if status == 0:
+            if kept == 0:
+                status = 1
+            else:
+                scale = 1e300
+                for i in range(kept):
+                    for j in range(p):
+                        scr.beta[j] = best_betas[i * p + j]
+                    candidate_scale = _refine_to_convergence(
+                        X_data, y_data,
+                        best_scales[i], family, tuning_chi_data, b0,
+                        max_it_s, refine_tol,
+                        max_iter_scale, scale_tol,
+                        scr.beta, &scr, n, p,
+                        &conv_s, &n_iter_s,
+                    )
+                    if candidate_scale < scale:
+                        scale = candidate_scale
+                        for j in range(p):
+                            beta_out_data[j] = scr.beta[j]
+
+        # MM step -----------------------------------------------------------
+        if status == 0 and scale > 0.0:
+            _mm_loop(
+                X_data, y_data, scale, family, tuning_psi_data,
+                max_it_mm, rel_tol_mm,
+                beta_out_data, &scr, n, p,
+                &conv_mm, &n_iter_mm,
+            )
+
+        # Final residuals and IRWLS weights at psi tuning -------------------
+        if status == 0 or status == 2:
+            _residuals(X_data, y_data, beta_out_data, r_out_data, n, p)
+            if scale > 0.0:
+                _wgt_zinv(r_out_data, w_out_data, n, scale, family,
+                          tuning_psi_data)
+            else:
+                for i in range(n):
+                    w_out_data[i] = 1.0
+
+    free(best_scales); free(best_betas)
+    _free_scratch(&scr)
+    return scale, status, n_iter_s, conv_s, n_iter_mm, conv_mm

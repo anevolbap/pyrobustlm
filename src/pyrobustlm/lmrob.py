@@ -103,7 +103,81 @@ def lmrob(
     s_seed = seed if seed is not None else control.seed
     k_chi_tuple = tuple(np.atleast_1d(np.asarray(control.tuning_chi, dtype=float)).ravel())
 
-    if init_method == "S":
+    # ------------------------------------------------------------------
+    # Monolithic Cython engine: fast-S + MM in one nogil call. Sets the
+    # ``_engine_c_done`` flag so the per-step Python blocks below skip
+    # themselves.
+    # ------------------------------------------------------------------
+    _engine_c_done = False
+    if control.engine_c and init_method == "S":
+        _FAM_IDS = {"bisquare": 0, "biweight": 0, "hampel": 1,
+                    "optimal": 2, "lqq": 3, "ggw": 4}
+        if psi_family in _FAM_IDS:
+            try:
+                import importlib
+
+                _cy_lmrob_fit = importlib.import_module(
+                    "pyrobustlm._core._lmrob"
+                ).cy_lmrob_fit
+            except (ImportError, AttributeError):
+                _cy_lmrob_fit = None
+            if _cy_lmrob_fit is not None:
+                _psi_k_eff = tuple(
+                    np.atleast_1d(np.asarray(control.tuning_psi, dtype=float)).ravel()
+                )
+                _tuning_chi = np.zeros(3, dtype=np.float64)
+                _tuning_psi = np.zeros(3, dtype=np.float64)
+                for _i, _v in enumerate(k_chi_tuple[:3]):
+                    _tuning_chi[_i] = float(_v)
+                for _i, _v in enumerate(_psi_k_eff[:3]):
+                    _tuning_psi[_i] = float(_v)
+                beta_out = np.empty(p, dtype=np.float64)
+                residuals_out = np.empty(n, dtype=np.float64)
+                rweights_out = np.empty(n, dtype=np.float64)
+                rng_e = np.random.default_rng(s_seed)
+                scale_e, status_e, n_iter_s, _conv_s, n_iter_mm, conv_mm = _cy_lmrob_fit(
+                    np.ascontiguousarray(X, dtype=np.float64),
+                    np.ascontiguousarray(y, dtype=np.float64),
+                    rng_e.bit_generator.capsule,
+                    _FAM_IDS[psi_family],
+                    _tuning_chi,
+                    _tuning_psi,
+                    control.bb,
+                    control.nResample,
+                    control.mts,
+                    control.k_fast_s,
+                    control.best_r_s,
+                    control.max_it,
+                    control.refine_tol,
+                    control.max_it,
+                    control.rel_tol,
+                    control.k_max,
+                    control.scale_tol,
+                    beta_out,
+                    residuals_out,
+                    rweights_out,
+                )
+                if status_e == 1:
+                    raise RuntimeError("lmrob: no non-singular subsamples found")
+                beta_init = beta_out.copy()
+                sigma_init = float(scale_e)
+                init_info = {
+                    "coef": beta_out.copy(),
+                    "scale": float(scale_e),
+                    "n_iter": int(n_iter_s),
+                    "method": "S",
+                }
+                from types import SimpleNamespace
+                _engine_mm = SimpleNamespace(
+                    coef=beta_out, converged=bool(conv_mm), n_iter=int(n_iter_mm)
+                )
+                _engine_c_done = True
+                _engine_residuals = residuals_out
+                _engine_rweights = rweights_out
+
+    if _engine_c_done:
+        pass  # cy_lmrob_fit already populated beta_init / sigma_init / init_info
+    elif init_method == "S":
         # ------------------------------------------------------------------
         # Initial S estimate via fast-S resampling
         # ------------------------------------------------------------------
@@ -189,26 +263,35 @@ def lmrob(
         raise NotImplementedError(f"init={init_method!r} not implemented")
 
     # ------------------------------------------------------------------
-    # MM step holding sigma fixed.
+    # MM step holding sigma fixed (skipped if the monolithic engine
+    # already produced post-MM beta + residuals + rweights).
     # ------------------------------------------------------------------
     psi_k_eff = tuple(np.atleast_1d(np.asarray(control.tuning_psi, dtype=float)).ravel())
-    mm = mm_iterate(
-        X=X,
-        y=y,
-        beta_init=beta_init,
-        sigma=sigma_init,
-        psi_family=psi_family,
-        psi_k=psi_k_eff,
-        max_it=control.max_it,
-        rel_tol=control.rel_tol,
-    )
+    if _engine_c_done:
+        mm = _engine_mm
+        coef = mm.coef
+        sigma = sigma_init
+        residuals = _engine_residuals
+        fitted = y - residuals
+        rweights = _engine_rweights
+    else:
+        mm = mm_iterate(
+            X=X,
+            y=y,
+            beta_init=beta_init,
+            sigma=sigma_init,
+            psi_family=psi_family,
+            psi_k=psi_k_eff,
+            max_it=control.max_it,
+            rel_tol=control.rel_tol,
+        )
 
-    coef = mm.coef
-    sigma = sigma_init
-    residuals = y - X @ coef
-    fitted = X @ coef
-    z = residuals / sigma if sigma != 0 else residuals
-    rweights = _psi.wgt(z, psi_family, psi_k_eff)
+        coef = mm.coef
+        sigma = sigma_init
+        residuals = y - X @ coef
+        fitted = X @ coef
+        z = residuals / sigma if sigma != 0 else residuals
+        rweights = _psi.wgt(z, psi_family, psi_k_eff)
 
     # ------------------------------------------------------------------
     # D-step (used by methods SMD and SMDM): refines scale via design-
