@@ -568,21 +568,25 @@ def fast_s(
         raise ValueError(f"fast_s requires n > p; got n={n}, p={p}")
 
     # ------------------------------------------------------------------
-    # Monolithic Cython engine (opt-in, bisquare only for now)
+    # Monolithic Cython engine (opt-in, all lmrob psi families)
     # ------------------------------------------------------------------
     if (
         cfg.engine_c
         and _CY_LMROB_FAST_S is not None
-        and cfg.psi_chi in ("bisquare", "biweight")
-        and len(cfg.k_chi) == 1
+        and cfg.psi_chi in _FAMILY_IDS
     ):
         rng_e = np.random.default_rng(seed)
         beta_out = np.empty(p, dtype=np.float64)
+        tuning = np.zeros(3, dtype=np.float64)
+        for i, v in enumerate(cfg.k_chi[:3]):
+            tuning[i] = float(v)
+        family_id = _FAMILY_IDS[cfg.psi_chi]
         scale, status, n_iter, converged = _CY_LMROB_FAST_S(
             X,
             y,
             rng_e.bit_generator.capsule,
-            float(cfg.k_chi[0]),
+            family_id,
+            tuning,
             cfg.b0,
             cfg.nResample,
             cfg.mts,
