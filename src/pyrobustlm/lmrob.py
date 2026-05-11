@@ -134,6 +134,7 @@ def lmrob(
                 beta_out = np.empty(p, dtype=np.float64)
                 residuals_out = np.empty(n, dtype=np.float64)
                 rweights_out = np.empty(n, dtype=np.float64)
+                beta_init_out = np.empty(p, dtype=np.float64)
                 rng_e = np.random.default_rng(s_seed)
                 scale_e, status_e, n_iter_s, _conv_s, n_iter_mm, conv_mm = _cy_lmrob_fit(
                     np.ascontiguousarray(X, dtype=np.float64),
@@ -156,10 +157,11 @@ def lmrob(
                     beta_out,
                     residuals_out,
                     rweights_out,
+                    beta_init_out,
                 )
                 if status_e == 1:
                     raise RuntimeError("lmrob: no non-singular subsamples found")
-                beta_init = beta_out.copy()
+                beta_init = beta_init_out.copy()
                 sigma_init = float(scale_e)
                 init_info = {
                     "coef": beta_out.copy(),
@@ -374,18 +376,60 @@ def lmrob(
     # Covariance
     # ------------------------------------------------------------------
     init_residuals = y - X @ beta_init
+    cov = None
     if cov_kind == ".vcov.avar1":
-        cov = vcov_avar1(
-            X=X,
-            residuals=residuals,
-            sigma=sigma,
-            psi_family=psi_family,
-            psi_k=psi_k_eff,
-            init_residuals=init_residuals,
-            chi_family=psi_family,
-            chi_k=k_chi_tuple,
-            bb=control.bb,
-        )
+        # Cython vcov fast path when engine_c is on.
+        if control.engine_c:
+            _FAM_IDS = {"bisquare": 0, "biweight": 0, "hampel": 1,
+                        "optimal": 2, "lqq": 3, "ggw": 4}
+            if psi_family in _FAM_IDS:
+                try:
+                    import importlib
+
+                    _cy_vcov = importlib.import_module(
+                        "pyrobustlm._core._lmrob"
+                    ).cy_lmrob_vcov_avar1
+                except (ImportError, AttributeError):
+                    _cy_vcov = None
+                if _cy_vcov is not None:
+                    _tuning_psi = np.zeros(3, dtype=np.float64)
+                    _tuning_chi = np.zeros(3, dtype=np.float64)
+                    for _i, _v in enumerate(psi_k_eff[:3]):
+                        _tuning_psi[_i] = float(_v)
+                    for _i, _v in enumerate(k_chi_tuple[:3]):
+                        _tuning_chi[_i] = float(_v)
+                    cov_buf = np.zeros((p, p), dtype=np.float64)
+                    _vcov_status = _cy_vcov(
+                        np.ascontiguousarray(X, dtype=np.float64),
+                        np.ascontiguousarray(residuals, dtype=np.float64),
+                        np.ascontiguousarray(init_residuals, dtype=np.float64),
+                        float(sigma),
+                        _FAM_IDS[psi_family],
+                        _tuning_psi,
+                        _tuning_chi,
+                        control.bb,
+                        cov_buf,
+                    )
+                    if _vcov_status == 0:
+                        # Posdefify (project to PSD); cheap at small p.
+                        eigvals, eigvecs = np.linalg.eigh(cov_buf)
+                        if (eigvals < 0).any():
+                            eigvals = np.where(eigvals < 0, 0.0, eigvals)
+                            cov_buf = (eigvecs * eigvals) @ eigvecs.T
+                            cov_buf = 0.5 * (cov_buf + cov_buf.T)
+                        cov = cov_buf
+        if cov is None:
+            cov = vcov_avar1(
+                X=X,
+                residuals=residuals,
+                sigma=sigma,
+                psi_family=psi_family,
+                psi_k=psi_k_eff,
+                init_residuals=init_residuals,
+                chi_family=psi_family,
+                chi_k=k_chi_tuple,
+                bb=control.bb,
+            )
     elif cov_kind == ".vcov.w":
         # Pre-compute tau if it isn't already populated by the D-step.
         # vcov_w with corrfact="tau"/"hybrid"/"tauold" needs it.

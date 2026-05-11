@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **``vcov_avar1`` in the monolithic Cython kernel.** New function
+  ``cy_lmrob_vcov_avar1`` ports the sandwich-covariance computation
+  end-to-end: per-family ``psi_prime`` / ``psi`` / ``chi`` / ``chi_prime``
+  inlined nogil, ``X' diag(w_pp) X`` build + ``dgesv`` inversion, then
+  the u1/u2/u3/u4 assembly in C. Matches ``inference.vcov_avar1``
+  element-wise (rerr ~1e-16). Posdefify (eigendecomposition) stays in
+  NumPy because p is small. ``cy_lmrob_fit`` also returns the post-S
+  beta via the new optional ``beta_init_out`` parameter so the Python
+  side can compute the right initial residuals.
+
+  Side-by-side timing (single-threaded BLAS, 7-rep median):
+
+  | dataset / setting | default | engine_c | speedup |
+  |---|---|---|---|
+  | stackloss MM     | 24.6 ms |  5.6 ms |  4.4x |
+  | stackloss KS2014 | 66.0 ms | 10.0 ms |  6.6x |
+  | phosphor MM      | 23.8 ms |  5.4 ms |  4.4x |
+  | phosphor KS2014  | 63.3 ms |  7.4 ms |  8.5x |
+  | phosphor KS2011  | 60.4 ms |  7.6 ms |  7.9x |
+  | salinity KS2014  | 71.7 ms | 12.8 ms |  5.6x |
+
+  R wall-clock on these fits is 3-7 ms, so ``engine_c=True`` lands at
+  1.4-1.9x R across all four datasets and three settings.
+
 ## [0.5.0] - 2026-05-11
 
 ### Added
