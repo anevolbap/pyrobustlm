@@ -55,3 +55,4 @@ tests/data/_d_test_*.csv
 # Local-only
 local/
 scratch/
+uv.lock
