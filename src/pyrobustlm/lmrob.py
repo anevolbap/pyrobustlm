@@ -150,60 +150,59 @@ def lmrob(
     ):
         _cy_lmrob_fit = _CY_LMROB_FIT
         if True:
-                _psi_k_eff = tuple(
-                    np.atleast_1d(np.asarray(control.tuning_psi, dtype=float)).ravel()
-                )
-                _tuning_chi = np.zeros(3, dtype=np.float64)
-                _tuning_psi = np.zeros(3, dtype=np.float64)
-                for _i, _v in enumerate(k_chi_tuple[:3]):
-                    _tuning_chi[_i] = float(_v)
-                for _i, _v in enumerate(_psi_k_eff[:3]):
-                    _tuning_psi[_i] = float(_v)
-                beta_out = np.empty(p, dtype=np.float64)
-                residuals_out = np.empty(n, dtype=np.float64)
-                rweights_out = np.empty(n, dtype=np.float64)
-                beta_init_out = np.empty(p, dtype=np.float64)
-                rng_e = np.random.default_rng(s_seed)
-                scale_e, status_e, n_iter_s, _conv_s, n_iter_mm, conv_mm = _cy_lmrob_fit(
-                    np.ascontiguousarray(X, dtype=np.float64),
-                    np.ascontiguousarray(y, dtype=np.float64),
-                    rng_e.bit_generator.capsule,
-                    _CY_FAMILY_IDS[psi_family],
-                    _tuning_chi,
-                    _tuning_psi,
-                    control.bb,
-                    control.nResample,
-                    control.mts,
-                    control.k_fast_s,
-                    control.best_r_s,
-                    control.max_it,
-                    control.refine_tol,
-                    control.max_it,
-                    control.rel_tol,
-                    control.k_max,
-                    control.scale_tol,
-                    beta_out,
-                    residuals_out,
-                    rweights_out,
-                    beta_init_out,
-                )
-                if status_e == 1:
-                    raise RuntimeError("lmrob: no non-singular subsamples found")
-                beta_init = beta_init_out.copy()
-                sigma_init = float(scale_e)
-                init_info = {
-                    "coef": beta_out.copy(),
-                    "scale": float(scale_e),
-                    "n_iter": int(n_iter_s),
-                    "method": "S",
-                }
-                from types import SimpleNamespace
-                _engine_mm = SimpleNamespace(
-                    coef=beta_out, converged=bool(conv_mm), n_iter=int(n_iter_mm)
-                )
-                _engine_c_done = True
-                _engine_residuals = residuals_out
-                _engine_rweights = rweights_out
+            _psi_k_eff = tuple(np.atleast_1d(np.asarray(control.tuning_psi, dtype=float)).ravel())
+            _tuning_chi = np.zeros(3, dtype=np.float64)
+            _tuning_psi = np.zeros(3, dtype=np.float64)
+            for _i, _v in enumerate(k_chi_tuple[:3]):
+                _tuning_chi[_i] = float(_v)
+            for _i, _v in enumerate(_psi_k_eff[:3]):
+                _tuning_psi[_i] = float(_v)
+            beta_out = np.empty(p, dtype=np.float64)
+            residuals_out = np.empty(n, dtype=np.float64)
+            rweights_out = np.empty(n, dtype=np.float64)
+            beta_init_out = np.empty(p, dtype=np.float64)
+            rng_e = np.random.default_rng(s_seed)
+            scale_e, status_e, n_iter_s, _conv_s, n_iter_mm, conv_mm = _cy_lmrob_fit(
+                np.ascontiguousarray(X, dtype=np.float64),
+                np.ascontiguousarray(y, dtype=np.float64),
+                rng_e.bit_generator.capsule,
+                _CY_FAMILY_IDS[psi_family],
+                _tuning_chi,
+                _tuning_psi,
+                control.bb,
+                control.nResample,
+                control.mts,
+                control.k_fast_s,
+                control.best_r_s,
+                control.max_it,
+                control.refine_tol,
+                control.max_it,
+                control.rel_tol,
+                control.k_max,
+                control.scale_tol,
+                beta_out,
+                residuals_out,
+                rweights_out,
+                beta_init_out,
+            )
+            if status_e == 1:
+                raise RuntimeError("lmrob: no non-singular subsamples found")
+            beta_init = beta_init_out.copy()
+            sigma_init = float(scale_e)
+            init_info = {
+                "coef": beta_out.copy(),
+                "scale": float(scale_e),
+                "n_iter": int(n_iter_s),
+                "method": "S",
+            }
+            from types import SimpleNamespace
+
+            _engine_mm = SimpleNamespace(
+                coef=beta_out, converged=bool(conv_mm), n_iter=int(n_iter_mm)
+            )
+            _engine_c_done = True
+            _engine_residuals = residuals_out
+            _engine_rweights = rweights_out
 
     if _engine_c_done:
         pass  # cy_lmrob_fit already populated beta_init / sigma_init / init_info
@@ -334,11 +333,7 @@ def lmrob(
         sigma_d = None
         d_converged = False
         # Cython D-step when engine_c is on and tabulated coefficients exist.
-        if (
-            control.engine_c
-            and _CY_LMROB_D_SCALE is not None
-            and psi_family in _CY_FAMILY_IDS
-        ):
+        if control.engine_c and _CY_LMROB_D_SCALE is not None and psi_family in _CY_FAMILY_IDS:
             _cy_d = _CY_LMROB_D_SCALE
             if True:
                 _tau_buf = np.empty(n, dtype=np.float64)
@@ -402,39 +397,35 @@ def lmrob(
     cov = None
     if cov_kind == ".vcov.avar1":
         # Cython vcov fast path when engine_c is on.
-        if (
-            control.engine_c
-            and _CY_LMROB_VCOV is not None
-            and psi_family in _CY_FAMILY_IDS
-        ):
+        if control.engine_c and _CY_LMROB_VCOV is not None and psi_family in _CY_FAMILY_IDS:
             _cy_vcov = _CY_LMROB_VCOV
             if True:
-                    _tuning_psi = np.zeros(3, dtype=np.float64)
-                    _tuning_chi = np.zeros(3, dtype=np.float64)
-                    for _i, _v in enumerate(psi_k_eff[:3]):
-                        _tuning_psi[_i] = float(_v)
-                    for _i, _v in enumerate(k_chi_tuple[:3]):
-                        _tuning_chi[_i] = float(_v)
-                    cov_buf = np.zeros((p, p), dtype=np.float64)
-                    _vcov_status = _cy_vcov(
-                        np.ascontiguousarray(X, dtype=np.float64),
-                        np.ascontiguousarray(residuals, dtype=np.float64),
-                        np.ascontiguousarray(init_residuals, dtype=np.float64),
-                        float(sigma),
-                        _CY_FAMILY_IDS[psi_family],
-                        _tuning_psi,
-                        _tuning_chi,
-                        control.bb,
-                        cov_buf,
-                    )
-                    if _vcov_status == 0:
-                        # Posdefify (project to PSD); cheap at small p.
-                        eigvals, eigvecs = np.linalg.eigh(cov_buf)
-                        if (eigvals < 0).any():
-                            eigvals = np.where(eigvals < 0, 0.0, eigvals)
-                            cov_buf = (eigvecs * eigvals) @ eigvecs.T
-                            cov_buf = 0.5 * (cov_buf + cov_buf.T)
-                        cov = cov_buf
+                _tuning_psi = np.zeros(3, dtype=np.float64)
+                _tuning_chi = np.zeros(3, dtype=np.float64)
+                for _i, _v in enumerate(psi_k_eff[:3]):
+                    _tuning_psi[_i] = float(_v)
+                for _i, _v in enumerate(k_chi_tuple[:3]):
+                    _tuning_chi[_i] = float(_v)
+                cov_buf = np.zeros((p, p), dtype=np.float64)
+                _vcov_status = _cy_vcov(
+                    np.ascontiguousarray(X, dtype=np.float64),
+                    np.ascontiguousarray(residuals, dtype=np.float64),
+                    np.ascontiguousarray(init_residuals, dtype=np.float64),
+                    float(sigma),
+                    _CY_FAMILY_IDS[psi_family],
+                    _tuning_psi,
+                    _tuning_chi,
+                    control.bb,
+                    cov_buf,
+                )
+                if _vcov_status == 0:
+                    # Posdefify (project to PSD); cheap at small p.
+                    eigvals, eigvecs = np.linalg.eigh(cov_buf)
+                    if (eigvals < 0).any():
+                        eigvals = np.where(eigvals < 0, 0.0, eigvals)
+                        cov_buf = (eigvecs * eigvals) @ eigvecs.T
+                        cov_buf = 0.5 * (cov_buf + cov_buf.T)
+                    cov = cov_buf
         if cov is None:
             cov = vcov_avar1(
                 X=X,

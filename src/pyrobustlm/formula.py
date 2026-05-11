@@ -30,14 +30,10 @@ class DesignMatrix:
     rhs_spec: object | None = None
 
 
-_SIMPLE_FORMULA_CHARS = set(
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_. +~"
-)
+_SIMPLE_FORMULA_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_. +~")
 
 
-def _try_simple_parse(
-    formula: str, data: pd.DataFrame
-) -> DesignMatrix | None:
+def _try_simple_parse(formula: str, data: pd.DataFrame) -> DesignMatrix | None:
     """Fast path for ``y ~ x1 + x2 + ...`` formulas with bare numeric
     variables. Skips formulaic entirely. Returns ``None`` if the formula
     doesn't match this pattern.

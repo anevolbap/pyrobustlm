@@ -41,7 +41,7 @@ def test_kernel_matches_fast_rng_path() -> None:
         X,
         y,
         rng.bit_generator.capsule,
-        0,           # family: bisquare
+        0,  # family: bisquare
         tuning,
         0.5,
         500,
@@ -106,8 +106,7 @@ def test_engine_c_speedup_at_small_n() -> None:
     # On any reasonable hardware, monolithic should be at least 1.3x faster
     # for this small-n configuration. If this fails on slow CI, loosen.
     assert t_engine_c < t_default, (
-        f"engine_c not faster: default={t_default * 1000:.1f}ms, "
-        f"engine_c={t_engine_c * 1000:.1f}ms"
+        f"engine_c not faster: default={t_default * 1000:.1f}ms, engine_c={t_engine_c * 1000:.1f}ms"
     )
 
 

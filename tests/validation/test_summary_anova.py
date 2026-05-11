@@ -179,9 +179,7 @@ def test_anova_deviance_pair_matches_r() -> None:
     """anova(full, reduced, test='Deviance') matches R element-wise."""
     df = _ensure_dataset("stackloss")
     ctrl = Control(nResample=500)
-    full = lmrob(
-        "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, control=ctrl, seed=42
-    )
+    full = lmrob("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, control=ctrl, seed=42)
     red = lmrob("stack.loss ~ Air.Flow + Water.Temp", df, control=ctrl, seed=42)
     red2 = lmrob("stack.loss ~ Air.Flow", df, control=ctrl, seed=42)
 

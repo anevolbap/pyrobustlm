@@ -104,9 +104,7 @@ def _try_import_cy_lmrob_fast_s() -> Callable[..., tuple[float, int, int, int]] 
 _CY_ITER: _CyIterFn | None = _try_import_cy_iter()
 _CY_REFINE: Callable[..., tuple[float, int, int, int]] | None = _try_import_cy_refine()
 _CY_DRAW_AND_ITER: Callable[..., tuple[float, int]] | None = _try_import_cy_draw_and_iter()
-_CY_LMROB_FAST_S: Callable[..., tuple[float, int, int, int]] | None = (
-    _try_import_cy_lmrob_fast_s()
-)
+_CY_LMROB_FAST_S: Callable[..., tuple[float, int, int, int]] | None = _try_import_cy_lmrob_fast_s()
 
 
 @dataclass(frozen=True)
@@ -570,11 +568,7 @@ def fast_s(
     # ------------------------------------------------------------------
     # Monolithic Cython engine (opt-in, all lmrob psi families)
     # ------------------------------------------------------------------
-    if (
-        cfg.engine_c
-        and _CY_LMROB_FAST_S is not None
-        and cfg.psi_chi in _FAMILY_IDS
-    ):
+    if cfg.engine_c and _CY_LMROB_FAST_S is not None and cfg.psi_chi in _FAMILY_IDS:
         rng_e = np.random.default_rng(seed)
         beta_out = np.empty(p, dtype=np.float64)
         tuning = np.zeros(3, dtype=np.float64)

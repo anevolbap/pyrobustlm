@@ -93,14 +93,9 @@ class LmRobResults:
                     )
                 feat = np.asarray(df.loc[:, cols].to_numpy(), dtype=np.float64)
                 has_intercept = bool(
-                    self.term_names_
-                    and self.term_names_[0] in ("Intercept", "(Intercept)")
+                    self.term_names_ and self.term_names_[0] in ("Intercept", "(Intercept)")
                 )
-                arr = (
-                    np.column_stack([np.ones(feat.shape[0]), feat])
-                    if has_intercept
-                    else feat
-                )
+                arr = np.column_stack([np.ones(feat.shape[0]), feat]) if has_intercept else feat
             else:
                 from pyrobustlm.formula import apply_spec
 
