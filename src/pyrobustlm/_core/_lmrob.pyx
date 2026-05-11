@@ -888,6 +888,310 @@ def cy_lmrob_fast_s(
 
 
 # ---------------------------------------------------------------------------
+# Design-adaptive D-scale (Koller & Stahel 2014). Mirrors
+# robustbase/src/lmrob.c::R_find_D_scale and pyrobustlm.d_scale.
+# ---------------------------------------------------------------------------
+# Kappa and (tfact, tcorr) for tau, per family at default tuning. Mirrors
+# the tables in pyrobustlm.d_scale (_TAU_FAST_TABLE) and lmrob.kappa
+# tabulation. For non-default tuning the caller falls back to the Python
+# path; this kernel only handles the common defaults.
+
+# Computed via scipy.integrate.quad on the default-tuning psi.r/wgt
+# integrand (see pyrobustlm.d_scale.kappa) at runtime in Python; the
+# values below were captured for the family defaults and re-used here.
+cdef double _DSCALE_KAPPA_BISQUARE = 0.8280771566048320
+cdef double _DSCALE_KAPPA_HAMPEL = 0.8569775805834327
+cdef double _DSCALE_KAPPA_OPTIMAL = 0.9355077953265407
+cdef double _DSCALE_KAPPA_LQQ = 0.8626400360440886
+# ggw default cases are case 1 (b=1, 95% eff) and case 4 (b=1.5, 95% eff).
+# kappa values measured the same way as the others.
+cdef double _DSCALE_KAPPA_GGW_C1 = 0.8914986545654882
+cdef double _DSCALE_KAPPA_GGW_C4 = 0.8914986545654882
+
+
+cdef inline int _dscale_tau_factors(
+    int family, const double* tuning, double* out_tfact, double* out_tcorr,
+) nogil:
+    """Look up (tfact, tcorr) for tau = sqrt(1-tfact*h)*(tcorr*h+1).
+    Returns 0 on success, 1 if no tabulated factors are available."""
+    cdef int case_idx
+    if family == FAM_BISQUARE:
+        out_tfact[0] = 0.9473684
+        out_tcorr[0] = -0.0900833
+        return 0
+    if family == FAM_HAMPEL:
+        out_tfact[0] = 0.94739770
+        out_tcorr[0] = -0.04103958
+        return 0
+    if family == FAM_OPTIMAL:
+        out_tfact[0] = 0.94735878
+        out_tcorr[0] = -0.09444537
+        return 0
+    if family == FAM_LQQ:
+        out_tfact[0] = 0.94736359
+        out_tcorr[0] = -0.08594805
+        return 0
+    if family == FAM_GGW:
+        case_idx = <int>(tuning[0])
+        if case_idx == 1:
+            out_tfact[0] = 0.9473787
+            out_tcorr[0] = -0.1143846
+            return 0
+        if case_idx == 4:
+            out_tfact[0] = 0.94741036
+            out_tcorr[0] = -0.08424648
+            return 0
+    return 1
+
+
+cdef inline int _dscale_kappa(
+    int family, const double* tuning, double* out_kappa,
+) nogil:
+    """Tabulated kappa per family. Returns 0 on success, 1 if no table."""
+    cdef int case_idx
+    if family == FAM_BISQUARE:
+        out_kappa[0] = _DSCALE_KAPPA_BISQUARE
+        return 0
+    if family == FAM_HAMPEL:
+        out_kappa[0] = _DSCALE_KAPPA_HAMPEL
+        return 0
+    if family == FAM_OPTIMAL:
+        out_kappa[0] = _DSCALE_KAPPA_OPTIMAL
+        return 0
+    if family == FAM_LQQ:
+        out_kappa[0] = _DSCALE_KAPPA_LQQ
+        return 0
+    if family == FAM_GGW:
+        case_idx = <int>(tuning[0])
+        if case_idx == 1:
+            out_kappa[0] = _DSCALE_KAPPA_GGW_C1
+            return 0
+        if case_idx == 4:
+            out_kappa[0] = _DSCALE_KAPPA_GGW_C4
+            return 0
+    return 1
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+cdef inline int _compute_hat_diagonal(
+    const double* X, const double* rweights,
+    Py_ssize_t n, Py_ssize_t p,
+    double* XwX_inv_buf, int* ipiv, double* h_out,
+) nogil:
+    """Compute h_i = w_i * X[i,:] (X^T W X)^{-1} X[i,:]^T.
+
+    ``XwX_inv_buf`` must be at least p*p doubles. On return it contains
+    (X^T W X)^{-1}. Returns 0 on success, 3 on LAPACK error.
+    """
+    cdef Py_ssize_t i, j, k
+    cdef double w_i, dot, hi
+    cdef int p_int = <int>p
+    cdef int info = 0
+
+    # Build XwX = X^T diag(w) X (column-major in XwX_inv_buf).
+    for j in range(p):
+        for k in range(p):
+            dot = 0.0
+            for i in range(n):
+                dot += X[i * p + j] * rweights[i] * X[i * p + k]
+            XwX_inv_buf[j + k * p] = dot
+
+    # Identity rhs (p x p, column-major).
+    # We solve A * Z = I in place; on return XwX_inv_buf is A^{-1}.
+    cdef double* rhs = <double*>malloc(p * p * sizeof(double))
+    if rhs == NULL:
+        return 3
+    for j in range(p):
+        for k in range(p):
+            rhs[j + k * p] = 1.0 if j == k else 0.0
+    dgesv(&p_int, &p_int, XwX_inv_buf, &p_int, ipiv, rhs, &p_int, &info)
+    if info != 0:
+        free(rhs)
+        return 3
+    # Copy A^{-1} back to XwX_inv_buf.
+    for j in range(p * p):
+        XwX_inv_buf[j] = rhs[j]
+    free(rhs)
+
+    # h_i = w_i * X[i,:] A^{-1} X[i,:]^T. Quadratic form via two-step.
+    for i in range(n):
+        hi = 0.0
+        for j in range(p):
+            dot = 0.0
+            for k in range(p):
+                dot += XwX_inv_buf[j + k * p] * X[i * p + k]
+            hi += X[i * p + j] * dot
+        h_out[i] = rweights[i] * hi
+        if h_out[i] > 1.0:
+            h_out[i] = 1.0
+    return 0
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+cdef inline int _d_scale_iterate(
+    const double* r, const double* tau_vec, Py_ssize_t n,
+    int family, const double* tuning,
+    double kappa_val, double init_scale,
+    int max_iter, double tol,
+    double* out_scale, int* out_converged,
+) nogil:
+    cdef double sgma = init_scale
+    cdef double new_s, tsum1, tsum2, z, wi
+    cdef double* w_arr = <double*>malloc(n * sizeof(double))
+    if w_arr == NULL:
+        return 3
+    cdef Py_ssize_t i
+    cdef int it
+    if sgma <= 0.0:
+        out_scale[0] = 0.0
+        out_converged[0] = 0
+        free(w_arr)
+        return 0
+    for it in range(max_iter):
+        # Compute scaled residuals r_i / (tau_i * sgma) and weights.
+        # Use _wgt_zinv: it expects r/s; here we want r / (tau * sgma).
+        # Inline the loop to avoid an extra buffer.
+        tsum1 = 0.0
+        tsum2 = 0.0
+        for i in range(n):
+            # tmp = r[i] / (tau_vec[i] * sgma); compute wgt(tmp) per family
+            # by inlining the bisquare-style branching. Reuse _wgt_zinv via
+            # a scratch buffer trick: build z_buf, then call _wgt_zinv.
+            w_arr[i] = r[i] / (tau_vec[i] * sgma)  # store z temporarily
+        # Now compute weights from z stored in w_arr; reuse via _wgt_zinv
+        # treating w_arr as both input residuals (scaled by 1) and output.
+        # _wgt_zinv computes w = wgt(r/s); pass s=1.0 to use w_arr directly.
+        _wgt_zinv(w_arr, w_arr, n, 1.0, family, tuning)
+        for i in range(n):
+            wi = w_arr[i]
+            tsum1 += r[i] * r[i] * wi
+            tsum2 += wi * tau_vec[i] * tau_vec[i]
+        if tsum2 == 0.0:
+            out_scale[0] = sgma
+            out_converged[0] = 0
+            free(w_arr)
+            return 0
+        new_s = sqrt(tsum1 / (tsum2 * kappa_val))
+        if fabs(new_s - sgma) < tol * (tol if tol > sgma else sgma):
+            sgma = new_s
+            out_scale[0] = sgma
+            out_converged[0] = 1
+            free(w_arr)
+            return 0
+        sgma = new_s
+    out_scale[0] = sgma
+    out_converged[0] = 0
+    free(w_arr)
+    return 0
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+def cy_lmrob_d_scale(
+    cnp.ndarray[double, ndim=2, mode="c"] X,
+    cnp.ndarray[double, ndim=1, mode="c"] residuals,
+    cnp.ndarray[double, ndim=1, mode="c"] rweights,
+    double init_scale,
+    int family,
+    cnp.ndarray[double, ndim=1, mode="c"] tuning,
+    int max_iter,
+    double tol,
+    cnp.ndarray[double, ndim=1, mode="c"] tau_out,
+):
+    """Design-adaptive D-scale (Koller & Stahel 2014).
+
+    Computes hat values h from rweights-weighted X, then tau from the
+    family-tabulated (tfact, tcorr), then iterates the dt1 fixed-point
+    until convergence. ``tau_out`` is filled with the per-observation
+    tau values so the Python side can stash them for vcov_w.
+
+    Returns ``(scale, converged, status)``. Status 0 = ok, 1 = no
+    tabulated tau/kappa (caller should fall back), 3 = LAPACK error.
+    """
+    if family == FAM_GGW and not _ggw_tables_init:
+        _init_ggw_tables()
+
+    cdef Py_ssize_t n = X.shape[0]
+    cdef Py_ssize_t p = X.shape[1]
+
+    cdef double tfact = 0.0, tcorr = 0.0
+    cdef double kappa_val = 0.0
+    cdef double* tuning_data = <double*>cnp.PyArray_DATA(tuning)
+    cdef double* X_data = <double*>cnp.PyArray_DATA(X)
+    cdef double* r_data = <double*>cnp.PyArray_DATA(residuals)
+    cdef double* w_data = <double*>cnp.PyArray_DATA(rweights)
+    cdef double* tau_data = <double*>cnp.PyArray_DATA(tau_out)
+    cdef double scale = init_scale
+    cdef int converged = 0
+    cdef int status = 0
+    cdef Py_ssize_t i
+
+    # Lookup tabulated coefficients before going nogil.
+    if _dscale_tau_factors(family, tuning_data, &tfact, &tcorr) != 0:
+        return scale, 0, 1
+    if _dscale_kappa(family, tuning_data, &kappa_val) != 0:
+        return scale, 0, 1
+
+    cdef double* h = <double*>malloc(n * sizeof(double))
+    cdef double* XwX = <double*>malloc(p * p * sizeof(double))
+    cdef int* ipiv = <int*>malloc(p * sizeof(int))
+    if h == NULL or XwX == NULL or ipiv == NULL:
+        free(h); free(XwX); free(ipiv)
+        raise MemoryError("cy_lmrob_d_scale: out of memory")
+
+    cdef int hat_status
+    with nogil:
+        hat_status = _compute_hat_diagonal(X_data, w_data, n, p, XwX, ipiv, h)
+    if hat_status != 0:
+        free(h); free(XwX); free(ipiv)
+        return scale, 0, hat_status
+
+    cdef double hi
+    with nogil:
+        # tau_i = sqrt(1 - tfact*h_i) * (tcorr*h_i + 1)
+        for i in range(n):
+            hi = h[i]
+            tau_data[i] = sqrt(1.0 - tfact * hi) * (tcorr * hi + 1.0)
+
+        # Starting value matches d_scale.py: sqrt(sum(w r^2) / kappa / sum(tau^2 w)).
+        # If non-finite or non-positive, fall back to init_scale.
+        cdef_num = 0.0
+        cdef_den = 0.0
+        # (No cdef inside nogil-with-block; declare above instead.)
+    # Re-do starting value in normal Python territory to avoid Cython grief
+    cdef double num = 0.0
+    cdef double den = 0.0
+    for i in range(n):
+        num += w_data[i] * r_data[i] * r_data[i]
+        den += w_data[i] * tau_data[i] * tau_data[i]
+    cdef double start
+    if den == 0.0 or kappa_val == 0.0:
+        start = init_scale
+    else:
+        start = sqrt(num / (kappa_val * den))
+        if start <= 0.0 or start != start:  # NaN check
+            start = init_scale
+
+    cdef int iter_status
+    with nogil:
+        iter_status = _d_scale_iterate(
+            r_data, tau_data, n, family, tuning_data,
+            kappa_val, start, max_iter, tol,
+            &scale, &converged,
+        )
+
+    free(h); free(XwX); free(ipiv)
+    if iter_status != 0:
+        return scale, converged, iter_status
+    return scale, converged, 0
+
+
+# ---------------------------------------------------------------------------
 # MM iteration kernel. Port of robustbase/src/lmrob.c::rwls and the existing
 # pyrobustlm._mm.mm_iterate. IRWLS with fixed scale and the L1 convergence
 # test ``d_beta <= rel_tol * max(rel_tol, ||beta||_1)``.

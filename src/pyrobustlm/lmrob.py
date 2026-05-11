@@ -301,16 +301,53 @@ def lmrob(
     method = control.method or "MM"
     tau_vec: np.ndarray | None = None
     if "D" in method:
-        sigma_d, d_converged, tau_vec, _h = d_scale(
-            X=X,
-            residuals=residuals,
-            rweights=rweights,
-            init_scale=sigma,
-            family=psi_family,
-            c_psi=psi_k_eff,
-            max_iter=control.k_max,
-            tol=control.rel_tol,
-        )
+        sigma_d = None
+        d_converged = False
+        # Cython D-step when engine_c is on and tabulated coefficients exist.
+        if control.engine_c:
+            try:
+                import importlib
+
+                _cy_d = importlib.import_module(
+                    "pyrobustlm._core._lmrob"
+                ).cy_lmrob_d_scale
+            except (ImportError, AttributeError):
+                _cy_d = None
+            _FAM_IDS = {"bisquare": 0, "biweight": 0, "hampel": 1,
+                        "optimal": 2, "lqq": 3, "ggw": 4}
+            if _cy_d is not None and psi_family in _FAM_IDS:
+                _tau_buf = np.empty(n, dtype=np.float64)
+                _tuning_psi = np.zeros(3, dtype=np.float64)
+                for _i, _v in enumerate(
+                    tuple(np.atleast_1d(np.asarray(control.tuning_psi, dtype=float)).ravel())[:3]
+                ):
+                    _tuning_psi[_i] = float(_v)
+                _sigma_d, _d_conv, _d_status = _cy_d(
+                    np.ascontiguousarray(X, dtype=np.float64),
+                    np.ascontiguousarray(residuals, dtype=np.float64),
+                    np.ascontiguousarray(rweights, dtype=np.float64),
+                    float(sigma),
+                    _FAM_IDS[psi_family],
+                    _tuning_psi,
+                    control.k_max,
+                    control.rel_tol,
+                    _tau_buf,
+                )
+                if _d_status == 0:
+                    sigma_d = float(_sigma_d)
+                    d_converged = bool(_d_conv)
+                    tau_vec = _tau_buf
+        if sigma_d is None:
+            sigma_d, d_converged, tau_vec, _h = d_scale(
+                X=X,
+                residuals=residuals,
+                rweights=rweights,
+                init_scale=sigma,
+                family=psi_family,
+                c_psi=psi_k_eff,
+                max_iter=control.k_max,
+                tol=control.rel_tol,
+            )
         if d_converged and sigma_d > 0:
             sigma = sigma_d
             init_info["d_scale"] = sigma_d
