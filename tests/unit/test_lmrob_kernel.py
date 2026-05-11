@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 
 def _make_problem(n: int, p: int, seed: int = 0) -> tuple[np.ndarray, np.ndarray]:
@@ -76,8 +77,16 @@ def test_engine_c_via_lmrob_api() -> None:
     assert fit.coef_.shape == (X.shape[1],)
 
 
+@pytest.mark.skipif(
+    bool(__import__("os").environ.get("CI")),
+    reason="Wall-clock perf comparison is too noisy on CI runners",
+)
 def test_engine_c_speedup_at_small_n() -> None:
-    """``engine_c=True`` should be faster than the default path at small n."""
+    """``engine_c=True`` should be faster than the default path at small n.
+
+    Skipped on CI because shared-runner timing is too noisy to make a
+    perf assertion that's both meaningful and reliable.
+    """
     import time
 
     import pandas as pd
@@ -103,8 +112,6 @@ def test_engine_c_speedup_at_small_n() -> None:
     t_default = bench(Control(nResample=500))
     t_engine_c = bench(Control(nResample=500, engine_c=True))
 
-    # On any reasonable hardware, monolithic should be at least 1.3x faster
-    # for this small-n configuration. If this fails on slow CI, loosen.
     assert t_engine_c < t_default, (
         f"engine_c not faster: default={t_default * 1000:.1f}ms, engine_c={t_engine_c * 1000:.1f}ms"
     )

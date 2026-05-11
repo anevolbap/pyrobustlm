@@ -73,9 +73,27 @@ def test_find_d_scale_idempotent_at_fixed_point():
     np.testing.assert_allclose(sgma2, sgma, rtol=1e-6)
 
 
+def _r_has_robustbase() -> bool:
+    """True iff Rscript is on PATH and the robustbase package is loadable."""
+    import shutil
+
+    if shutil.which("Rscript") is None:
+        return False
+    try:
+        r = subprocess.run(
+            ["Rscript", "-e", "library(robustbase)"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
 @pytest.mark.skipif(
-    not __import__("shutil").which("Rscript"),
-    reason="Rscript not installed (test drives R's R_find_D_scale C kernel)",
+    not _r_has_robustbase(),
+    reason="Rscript + robustbase not available (test drives R's R_find_D_scale C kernel)",
 )
 def test_d_iteration_matches_r_kernel(stackloss_df):
     """Our D-iteration matches R's ``R_find_D_scale`` C kernel to 5 decimals
