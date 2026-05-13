@@ -9,7 +9,7 @@ Python port of the `lmrob` MM-estimator from R's
 
 Documentation: [pyrobustlm.readthedocs.io](https://pyrobustlm.readthedocs.io/).
 
-Status: v0.4.0 (alpha). End-to-end pipeline matches R's `lmrob` element-wise
+Status: v0.5.5 (alpha). End-to-end pipeline matches R's `lmrob` element-wise
 on the classical robust regression datasets (`stackloss`, `coleman`,
 `delivery`, `aircraft`, `phosphor`, etc.) within `rtol=1e-3` for both
 coefficients and covariance. See [`plan.md`](plan.md) for the full roadmap
@@ -29,14 +29,37 @@ divergences from R.
 - `Control` presets matching R's `lmrob.control(setting={"KS2014","KS2011","MM"})`.
 - Affine equivariance, scale equivariance, regression equivariance verified
   via Hypothesis property tests.
+- `init="M-S"` for factor designs (Maronna-Yohai 2000, 4-phase port of
+  robustbase's `R_lmrob_M_S`).
+- D-scale refinement (Koller & Stahel 2014) for `setting="KS2014"` and
+  `setting="KS2011"`; full SMDM pipeline matches R element-wise.
+- `vcov.w` with all five `cov.corrfact` branches plus the Huber
+  finite-sample correction, matching R within `rtol=1e-3`.
+- `summary()` (coefficient table, robust R-squared) and `anova()`
+  (Wald + Deviance) matching R element-wise.
+- `Control(engine_c=True)` opt-in monolithic Cython engine; see
+  [Performance](#performance).
 
 ## What does not work yet
 
-- `init="M-S"` for factor designs (Phase 5).
-- `vcov_w` (KS2011 finite-sample corrections; falls back to `vcov_avar1`).
-- Cython kernels: pyrobustlm is currently 2x-50x slower than R; performance
-  pass is Phase 11.
-- Bit-identical reproducibility with R's MT RNG. We use NumPy's PCG64.
+- Per-case `weights` argument (raises `NotImplementedError`).
+- Bit-identical reproducibility with R's MT RNG. We use NumPy's PCG64
+  (waived in `plan.md` §5.2; coefficients agree with R within
+  basin-of-attraction tolerances documented in
+  [`docs/numerical-notes.md`](docs/numerical-notes.md)).
+
+## Performance
+
+The default path is pure-NumPy + Cython kernels for the inner loops and
+runs about 5-15x R wall-clock on small-n problems (see
+[`docs/bench-report.md`](docs/bench-report.md)).
+
+`Control(engine_c=True)` opts into a monolithic Cython lmrob engine that
+runs the entire fit (fast-S, MM, D-scale, vcov) in one nogil C block.
+On a single-threaded BLAS box, phosphor MM fits in ~3.6 ms vs R's
+~3 ms (about 1.2x R); KS settings 6-10 ms vs R's 4-7 ms. See
+[`docs/engine_c.md`](docs/engine_c.md) for the trade-off and the
+reproducible bench script `scripts/bench_engine_c.py`.
 
 ## Install (from source)
 
