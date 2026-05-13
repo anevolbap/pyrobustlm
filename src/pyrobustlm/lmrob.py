@@ -541,6 +541,9 @@ class LmRob:
 
     def fit(self, X: np.ndarray, y: np.ndarray, seed: int | None = None) -> LmRob:
         # Build a tiny pandas DataFrame so we can reuse the formula path.
+        # Constructing the DataFrame from a single dict-of-arrays is faster
+        # than ``pd.DataFrame(X, columns=...)`` + ``df["y"] = y`` (one
+        # block-manager build instead of two).
         import pandas as pd
 
         X = np.asarray(X, dtype=np.float64)
@@ -548,8 +551,9 @@ class LmRob:
         if X.ndim != 2:
             raise ValueError("X must be 2-D")
         cols = [f"x{i}" for i in range(X.shape[1])]
-        df = pd.DataFrame(X, columns=cols)
-        df["y"] = y
+        data_dict: dict[str, np.ndarray] = {c: X[:, i] for i, c in enumerate(cols)}
+        data_dict["y"] = y
+        df = pd.DataFrame(data_dict)
         formula = "y ~ " + " + ".join(cols)
         self._result = lmrob(formula, df, control=self.control, seed=seed)
         return self
