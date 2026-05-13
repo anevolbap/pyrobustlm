@@ -164,10 +164,16 @@ def lmrob(
             _tuning_chi[_i] = k_chi_tuple[_i]
         for _i in range(min(3, len(psi_k_eff))):
             _tuning_psi[_i] = psi_k_eff[_i]
-        beta_out = np.empty(p, dtype=np.float64)
-        residuals_out = np.empty(n, dtype=np.float64)
-        rweights_out = np.empty(n, dtype=np.float64)
-        beta_init_out = np.empty(p, dtype=np.float64)
+        # One ``np.empty`` for all output buffers instead of 4-5.
+        # ``np.empty`` is ~10 µs each at small sizes; bundling saves
+        # ~40 µs/fit.
+        _want_inline_vcov_alloc = cov_kind == ".vcov.avar1"
+        _cov_size = p * p if _want_inline_vcov_alloc else 0
+        _big = np.empty(2 * p + 2 * n + _cov_size, dtype=np.float64)
+        beta_out = _big[:p]
+        residuals_out = _big[p : p + n]
+        rweights_out = _big[p + n : p + 2 * n]
+        beta_init_out = _big[p + 2 * n : 2 * p + 2 * n]
         rng_e = np.random.default_rng(s_seed)
         # X and y are already float64 C-contiguous coming from the design
         # builder; skip np.ascontiguousarray if so to avoid a Python call.
@@ -185,8 +191,11 @@ def lmrob(
         # inline (saves a Python call + a separate np.zeros + a re-pass
         # through the LAPACK setup). Only useful for cov=".vcov.avar1"
         # which is the default MM path.
+        # Cov buffer is the tail of ``_big`` (zero-initialized later if
+        # the kernel actually writes to it). ``_big`` is uninitialized
+        # which is fine: the Cython kernel writes the full p*p block.
         _want_inline_vcov = cov_kind == ".vcov.avar1"
-        _cov_buf = np.zeros((p, p), dtype=np.float64) if _want_inline_vcov else None
+        _cov_buf = _big[2 * p + 2 * n :].reshape((p, p)) if _want_inline_vcov else None
         scale_e, status_e, n_iter_s, _conv_s, n_iter_mm, conv_mm, _vcov_status = _CY_LMROB_FIT(
             X_c,
             y_c,
