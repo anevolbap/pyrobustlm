@@ -18,7 +18,7 @@ from libc.stdint cimport uint64_t
 from libc.stdlib cimport malloc, free
 
 from numpy.random cimport bitgen_t
-from scipy.linalg.cython_lapack cimport dgels, dgesv
+from scipy.linalg.cython_lapack cimport dgels, dgesv, dsyev
 
 import numpy as np
 cimport numpy as cnp
@@ -1052,6 +1052,72 @@ cdef inline double _chi_prime_factor(int family, const double* tuning) nogil:
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
+cdef int _posdefify(double* cov, Py_ssize_t p) nogil:
+    """In-place projection of a symmetric ``cov`` (row-major p×p) to the
+    nearest PSD matrix by replacing negative eigenvalues with 0.
+
+    Returns 0 on success, 3 on LAPACK / allocation error. No-op when all
+    eigenvalues are already non-negative.
+    """
+    cdef int p_int = <int>p
+    cdef int info = 0
+    cdef double lwork_query = 0.0
+    cdef int lwork_query_int = -1
+    cdef Py_ssize_t i, j, k
+    cdef int any_neg = 0
+    cdef int lwork
+    cdef double dot
+
+    cdef double* w = <double*>malloc(p * sizeof(double))
+    cdef double* a = <double*>malloc(p * p * sizeof(double))
+    if w == NULL or a == NULL:
+        free(w); free(a)
+        return 3
+    # Symmetric so row-major and column-major coincide.
+    for i in range(p * p):
+        a[i] = cov[i]
+
+    # Query optimal workspace.
+    dsyev(b'V', b'U', &p_int, a, &p_int, w, &lwork_query, &lwork_query_int, &info)
+    if info != 0:
+        free(w); free(a)
+        return 3
+    lwork = <int>lwork_query
+    if lwork < 3 * p_int - 1:
+        lwork = 3 * p_int - 1
+    cdef double* work = <double*>malloc(lwork * sizeof(double))
+    if work == NULL:
+        free(w); free(a)
+        return 3
+
+    dsyev(b'V', b'U', &p_int, a, &p_int, w, work, &lwork, &info)
+    if info != 0:
+        free(w); free(a); free(work)
+        return 3
+
+    for i in range(p):
+        if w[i] < 0.0:
+            any_neg = 1
+            w[i] = 0.0
+
+    if any_neg:
+        # Reconstruct cov = a @ diag(w) @ a^T. a is column-major
+        # (LAPACK convention); eigenvectors are columns.
+        for i in range(p):
+            for j in range(i, p):
+                dot = 0.0
+                for k in range(p):
+                    dot += a[i + k * p] * w[k] * a[j + k * p]
+                cov[i * p + j] = dot
+                cov[j * p + i] = dot
+
+    free(w); free(a); free(work)
+    return 0
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
 cdef int _compute_vcov_avar1_body(
     const double* X_data,
     const double* r_data,
@@ -1255,6 +1321,9 @@ cdef int _compute_vcov_avar1_body(
                     scalar = 0.5 * (cov_data[j * p + k] + cov_data[k * p + j])
                     cov_data[j * p + k] = scalar
                     cov_data[k * p + j] = scalar
+            # Posdefify in place: replace negative eigenvalues with 0.
+            # Saves the Python-side ``eigh + matmul + symmetrize`` step.
+            _posdefify(cov_data, p)
 
     free(r_s); free(r0_s); free(w_pp); free(w0_pp)
     free(psi_rs); free(chi_r0s); free(A); free(rhs)

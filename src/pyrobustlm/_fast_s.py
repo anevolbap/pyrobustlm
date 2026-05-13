@@ -355,7 +355,11 @@ def _auto_use_threads(n: int, p: int, n_iter: int) -> bool:
     *and* ``n_iter >= 250``. Tune as needed; users can always force
     ``n_workers`` explicitly.
     """
-    return (n * p * p >= 1_000_000) and (n_iter >= 250)
+    # Calibrated on a 16-core OpenBLAS x86_64 box: threading goes from
+    # neutral (~1.0x) at n*p^2 ~= 5,000 to clearly profitable (>= 2x) at
+    # n*p^2 >= 100,000. We pick a threshold near the neutral point so
+    # auto-mode reliably helps anywhere with non-trivial computation.
+    return (n * p * p >= 10_000) and (n_iter >= 250)
 
 
 def _to_seed_sequence(seed: int | np.random.Generator | None) -> SeedSequence:

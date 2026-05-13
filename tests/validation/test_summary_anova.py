@@ -193,3 +193,27 @@ def test_anova_deviance_pair_matches_r() -> None:
     np.testing.assert_allclose(tbl2[1, 1], 6.4836, rtol=2e-3)
     np.testing.assert_allclose(tbl2[1, 3], 0.03909, rtol=2e-3)
     assert tbl2[1, 2] == 2
+
+
+def test_anova_factor_design_matches_r() -> None:
+    """anova() on a multi-column factor drop (Wald + Deviance) matches R.
+
+    Drops the ``RegionF`` factor (3 dummies) from the education
+    regression. R reference values are from
+    ``anova(lmrob(Y ~ RegionF + X1 + X2 + X3), lmrob(Y ~ X1 + X2 + X3))``.
+    """
+    df = _ensure_dataset("education")
+    df["RegionF"] = df["Region"].astype("category")
+    ctrl = Control(nResample=500)
+    full = lmrob("Y ~ RegionF + X1 + X2 + X3", df, control=ctrl, seed=42)
+    red = lmrob("Y ~ X1 + X2 + X3", df, control=ctrl, seed=42)
+
+    wald = anova(full, red).table
+    assert wald[1, 2] == 3  # three Region dummies dropped
+    np.testing.assert_allclose(wald[1, 1], 7.7867, rtol=5e-3)
+    np.testing.assert_allclose(wald[1, 3], 0.05063, rtol=5e-3)
+
+    dev = anova(full, red, test="Deviance").table
+    assert dev[1, 2] == 3
+    np.testing.assert_allclose(dev[1, 1], 11.797, rtol=5e-3)
+    np.testing.assert_allclose(dev[1, 3], 0.008113, rtol=5e-2)

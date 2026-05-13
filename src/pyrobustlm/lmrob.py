@@ -424,46 +424,34 @@ def lmrob(
     init_residuals = y - X @ beta_init
     cov = None
     if cov_kind == ".vcov.avar1":
-        # If the monolithic engine already produced the cov inline, use
-        # it directly (just posdefify).
+        # If the monolithic engine already produced the cov inline,
+        # use it (Cython already posdefified).
         if _engine_c_done and _engine_cov_buf is not None:
-            cov_buf = _engine_cov_buf
-            eigvals, eigvecs = np.linalg.eigh(cov_buf)
-            if (eigvals < 0).any():
-                eigvals = np.where(eigvals < 0, 0.0, eigvals)
-                cov_buf = (eigvecs * eigvals) @ eigvecs.T
-                cov_buf = 0.5 * (cov_buf + cov_buf.T)
-            cov = cov_buf
+            cov = _engine_cov_buf
         # Otherwise Cython vcov fast path when engine_c is on.
         elif control.engine_c and _CY_LMROB_VCOV is not None and psi_family in _CY_FAMILY_IDS:
             _cy_vcov = _CY_LMROB_VCOV
-            if True:
-                _tuning_psi = np.zeros(3, dtype=np.float64)
-                _tuning_chi = np.zeros(3, dtype=np.float64)
-                for _i, _v in enumerate(psi_k_eff[:3]):
-                    _tuning_psi[_i] = float(_v)
-                for _i, _v in enumerate(k_chi_tuple[:3]):
-                    _tuning_chi[_i] = float(_v)
-                cov_buf = np.zeros((p, p), dtype=np.float64)
-                _vcov_status = _cy_vcov(
-                    np.ascontiguousarray(X, dtype=np.float64),
-                    np.ascontiguousarray(residuals, dtype=np.float64),
-                    np.ascontiguousarray(init_residuals, dtype=np.float64),
-                    float(sigma),
-                    _CY_FAMILY_IDS[psi_family],
-                    _tuning_psi,
-                    _tuning_chi,
-                    control.bb,
-                    cov_buf,
-                )
-                if _vcov_status == 0:
-                    # Posdefify (project to PSD); cheap at small p.
-                    eigvals, eigvecs = np.linalg.eigh(cov_buf)
-                    if (eigvals < 0).any():
-                        eigvals = np.where(eigvals < 0, 0.0, eigvals)
-                        cov_buf = (eigvecs * eigvals) @ eigvecs.T
-                        cov_buf = 0.5 * (cov_buf + cov_buf.T)
-                    cov = cov_buf
+            _tuning_psi = np.zeros(3, dtype=np.float64)
+            _tuning_chi = np.zeros(3, dtype=np.float64)
+            for _i, _v in enumerate(psi_k_eff[:3]):
+                _tuning_psi[_i] = float(_v)
+            for _i, _v in enumerate(k_chi_tuple[:3]):
+                _tuning_chi[_i] = float(_v)
+            cov_buf = np.zeros((p, p), dtype=np.float64)
+            _vcov_status = _cy_vcov(
+                np.ascontiguousarray(X, dtype=np.float64),
+                np.ascontiguousarray(residuals, dtype=np.float64),
+                np.ascontiguousarray(init_residuals, dtype=np.float64),
+                float(sigma),
+                _CY_FAMILY_IDS[psi_family],
+                _tuning_psi,
+                _tuning_chi,
+                control.bb,
+                cov_buf,
+            )
+            if _vcov_status == 0:
+                # Cython already posdefified.
+                cov = cov_buf
         if cov is None:
             cov = vcov_avar1(
                 X=X,

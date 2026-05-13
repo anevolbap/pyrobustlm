@@ -61,6 +61,7 @@ divergences from R.
 quickstart
 api
 porting-from-r
+engine_c
 numerical-notes
 ```
 

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Posdefify (vcov projection to PSD) in Cython.** The `dsyev`
+  eigendecomposition + clipping + reconstruction lives inside the
+  Cython kernel now; the Python-side `numpy.linalg.eigh` round-trip is
+  gone. Marginal but tidier.
+- **Docs: new `engine_c` page** on the Sphinx site, explaining the
+  trade-off and listing the bench numbers.
+- **Anova factor-design test.** `tests/validation/test_summary_anova.py`
+  now covers a multi-column factor drop (`RegionF` from the
+  ``education`` dataset). Wald and Deviance match R element-wise.
+
+### Changed
+
+- **OpenMP auto-threshold loosened.** ``n_workers=0`` was gated on
+  ``n*p^2 >= 1_000_000`` which only kicked in on quite large problems;
+  measurement shows threading goes positive at ``n*p^2 >= 5_000`` and
+  reaches 2x by 50,000. Threshold is now ``n*p^2 >= 10_000``, so
+  ``n_workers=0`` actually parallelises on most non-trivial problems.
+
 ## [0.5.4] - 2026-05-11
 
 ### Added
