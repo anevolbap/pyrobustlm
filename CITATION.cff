@@ -1,0 +1,82 @@
+cff-version: 1.2.0
+message: "If you use pyrobustlm in academic work, please cite it as below."
+title: "pyrobustlm: Python port of robustbase::lmrob (MM regression for robust linear models)"
+abstract: >-
+  Python port of R's robustbase::lmrob, the MM-estimator for robust
+  linear regression. Implements the full fast-S resampling + MM
+  iteration + design-adaptive D-scale pipeline (Koller & Stahel 2014)
+  and matches R's robustbase 0.99-7 element-wise on the classical
+  validation datasets. Ships Cython-accelerated kernels for all six
+  psi families and an opt-in monolithic Cython engine that runs at
+  about 1.2-1.7x R wall-clock.
+type: software
+authors:
+  - given-names: Pablo
+    family-names: Vena
+    alias: anevolbap
+repository-code: "https://github.com/anevolbap/pyrobustlm"
+url: "https://pyrobustlm.readthedocs.io/"
+license: GPL-3.0-or-later
+keywords:
+  - robust regression
+  - MM-estimator
+  - statistics
+  - python
+  - cython
+preferred-citation:
+  type: software
+  title: "pyrobustlm"
+  authors:
+    - given-names: Pablo
+      family-names: Vena
+      alias: anevolbap
+  url: "https://github.com/anevolbap/pyrobustlm"
+references:
+  - type: article
+    authors:
+      - family-names: Yohai
+        given-names: Victor J.
+    title: "High Breakdown-Point and High Efficiency Robust Estimates for Regression"
+    journal: "The Annals of Statistics"
+    volume: 15
+    issue: 2
+    year: 1987
+    doi: "10.1214/aos/1176350366"
+  - type: article
+    authors:
+      - family-names: Salibian-Barrera
+        given-names: Matias
+      - family-names: Yohai
+        given-names: Victor J.
+    title: "A Fast Algorithm for S-Regression Estimates"
+    journal: "Journal of Computational and Graphical Statistics"
+    volume: 15
+    issue: 2
+    year: 2006
+    doi: "10.1198/106186006X113629"
+  - type: article
+    authors:
+      - family-names: Koller
+        given-names: Manuel
+      - family-names: Stahel
+        given-names: Werner A.
+    title: "Sharpening Wald-type Inference in Robust Regression for Small Samples"
+    journal: "Computational Statistics & Data Analysis"
+    volume: 55
+    issue: 8
+    year: 2011
+    doi: "10.1016/j.csda.2011.02.014"
+  - type: software
+    authors:
+      - family-names: Maechler
+        given-names: Martin
+      - family-names: Koller
+        given-names: Manuel
+      - family-names: Croux
+        given-names: Christophe
+      - family-names: Stahel
+        given-names: Werner A.
+      - family-names: others
+    title: "robustbase: Basic Robust Statistics"
+    url: "https://CRAN.R-project.org/package=robustbase"
+    license: GPL-3.0-or-later

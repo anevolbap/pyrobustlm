@@ -139,6 +139,10 @@ GPL-3.0-or-later, matching `robustbase`. See [`LICENSE`](LICENSE) and
 
 ## Citing
 
-If you use `pyrobustlm` in research, please cite both `robustbase`'s
-canonical reference (Maechler et al., 2024) and this project's GitHub URL
-until a Zenodo DOI is minted.
+If you use `pyrobustlm` in research, please cite the project alongside
+`robustbase`. Citation metadata is in [`CITATION.cff`](CITATION.cff)
+(GitHub shows a "Cite this repository" button on the sidebar). The
+references include the key papers: Yohai (1987) on MM-estimators,
+Salibian-Barrera & Yohai (2006) on the fast-S algorithm, and
+Koller & Stahel (2011) on the small-sample Wald correction implemented
+in `vcov.w`.
