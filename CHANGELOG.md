@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-05-14
+
+### Added
+
+- **Engine_c parity test corpus.** New
+  ``tests/integration/test_engine_c_parity.py`` fits four classical
+  datasets twice (default + ``engine_c=True``) and asserts the
+  coefficients, scale, and vcov diagonals agree to rtol=1e-8 (on
+  coef/scale) and rtol=1e-6 (on cov diag).
+
+### Fixed
+
+- ``_compute_vcov_avar1_body`` had a stray ``except 3`` clause that
+  Cython interpreted as "return value 3 == Python exception
+  pending"; status=3 was the legitimate non-exception status for a
+  LAPACK error. Dropping the clause lets the status code flow
+  through cleanly; the previously-confusing "returned NULL without
+  setting an exception" is now a clean ``FloatingPointError``.
+
+### Perf misc
+
+- Bundle all output buffers into one ``np.empty`` allocation
+  (``beta_out``, ``residuals_out``, ``rweights_out``,
+  ``beta_init_out``, ``cov_out`` are now slices of one big array).
+  Saves about 40 us per fit.
+- ``LmRob.fit`` builds its working DataFrame in one shot from a
+  dict-of-arrays instead of ``pd.DataFrame(X, columns=...)`` +
+  ``df["y"] = y``. Saves about 150 us per fit.
+
+### Docs
+
+- README refreshed: status v0.5.6, new Performance section, "What
+  works" reflects what actually ships, "What does not work yet"
+  trimmed to actual gaps.
+- ``docs/numerical-notes.md`` entry 2 (Performance vs R) refreshed
+  with engine_c numbers.
+- ``docs/bench-report.md`` refreshed against v0.5.6 default path.
+
 ## [0.5.5] - 2026-05-11
 
 ### Added
@@ -407,7 +445,8 @@ First public release. End-to-end MM regression that matches R's
 See [`docs/numerical-notes.md`](docs/numerical-notes.md) for the full list
 of documented divergences from R.
 
-[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.5...HEAD
+[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.6...HEAD
+[0.5.6]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.2...v0.5.3
