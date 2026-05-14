@@ -122,3 +122,22 @@ fit = lmrob(
 `n_workers=1` (default) is serial and bit-identical with single-threaded
 runs. `n_workers=0` is auto and only enables threading when the problem
 is large enough that BLAS dominates Python overhead.
+
+## The fast Cython engine
+
+`Control(engine_c=True)` opts into a monolithic Cython kernel that runs
+the whole fit (fast-S, MM, D-scale, vcov) in one nogil C block:
+
+```python
+fit = lmrob(
+    "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
+    df,
+    control=Control(engine_c=True),
+    seed=42,
+)
+```
+
+Wall-clock with `engine_c=True` is about 1.2-1.7x R on small-n
+problems (3.6-5 ms vs R's ~3 ms), down from 5-15x R on the default
+path. See [the engine_c page](engine_c) for the full trade-off, which
+mainly concerns RNG byte-level reproducibility.
