@@ -1130,7 +1130,7 @@ cdef int _compute_vcov_avar1_body(
     Py_ssize_t n,
     Py_ssize_t p,
     double* cov_data,
-) nogil except 3:
+) nogil:
     """Shared implementation of vcov_avar1. Allocates its own scratch,
     fills ``cov_data`` (C-contiguous p*p), returns status: 0 ok,
     3 LAPACK error / out of memory.
