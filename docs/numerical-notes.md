@@ -33,26 +33,33 @@ reproducibility with R.
 **Where.** Tests at ``tests/validation/test_vs_r_classical.py`` apply
 per-dataset tolerances reflecting this sensitivity.
 
-### 2. Performance vs R (Phase 11)
+### 2. Performance vs R
 
-**What.** With the bisquare Cython kernel for psi/wgt/rho/m_scale wired into
-the hot path of ``fast_s`` and ``m_scale``, pyrobustlm is now within 1.1x to
-12x of R's C-backed lmrob on the bisquare-default path:
+**Default path** (Cython kernels for the inner loops, NumPy elsewhere)
+runs at about 4-15x R wall-clock on the validation corpus. See
+``docs/bench-report.md`` for the per-case table.
 
-| n | p | R | pyrobustlm | ratio |
-|---|---|---|------------|-------|
-| 100  | 5  | 8 ms   | 94 ms  | 12x  |
-| 500  | 10 | 30 ms  | 79 ms  | 2.6x |
-| 1000 | 10 | 46 ms  | 119 ms | 2.6x |
-| 2000 | 20 | 249 ms | 277 ms | 1.1x |
+**Opt-in ``Control(engine_c=True)``** routes the entire fit through a
+monolithic Cython kernel. Wall-clock on the four datasets we measure
+side-by-side:
 
-**Why.** Cython kernels remove the Python-loop overhead in the inner
-resampling loop. On large problems NumPy/BLAS dominates and we approach R.
-On small problems Python's ``np.linalg.lstsq`` and ``np.linalg.solve``
-overhead dominates.
+| dataset / setting | default | engine_c | ratio vs R |
+|---|---|---|---|
+| stackloss MM     | 22 ms  | 4.0 ms |  1.3x R |
+| stackloss KS2014 | 63 ms  | 7.1 ms |  1.4x R |
+| phosphor MM      | 19 ms  | 3.6 ms |  1.2x R |
+| phosphor KS2014  | 56 ms  | 5.8 ms |  1.1x R |
+| salinity MM      | 21 ms  | 5.2 ms |  1.7x R |
+| delivery MM      | 22 ms  | 5.0 ms |  1.7x R |
 
-**Remaining gap.** Other psi families (huber, hampel, optimal, lqq, ggw)
-still use the NumPy path; Cython kernels for them follow the same pattern.
+**Why this is the floor.** The Cython kernel performs the same BLAS
+work R's C kernel does (we share OpenBLAS). The remaining gap is one
+Python/C boundary cross at the top of every fit plus formulaic
+parsing for non-trivial formulas. Going below R wall-clock would
+mean dropping the Python public API.
+
+**The engine_c trade-off** is byte-level RNG drift; see
+``docs/engine_c.md`` for the long explanation.
 
 ### 3. M-S estimator (Phase 5)
 
