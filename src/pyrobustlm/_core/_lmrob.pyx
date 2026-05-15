@@ -18,6 +18,7 @@ from libc.stdint cimport uint64_t
 from libc.stdlib cimport malloc, free
 
 from numpy.random cimport bitgen_t
+from scipy.linalg.cython_blas cimport dgemm
 from scipy.linalg.cython_lapack cimport dgels, dgesv, dsyev
 
 import numpy as np
@@ -1203,13 +1204,32 @@ cdef int _compute_vcov_avar1_body(
     # write a per-family chi_eval below in tandem.
     _chi_eval(r0_s, chi_r0s, n, family, tchi_data)
 
-    # XwX = X^T diag(w_pp) X, column-major (we use it for dgesv).
+    # XwX = X^T diag(w_pp) X via dgemm. w_pp = psi'(r/s) can be negative
+    # for redescending psi (bisquare, lqq, ggw, optimal), so we can't use
+    # a sqrt(w) trick. Build X_w in column-major (n × p) with each row
+    # i scaled by w_pp[i]; then dgemm computes X_data^T @ X_w_buf.
+    cdef double* X_w_buf = <double*>malloc(n * p * sizeof(double))
+    if X_w_buf == NULL:
+        free(r_s); free(r0_s); free(w_pp); free(w0_pp)
+        free(psi_rs); free(chi_r0s); free(A); free(rhs)
+        free(tmp_pv); free(a_vec); free(Xww)
+        free(u_mat); free(outer_buf); free(ipiv)
+        return 3
+    cdef double sw_i
+    for i in range(n):
+        sw_i = w_pp[i]
+        for j in range(p):
+            X_w_buf[i + j * n] = X_data[i * p + j] * sw_i
+    # dgemm('N','N', p, p, n, ..., X_data row-major-as-col-major (p,n) lda=p,
+    #       X_w_buf col-major (n,p) lda=n, ..., A col-major (p,p) lda=p)
+    # op(A) = X_data (col-major p×n) which is mathematically X^T.
+    # op(B) = X_w_buf (col-major n×p). Result = X^T @ X_w = X^T diag(w) X.
+    cdef double alpha = 1.0
+    cdef double beta = 0.0
+    dgemm(b'N', b'N', &p_int, &p_int, &n_int, &alpha,
+          X_data, &p_int, X_w_buf, &n_int, &beta, A, &p_int)
     for j in range(p):
         for k in range(p):
-            dot = 0.0
-            for i in range(n):
-                dot += X_data[i * p + j] * w_pp[i] * X_data[i * p + k]
-            A[j + k * p] = dot
             rhs[j + k * p] = 1.0 if j == k else 0.0
 
     dgesv(&p_int, &p_int, A, &p_int, ipiv, rhs, &p_int, &info)
@@ -1250,13 +1270,15 @@ cdef int _compute_vcov_avar1_body(
                 Xww[j] = dot
 
             # u1 = A @ (X^T diag(psi_rs^2) X) @ (n * A)
-            # Step 1: u_mat = X^T diag(psi_rs^2) X (column-major)
-            for j in range(p):
-                for k in range(p):
-                    dot = 0.0
-                    for i in range(n):
-                        dot += X_data[i * p + j] * (psi_rs[i] * psi_rs[i]) * X_data[i * p + k]
-                    u_mat[j + k * p] = dot
+            # Step 1: u_mat = X^T diag(psi_rs^2) X via BLAS. Rebuild
+            # X_w_buf with psi_rs^2 scaling (always non-negative, but
+            # use the same X^T @ X_w pattern for consistency).
+            for i in range(n):
+                sw_i = psi_rs[i] * psi_rs[i]
+                for j in range(p):
+                    X_w_buf[i + j * n] = X_data[i * p + j] * sw_i
+            dgemm(b'N', b'N', &p_int, &p_int, &n_int, &alpha,
+                  X_data, &p_int, X_w_buf, &n_int, &beta, u_mat, &p_int)
             # Step 2: outer_buf = A @ u_mat (column-major p×p)
             for j in range(p):
                 for k in range(p):
@@ -1329,6 +1351,7 @@ cdef int _compute_vcov_avar1_body(
     free(psi_rs); free(chi_r0s); free(A); free(rhs)
     free(tmp_pv); free(a_vec); free(Xww)
     free(u_mat); free(outer_buf); free(ipiv)
+    free(X_w_buf)
     return status
 
 
