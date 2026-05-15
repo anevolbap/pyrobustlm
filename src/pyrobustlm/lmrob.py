@@ -371,7 +371,7 @@ def lmrob(
             for _i in range(min(3, len(psi_k_eff))):
                 _tuning_psi_mm[_i] = float(psi_k_eff[_i])
             beta_mm = np.ascontiguousarray(beta_init, dtype=np.float64).copy()
-            n_iter_mm, converged_mm, mm_status = _CY_LMROB_MM(
+            n_iter_mm, converged_mm, _mm_status = _CY_LMROB_MM(
                 np.ascontiguousarray(X, dtype=np.float64),
                 np.ascontiguousarray(y, dtype=np.float64),
                 beta_mm,
