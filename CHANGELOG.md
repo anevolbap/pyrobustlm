@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.9] - 2026-05-15
+
+### Perf
+
+- **Cython MM in the default-path branch when ``engine_c=True``.** The
+  engine_c block auto-falls-back at large n, but it used to drop into
+  the NumPy ``mm_iterate`` after the fallback. The IRLS loop now uses
+  ``cy_lmrob_mm`` whenever ``Control(engine_c=True)`` is set and the
+  ``psi`` family has a Cython kernel. ``Control(engine_c=True)`` and
+  ``Control(n_workers=0)`` now finish in the same ballpark on
+  large-n fits.
+
+  Bench at n=5000, p=30, nResample=500 (single-thread OpenBLAS):
+
+  | config | wall-clock |
+  |---|---|
+  | ``Control()`` (default, serial) | 1882 ms |
+  | ``Control(n_workers=0)`` | 730 ms |
+  | ``Control(engine_c=True)`` | 719 ms |
+
 ## [0.5.8] - 2026-05-14
 
 ### Perf
