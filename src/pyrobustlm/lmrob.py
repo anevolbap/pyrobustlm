@@ -362,11 +362,7 @@ def lmrob(
         # signalled they want speed; engine_c block above ran or fell
         # back, but in either case we should use the Cython MM here too).
         # Falls back to the NumPy implementation in plain default mode.
-        if (
-            control.engine_c
-            and _CY_LMROB_MM is not None
-            and psi_family in _CY_FAMILY_IDS
-        ):
+        if control.engine_c and _CY_LMROB_MM is not None and psi_family in _CY_FAMILY_IDS:
             _tuning_psi_mm = np.zeros(3, dtype=np.float64)
             for _i in range(min(3, len(psi_k_eff))):
                 _tuning_psi_mm[_i] = float(psi_k_eff[_i])
@@ -383,9 +379,7 @@ def lmrob(
             )
             from types import SimpleNamespace
 
-            mm = SimpleNamespace(
-                coef=beta_mm, converged=bool(converged_mm), n_iter=int(n_iter_mm)
-            )
+            mm = SimpleNamespace(coef=beta_mm, converged=bool(converged_mm), n_iter=int(n_iter_mm))
         else:
             mm = mm_iterate(
                 X=X,
