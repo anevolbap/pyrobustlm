@@ -39,7 +39,7 @@ def _to_chi_psi_family(psi_family: str) -> str:
 _CyFn = Callable[..., Any]
 
 
-def _load_cy() -> tuple[_CyFn | None, _CyFn | None, _CyFn | None]:
+def _load_cy() -> tuple[_CyFn | None, _CyFn | None, _CyFn | None, _CyFn | None]:
     try:
         import importlib
 
@@ -48,12 +48,13 @@ def _load_cy() -> tuple[_CyFn | None, _CyFn | None, _CyFn | None]:
             getattr(mod, "cy_lmrob_fit", None),
             getattr(mod, "cy_lmrob_d_scale", None),
             getattr(mod, "cy_lmrob_vcov_avar1", None),
+            getattr(mod, "cy_lmrob_mm", None),
         )
     except Exception:
-        return None, None, None
+        return None, None, None, None
 
 
-_CY_LMROB_FIT, _CY_LMROB_D_SCALE, _CY_LMROB_VCOV = _load_cy()
+_CY_LMROB_FIT, _CY_LMROB_D_SCALE, _CY_LMROB_VCOV, _CY_LMROB_MM = _load_cy()
 
 # Map family names to the integer enum used by the Cython kernel.
 _CY_FAMILY_IDS = {
@@ -357,16 +358,45 @@ def lmrob(
         fitted = y - residuals
         rweights = _engine_rweights
     else:
-        mm = mm_iterate(
-            X=X,
-            y=y,
-            beta_init=beta_init,
-            sigma=sigma_init,
-            psi_family=psi_family,
-            psi_k=psi_k_eff,
-            max_it=control.max_it,
-            rel_tol=control.rel_tol,
-        )
+        # Cython MM fast path when engine_c was requested (the user has
+        # signalled they want speed; engine_c block above ran or fell
+        # back, but in either case we should use the Cython MM here too).
+        # Falls back to the NumPy implementation in plain default mode.
+        if (
+            control.engine_c
+            and _CY_LMROB_MM is not None
+            and psi_family in _CY_FAMILY_IDS
+        ):
+            _tuning_psi_mm = np.zeros(3, dtype=np.float64)
+            for _i in range(min(3, len(psi_k_eff))):
+                _tuning_psi_mm[_i] = float(psi_k_eff[_i])
+            beta_mm = np.ascontiguousarray(beta_init, dtype=np.float64).copy()
+            n_iter_mm, converged_mm, mm_status = _CY_LMROB_MM(
+                np.ascontiguousarray(X, dtype=np.float64),
+                np.ascontiguousarray(y, dtype=np.float64),
+                beta_mm,
+                float(sigma_init),
+                _CY_FAMILY_IDS[psi_family],
+                _tuning_psi_mm,
+                control.max_it,
+                control.rel_tol,
+            )
+            from types import SimpleNamespace
+
+            mm = SimpleNamespace(
+                coef=beta_mm, converged=bool(converged_mm), n_iter=int(n_iter_mm)
+            )
+        else:
+            mm = mm_iterate(
+                X=X,
+                y=y,
+                beta_init=beta_init,
+                sigma=sigma_init,
+                psi_family=psi_family,
+                psi_k=psi_k_eff,
+                max_it=control.max_it,
+                rel_tol=control.rel_tol,
+            )
 
         coef = mm.coef
         sigma = sigma_init
