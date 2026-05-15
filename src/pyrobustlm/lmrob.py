@@ -453,17 +453,11 @@ def lmrob(
         # use it (Cython already posdefified).
         if _engine_c_done and _engine_cov_buf is not None:
             cov = _engine_cov_buf
-        # Otherwise Cython vcov fast path when engine_c is on AND the
-        # problem is small enough that the hand-coded matrix products
-        # are competitive with NumPy/BLAS. At large p the Cython kernel's
-        # naive triple-loops for ``X^T diag(w) X`` are ~10x slower than
-        # BLAS dgemm; fall back to the Python ``vcov_avar1`` then.
-        elif (
-            control.engine_c
-            and not _engine_c_too_big
-            and _CY_LMROB_VCOV is not None
-            and psi_family in _CY_FAMILY_IDS
-        ):
+        # Otherwise Cython vcov fast path when engine_c is on. The
+        # matrix products now go through BLAS dgemm so the kernel is
+        # competitive with NumPy at all sizes; the previous large-n
+        # gate is no longer needed.
+        elif control.engine_c and _CY_LMROB_VCOV is not None and psi_family in _CY_FAMILY_IDS:
             _cy_vcov = _CY_LMROB_VCOV
             _tuning_psi = np.zeros(3, dtype=np.float64)
             _tuning_chi = np.zeros(3, dtype=np.float64)
