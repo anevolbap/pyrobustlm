@@ -195,26 +195,30 @@ cdef inline double _chi_sum(
     cdef double a, ax, t, xi, u, dx, s0
     cdef double k, a_t, b_t, r_t, c, b_l, s_l, k01, denom, s5, s6, k01_2, end3
     cdef double R1h, R2h, R3h, R4h, ac, a2, nc, inv_nc, bma_inv_half
+    cdef double inv_s, inv_k, inv_sk, inv_denom
+    cdef double c0_lqq, c1_lqq, c2_lqq, c3_lqq, s_l_over_b_l, s5_sq_over_3s6
+    cdef double inv_3p25, inv_6p5
     cdef int j
 
     if family == FAM_BISQUARE:
         k = tuning[0]
+        inv_sk = 1.0 / (s * k)
         for i in range(n):
-            t = r[i] / s
+            t = r[i] * inv_sk
             ax = t if t >= 0 else -t
-            if ax >= k:
+            if ax >= 1.0:
                 total += 1.0
             else:
-                t = ax / k
-                t = 1.0 - t * t
+                t = 1.0 - ax * ax
                 total += 1.0 - t * t * t
     elif family == FAM_HAMPEL:
         a_t = tuning[0]; b_t = tuning[1]; r_t = tuning[2]
         nc = a_t * (b_t + r_t - a_t) * 0.5
         inv_nc = 1.0 / nc
+        inv_s = 1.0 / s
         bma_inv_half = 0.5 / (r_t - b_t)
         for i in range(n):
-            xi = r[i] / s
+            xi = r[i] * inv_s
             u = xi if xi >= 0 else -xi
             if u <= a_t:
                 total += (xi * xi * 0.5) * inv_nc
@@ -226,21 +230,23 @@ cdef inline double _chi_sum(
                 total += 1.0
     elif family == FAM_OPTIMAL:
         k = tuning[0]
+        inv_sk = 1.0 / (s * k)
         R1h = -1.944 * 0.5
         R2h = 1.728 * 0.25
         R3h = -0.312 / 6.0
         R4h = 0.016 / 8.0
+        inv_3p25 = 1.0 / 3.25
+        inv_6p5 = 1.0 / 6.5
         for i in range(n):
-            xi = r[i] / s
-            ac = xi / k
+            ac = r[i] * inv_sk
             ax = ac if ac >= 0 else -ac
             if ax > 3.0:
                 total += 1.0
             elif ax > 2.0:
                 a2 = ax * ax
-                total += (a2 * (R1h + a2 * (R2h + a2 * (R3h + a2 * R4h))) + 1.792) / 3.25
+                total += (a2 * (R1h + a2 * (R2h + a2 * (R3h + a2 * R4h))) + 1.792) * inv_3p25
             else:
-                total += (ac * ac) / 6.5
+                total += (ac * ac) * inv_6p5
     elif family == FAM_LQQ:
         b_l = tuning[0]; c = tuning[1]; s_l = tuning[2]
         k01 = b_l + c
@@ -252,19 +258,26 @@ cdef inline double _chi_sum(
             end3 = k01
         else:
             end3 = k01 - s6 / s5
+        inv_s = 1.0 / s
+        inv_denom = 1.0 / denom
+        c0_lqq = (3.0 * s_l - 3.0) * inv_denom
+        c1_lqq = (6.0 * s_l - 6.0) * inv_denom
+        c2_lqq = (6.0 * s5) * inv_denom
+        c3_lqq = k01_2 * 0.5 - s_l * b_l * b_l / 6.0
+        s_l_over_b_l = s_l / b_l
+        s5_sq_over_3s6 = s5 * s5 / (3.0 * s6) if s6 != 0.0 else 0.0
         for i in range(n):
-            xi = r[i] / s
+            xi = r[i] * inv_s
             ax = xi if xi >= 0 else -xi
             if ax <= c:
-                total += (3.0 * s_l - 3.0) / denom * xi * xi
+                total += c0_lqq * xi * xi
             elif ax <= k01:
                 s0 = ax - c
-                total += (6.0 * s_l - 6.0) / denom * (xi * xi * 0.5 - s_l / b_l * s0 * s0 * s0 / 6.0)
+                total += c1_lqq * (xi * xi * 0.5 - s_l_over_b_l * s0 * s0 * s0 / 6.0)
             elif ax < end3:
                 dx = ax - k01
-                total += (6.0 * s5) / denom * (
-                    k01_2 * 0.5 - s_l * b_l * b_l / 6.0
-                    - dx * 0.5 * (s6 + dx * (s5 + dx * s5 * s5 / 3.0 / s6))
+                total += c2_lqq * (
+                    c3_lqq - dx * 0.5 * (s6 + dx * (s5 + dx * s5_sq_over_3s6))
                 )
             else:
                 total += 1.0
@@ -288,10 +301,11 @@ cdef inline void _wgt_zinv(
 ) nogil:
     cdef Py_ssize_t i
     cdef double a, u, ax, xi, ac, a2, rho_p, dx, s0
-    cdef double k, inv_sk
+    cdef double k, inv_sk, inv_s, a_t_inv_rmb
     cdef double a_t, b_t, r_t
     cdef double R1, R2, R3, R4
     cdef double b_l, c, s_l, k01, s5, s6, end3
+    cdef double s_l_over_2bl, s5_sq_over_s6, s6_over_s5, s6_half
     cdef int j
 
     if family == FAM_BISQUARE:
@@ -306,22 +320,25 @@ cdef inline void _wgt_zinv(
                 out[i] = u * u
     elif family == FAM_HAMPEL:
         a_t = tuning[0]; b_t = tuning[1]; r_t = tuning[2]
+        inv_s = 1.0 / s
+        a_t_inv_rmb = a_t / (r_t - b_t)
         for i in range(n):
-            xi = r[i] / s
+            xi = r[i] * inv_s
             u = xi if xi >= 0 else -xi
             if u <= a_t:
                 out[i] = 1.0
             elif u <= b_t:
                 out[i] = a_t / u if u > 0 else 1.0
             elif u <= r_t:
-                out[i] = (a_t * (r_t - u) / (r_t - b_t)) / u
+                out[i] = a_t_inv_rmb * (r_t - u) / u
             else:
                 out[i] = 0.0
     elif family == FAM_OPTIMAL:
         k = tuning[0]
+        inv_sk = 1.0 / (s * k)
         R1 = -1.944; R2 = 1.728; R3 = -0.312; R4 = 0.016
         for i in range(n):
-            ac = (r[i] / s) / k
+            ac = r[i] * inv_sk
             ax = ac if ac >= 0 else -ac
             if ax > 3.0:
                 out[i] = 0.0
@@ -340,22 +357,27 @@ cdef inline void _wgt_zinv(
             end3 = k01
         else:
             end3 = k01 - s6 / s5
+        inv_s = 1.0 / s
+        s_l_over_2bl = s_l / (2.0 * b_l)
+        s5_sq_over_s6 = s5 * s5 / s6 if s6 != 0.0 else 0.0
+        s6_over_s5 = s6 / s5 if s5 != 0.0 else 0.0
+        s6_half = s6 * 0.5
         for i in range(n):
-            xi = r[i] / s
+            xi = r[i] * inv_s
             ax = xi if xi >= 0 else -xi
             if ax <= c:
                 out[i] = 1.0
             elif ax <= k01:
                 s0 = ax - c
                 if ax > 0:
-                    out[i] = 1.0 - s_l * s0 * s0 / (2.0 * ax * b_l)
+                    out[i] = 1.0 - s_l_over_2bl * s0 * s0 / ax
                 else:
                     out[i] = 1.0
             elif ax < end3:
                 dx = ax - k01
                 if ax > 0:
                     out[i] = -(
-                        s6 * 0.5 + s5 * s5 / s6 * dx * (dx * 0.5 + s6 / s5)
+                        s6_half + s5_sq_over_s6 * dx * (dx * 0.5 + s6_over_s5)
                     ) / ax
                 else:
                     out[i] = 0.0
