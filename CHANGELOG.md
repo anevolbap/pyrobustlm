@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.7] - 2026-05-14
+
+### Changed
+
+- **``Control(engine_c=True)`` auto-falls-back to threaded default at
+  large n.** The monolithic Cython kernel is a single non-parallel
+  call; once ``n*p^2 >= 100,000`` it loses to the threaded default
+  path. ``lmrob()`` now detects this regime, skips the engine_c block,
+  also skips the Cython ``vcov_avar1`` fast path (hand-coded matrix
+  products are ~10x slower than NumPy/BLAS at p>=20), clears
+  ``cfg.engine_c`` when calling ``fast_s`` (so the embedded
+  ``cy_lmrob_fast_s`` branch does not fire), and enables ``n_workers=0``
+  auto-threading on the fallback. A single ``Control(engine_c=True)``
+  setting now gives the fastest fit on small-n and large-n alike.
+
+  Bench at n=5000, p=30, nResample=500 (single-thread OpenBLAS):
+
+  | config | wall-clock |
+  |---|---|
+  | ``Control()`` (default, serial) | ~2230 ms |
+  | ``Control(n_workers=0)`` | ~860 ms |
+  | ``Control(engine_c=True)`` | ~870 ms (auto fallback) |
+
+- **Auto worker count bumped** from ``n_iter // 250`` to ``n_iter // 64``.
+  At the default ``nResample=500`` this lifts the auto picker from
+  2 workers to 7, which is past the diminishing-returns knee on the
+  representative configurations we measure.
+
+### Added
+
+- ``CITATION.cff`` so GitHub shows a "Cite this repository" button.
+  Lists the four key papers: Yohai (1987), Salibian-Barrera & Yohai
+  (2006), Koller & Stahel (2011), and the robustbase package itself.
+
+### Docs
+
+- New ``engine_c`` section in ``docs/quickstart.md``.
+- ``docs/engine_c.md`` rewritten to document the auto-fallback
+  behaviour (no manual path-picking for users).
+- ``docs/numerical-notes.md`` entry 2 (Performance vs R) refreshed
+  with engine_c numbers.
+
 ## [0.5.6] - 2026-05-14
 
 ### Added
@@ -445,7 +487,8 @@ First public release. End-to-end MM regression that matches R's
 See [`docs/numerical-notes.md`](docs/numerical-notes.md) for the full list
 of documented divergences from R.
 
-[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.6...HEAD
+[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.7...HEAD
+[0.5.7]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.6...v0.5.7
 [0.5.6]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.3...v0.5.4
