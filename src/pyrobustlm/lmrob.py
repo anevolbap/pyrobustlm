@@ -150,8 +150,20 @@ def lmrob(
     # themselves.
     # ------------------------------------------------------------------
     _engine_c_done = False
+    # At larger n the threaded default path beats the single-threaded
+    # monolithic kernel (engine_c is one Cython call and does not
+    # parallelise internally). Skip the engine_c block in that regime
+    # so users who set ``engine_c=True`` still get the fastest fit;
+    # also enable auto-threading on the fallback so the win materialises
+    # without the user having to also set ``n_workers``.
+    # Threshold matches the auto-threading heuristic in ``_fast_s``.
+    _engine_c_too_big = n * p * p >= 100_000
+    _eff_n_workers = control.n_workers
+    if control.engine_c and _engine_c_too_big and _eff_n_workers == 1:
+        _eff_n_workers = 0  # auto
     if (
         control.engine_c
+        and not _engine_c_too_big
         and init_method == "S"
         and psi_family in _CY_FAMILY_IDS
         and _CY_LMROB_FIT is not None
@@ -260,9 +272,13 @@ def lmrob(
             scale_tol=control.scale_tol,
             max_iter_scale=control.k_max,
             mts=control.mts,
-            n_workers=control.n_workers,
+            n_workers=_eff_n_workers,
             fast_rng=control.fast_rng,
-            engine_c=control.engine_c,
+            # If we already decided ``engine_c`` is too expensive for
+            # this problem size (n*p^2 >= 100k), don't let ``fast_s``
+            # take its own engine_c branch either; that branch is a
+            # single Cython call and disables threading.
+            engine_c=control.engine_c and not _engine_c_too_big,
         )
         s_result = fast_s(X, y, cfg=cfg, seed=s_seed)
         beta_init = s_result.coef
@@ -437,8 +453,17 @@ def lmrob(
         # use it (Cython already posdefified).
         if _engine_c_done and _engine_cov_buf is not None:
             cov = _engine_cov_buf
-        # Otherwise Cython vcov fast path when engine_c is on.
-        elif control.engine_c and _CY_LMROB_VCOV is not None and psi_family in _CY_FAMILY_IDS:
+        # Otherwise Cython vcov fast path when engine_c is on AND the
+        # problem is small enough that the hand-coded matrix products
+        # are competitive with NumPy/BLAS. At large p the Cython kernel's
+        # naive triple-loops for ``X^T diag(w) X`` are ~10x slower than
+        # BLAS dgemm; fall back to the Python ``vcov_avar1`` then.
+        elif (
+            control.engine_c
+            and not _engine_c_too_big
+            and _CY_LMROB_VCOV is not None
+            and psi_family in _CY_FAMILY_IDS
+        ):
             _cy_vcov = _CY_LMROB_VCOV
             _tuning_psi = np.zeros(3, dtype=np.float64)
             _tuning_chi = np.zeros(3, dtype=np.float64)

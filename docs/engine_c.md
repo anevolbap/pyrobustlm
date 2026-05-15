@@ -30,6 +30,25 @@ It currently covers all five lmrob-supported psi families
 `cov=".vcov.avar1"` and the `setting="KS2014"` / `"KS2011"` SMDM
 pipeline.
 
+## When NOT to use it
+
+At larger n (roughly `n*p^2 >= 100,000`) you are better off with the
+default path plus `n_workers=0` (auto threads). The default path
+parallelises the resampling loop via a `ThreadPoolExecutor`;
+`engine_c=True` is currently a single Cython call and does not
+internally parallelise. Concrete example at n=5000, p=30, nResample=500:
+
+| config | wall-clock |
+|---|---|
+| `Control()` (default, serial) | ~1430 ms |
+| `Control(n_workers=4)` | ~590 ms |
+| `Control(engine_c=True)` | ~1650 ms |
+| `Control(engine_c=True, n_workers=4)` | ~1630 ms (no benefit) |
+
+Rule of thumb: `engine_c=True` for small-n problems where Python
+coordination overhead dominates; default `n_workers=0` for large-n
+problems where BLAS dominates and parallelism helps.
+
 ## What you give up
 
 The Cython subset-draw uses Floyd's combination algorithm via numpy's

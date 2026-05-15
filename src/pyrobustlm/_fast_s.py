@@ -331,18 +331,18 @@ def _resolve_n_workers(req: int, n_iter: int) -> int:
 
     Special values: ``1`` = serial; ``0`` = auto.
 
-    Auto picks ``min(os.cpu_count(), max(1, n_iter // 250))``. The cap on
-    ``n_iter`` is intentional: per-worker chunks need to be large enough
-    that the per-task overhead amortises. The caller is responsible for
-    only invoking auto mode when the per-iteration BLAS cost is large
-    enough to dominate Python/GIL overhead (see ``fast_s`` for the
-    cost-based gate).
+    Auto picks ``min(os.cpu_count(), max(2, n_iter // 64))``. The cap
+    on ``n_iter`` keeps per-worker chunks above ~64 candidates so the
+    per-task overhead amortises. The caller is responsible for only
+    invoking auto mode when the per-iteration BLAS cost is large enough
+    to dominate Python/GIL overhead (see ``fast_s`` for the cost-based
+    gate).
     """
     if req == 1:
         return 1
     if req == 0:
         cores = os.cpu_count() or 1
-        return max(1, min(cores, max(1, n_iter // 250)))
+        return max(1, min(cores, max(2, n_iter // 64)))
     return max(1, int(req))
 
 
