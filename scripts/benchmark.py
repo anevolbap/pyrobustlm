@@ -9,6 +9,7 @@ scale, covariance, residuals, weights, and timing data. Pair with
 
 from __future__ import annotations
 
+import argparse
 import json
 import subprocess
 import time
@@ -20,8 +21,9 @@ import pandas as pd
 from pyrobustlm import Control, lmrob
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+_ENGINE_C = False
 OUT_DIR = REPO_ROOT / "tests" / "bench" / "py"
-OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _ensure_dataset(name: str) -> pd.DataFrame:
@@ -118,7 +120,7 @@ def _fit_and_time(
 ) -> dict:
     # ``setting=None`` matches R's plain ``lmrob.control()`` default
     # (psi=bisquare unless overridden, method=MM, cov=.vcov.avar1).
-    ctrl = Control(psi=psi_family, setting=setting, nResample=500)
+    ctrl = Control(psi=psi_family, setting=setting, nResample=500, engine_c=_ENGINE_C)
     _ = lmrob(formula, df, control=ctrl, seed=1)
     runtimes = []
     for _ in range(k_reps):
@@ -158,7 +160,28 @@ def _serialize(result: dict, name: str, psi_family: str) -> None:
     (OUT_DIR / f"{name}.json").write_text(json.dumps(out, indent=2))
 
 
+def _safe_fit(name: str, fn, *args, **kwargs):
+    try:
+        return fn(*args, **kwargs)
+    except Exception as exc:
+        print(f"  SKIP {name}: {exc.__class__.__name__}: {exc}")
+        return None
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--engine-c",
+        action="store_true",
+        help="Run with Control(engine_c=True); write to tests/bench/py_engine_c/.",
+    )
+    args = parser.parse_args()
+    global _ENGINE_C, OUT_DIR
+    _ENGINE_C = args.engine_c
+    OUT_DIR = REPO_ROOT / "tests" / "bench" / ("py_engine_c" if _ENGINE_C else "py")
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"[py bench] engine_c={_ENGINE_C} writing to {OUT_DIR.relative_to(REPO_ROOT)}")
+
     for name, dataset, formula, psi_family in CLASSICAL:
         print(f"[py bench] {name}")
         df = _ensure_dataset(dataset)
@@ -168,21 +191,26 @@ def main() -> None:
         elif formula == "y ~ .":
             rhs = " + ".join([c for c in df.columns if c != "y"])
             formula = f"y ~ {rhs}"
-        result = _fit_and_time(formula, df, psi_family)
-        _serialize(result, name, psi_family)
+        result = _safe_fit(name, _fit_and_time, formula, df, psi_family)
+        if result is not None:
+            _serialize(result, name, psi_family)
 
     for name, psi_family in PER_PSI:
         print(f"[py bench] {name}")
         df = _ensure_dataset("stackloss")
-        result = _fit_and_time("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, psi_family)
-        _serialize(result, name, psi_family)
+        result = _safe_fit(
+            name,
+            _fit_and_time,
+            "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
+            df,
+            psi_family,
+        )
+        if result is not None:
+            _serialize(result, name, psi_family)
 
-    for name, setting in PER_SETTING:
-        print(f"[py bench] {name}")
+    def _per_setting(name, setting):
         df = _ensure_dataset("stackloss")
-        # Don't pin psi here: each named setting carries its own default
-        # (KS2014 / KS2011 both use psi="lqq").
-        ctrl = Control(setting=setting, nResample=500)
+        ctrl = Control(setting=setting, nResample=500, engine_c=_ENGINE_C)
         _ = lmrob(
             "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
             df,
@@ -199,27 +227,35 @@ def main() -> None:
                 seed=1,
             )
             runtimes.append(time.perf_counter() - t0)
-        result = {
+        return {
             "fit": fit,
             "runtimes_sec": runtimes,
             "runtime_min_sec": float(min(runtimes)),
             "runtime_median_sec": float(np.median(runtimes)),
-        }
-        _serialize(result, name, ctrl.psi)
+        }, ctrl.psi
+
+    for name, setting in PER_SETTING:
+        print(f"[py bench] {name}")
+        out = _safe_fit(name, _per_setting, name, setting)
+        if out is not None:
+            result, psi = out
+            _serialize(result, name, psi)
 
     for name, n, p in SYNTHETIC:
         print(f"[py bench] {name}")
         df = _make_synthetic(n, p)
         formula = "y ~ " + " + ".join(f"x{i + 1}" for i in range(p))
-        result = _fit_and_time(formula, df, "bisquare")
-        _serialize(result, name, "bisquare")
+        result = _safe_fit(name, _fit_and_time, formula, df, "bisquare")
+        if result is not None:
+            _serialize(result, name, "bisquare")
 
     for name, n, p, fam in SYNTH_PER_PSI:
         print(f"[py bench] {name}")
         df = _make_synthetic(n, p)
         formula = "y ~ " + " + ".join(f"x{i + 1}" for i in range(p))
-        result = _fit_and_time(formula, df, fam)
-        _serialize(result, name, fam)
+        result = _safe_fit(name, _fit_and_time, formula, df, fam)
+        if result is not None:
+            _serialize(result, name, fam)
     print(f"Wrote Python bench JSONs to {OUT_DIR}")
 
 

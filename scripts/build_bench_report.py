@@ -24,6 +24,7 @@ import numpy as np
 REPO_ROOT = Path(__file__).resolve().parents[1]
 R_DIR = REPO_ROOT / "tests" / "bench" / "r"
 PY_DIR = REPO_ROOT / "tests" / "bench" / "py"
+PY_ENGINE_C_DIR = REPO_ROOT / "tests" / "bench" / "py_engine_c"
 OUT = REPO_ROOT / "docs" / "bench-report.md"
 
 
@@ -74,6 +75,11 @@ def main() -> None:
 
     r_cases = {p.stem: _load(p) for p in sorted(R_DIR.glob("*.json"))}
     py_cases = {p.stem: _load(p) for p in sorted(PY_DIR.glob("*.json"))}
+    py_c_cases = (
+        {p.stem: _load(p) for p in sorted(PY_ENGINE_C_DIR.glob("*.json"))}
+        if PY_ENGINE_C_DIR.exists()
+        else {}
+    )
     common = sorted(set(r_cases) & set(py_cases))
     only_r = sorted(set(r_cases) - set(py_cases))
     only_py = sorted(set(py_cases) - set(r_cases))
@@ -81,6 +87,7 @@ def main() -> None:
     # Compute headline parity numbers for the summary block.
     coef_rs, scale_rs, cov_rs = [], [], []
     rt_ratios = []
+    rt_ratios_c = []
     for name in common:
         rj = r_cases[name]
         pj = py_cases[name]
@@ -89,6 +96,10 @@ def main() -> None:
         cov_rs.append(_diag_rel_err(pj["cov"], rj["cov"]))
         if rj["runtime_median_sec"] > 0:
             rt_ratios.append(pj["runtime_median_sec"] / rj["runtime_median_sec"])
+            if name in py_c_cases:
+                rt_ratios_c.append(
+                    py_c_cases[name]["runtime_median_sec"] / rj["runtime_median_sec"]
+                )
     body: list[str] = [
         "# Benchmark report",
         "",
@@ -107,6 +118,14 @@ def main() -> None:
         f"- Cov diagonal max-rerr: median {np.median(cov_rs):.2e}, max {np.max(cov_rs):.2e}",
         f"- Runtime ratio (py/R): median {np.median(rt_ratios):.2f}x, "
         f"min {np.min(rt_ratios):.2f}x, max {np.max(rt_ratios):.2f}x",
+        *(
+            [
+                f"- Runtime ratio (py engine_c/R): median {np.median(rt_ratios_c):.2f}x, "
+                f"min {np.min(rt_ratios_c):.2f}x, max {np.max(rt_ratios_c):.2f}x"
+            ]
+            if rt_ratios_c
+            else []
+        ),
         "",
         "## Environment",
         "",
@@ -150,26 +169,35 @@ def main() -> None:
     # Runtime table
     # ------------------------------------------------------------------
     rows = []
+    headers = ["case", "psi", "n_x_p", "R (ms)", "py (ms)", "py/R"]
+    if py_c_cases:
+        headers.extend(["py engine_c (ms)", "py engine_c/R"])
     for name in common:
         rj = r_cases[name]
         pj = py_cases[name]
         r_med = float(rj["runtime_median_sec"])
         py_med = float(pj["runtime_median_sec"])
-        rows.append(
-            [
-                name,
-                str(rj.get("psi", "")),
-                f"{rj['n']}x{rj['p']}",
-                f"{1000 * r_med:.1f}",
-                f"{1000 * py_med:.1f}",
-                f"{py_med / r_med:.2f}x" if r_med > 0 else "n/a",
-            ]
-        )
+        row = [
+            name,
+            str(rj.get("psi", "")),
+            f"{rj['n']}x{rj['p']}",
+            f"{1000 * r_med:.1f}",
+            f"{1000 * py_med:.1f}",
+            f"{py_med / r_med:.2f}x" if r_med > 0 else "n/a",
+        ]
+        if py_c_cases:
+            if name in py_c_cases:
+                py_c_med = float(py_c_cases[name]["runtime_median_sec"])
+                row.append(f"{1000 * py_c_med:.1f}")
+                row.append(f"{py_c_med / r_med:.2f}x" if r_med > 0 else "n/a")
+            else:
+                row.extend(["-", "-"])
+        rows.append(row)
     body.append(
         _section(
             "Runtime: median over 5 reps (lower is better)",
             rows,
-            ["case", "psi", "n_x_p", "R (ms)", "py (ms)", "py/R"],
+            headers,
         )
     )
 
