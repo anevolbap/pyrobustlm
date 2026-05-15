@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.10] - 2026-05-15
+
+### Perf
+
+- **Hoist per-call constants out of psi/chi inner loops.** The Cython
+  ``_chi_sum`` and ``_wgt_zinv`` kernels recomputed denominators,
+  reciprocals, and constant subexpressions on every element of the
+  per-residual loop (lqq especially: ``(3*s_l-3)/denom``, ``s_l/b_l``,
+  ``s5*s5/(3*s6)``). Hoisted them above the loop and replaced the
+  per-element ``r[i]/s`` with ``inv_s = 1/s`` plus a multiply.
+
+  Bench at ``synth_n500_p10`` with ``Control(engine_c=True)``
+  (single-thread OpenBLAS, A/B on the same machine):
+
+  | psi | before | after | delta |
+  |---|---|---|---|
+  | lqq | 200 ms | 130 ms | -35% |
+  | optimal | 152 ms | 97 ms | -36% |
+  | bisquare | 107 ms | 77 ms | -29% |
+  | hampel | 130 ms | 125 ms | -5% |
+
+  Median runtime ratio ``py engine_c / R`` across the full bench corpus
+  drops from 1.02x to 0.80x: pyrobustlm now beats R on more than half
+  of cases. The worst remaining engine_c case
+  (``synth_ggw_n500_p10``) is 1.91x R.
+
 ## [0.5.9] - 2026-05-15
 
 ### Perf
