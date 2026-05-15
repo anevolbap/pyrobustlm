@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.8] - 2026-05-14
+
+### Perf
+
+- **BLAS dgemm in the Cython vcov body.** The two big matrix products
+  inside ``_compute_vcov_avar1_body`` (the ``X^T diag(w) X``
+  computation and the inner ``u_mat = X^T diag(psi^2) X``) were hand-
+  coded triple loops. Switched to ``dgemm`` via
+  ``scipy.linalg.cython_blas``: build a column-major
+  ``X_w[i + j*n] = X[i,j]*w[i]`` and let dgemm do
+  ``X^T @ X_w``. The sqrt(w) trick is avoided because ``psi'`` can be
+  negative for redescending psi.
+
+  Per-call vcov_avar1 wall-clock (single-thread OpenBLAS):
+
+  | n / p | Python | Cython before | Cython after |
+  |---|---|---|---|
+  | 100 / 5  | 0.18 ms | 0.16 ms | 0.02 ms |
+  | 500 / 10 | 0.18 ms | 0.30 ms | 0.05 ms |
+  | 5000 / 30| 1.29 ms | 22 ms   | 1.20 ms |
+
+- **Cython vcov fast path is now used at all sizes** (the
+  ``_engine_c_too_big`` gate is removed from the standalone vcov
+  branch). The engine_c block itself still falls back at large n
+  because its embedded fast-S kernel does not parallelise.
+
 ## [0.5.7] - 2026-05-14
 
 ### Changed
@@ -487,7 +513,8 @@ First public release. End-to-end MM regression that matches R's
 See [`docs/numerical-notes.md`](docs/numerical-notes.md) for the full list
 of documented divergences from R.
 
-[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.7...HEAD
+[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.8...HEAD
+[0.5.8]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.7...v0.5.8
 [0.5.7]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.6...v0.5.7
 [0.5.6]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.4...v0.5.5
