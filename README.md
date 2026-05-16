@@ -38,13 +38,14 @@ divergences from R.
   finite-sample correction, matching R within `rtol=1e-3`.
 - `summary()` (coefficient table, robust R-squared) and `anova()`
   (Wald + Deviance) matching R element-wise.
+- Per-case `weights` argument: matches R element-wise on the NumPy
+  path. Non-trivial weights force ``Control(engine_c=False)`` for now.
 - Default `Control()` runs the monolithic Cython engine (single nogil
   C block for fast-S, MM, D-scale, and vcov); see
   [Performance](#performance).
 
 ## What does not work yet
 
-- Per-case `weights` argument (raises `NotImplementedError`).
 - Bit-identical reproducibility with R's MT RNG. We use NumPy's PCG64
   (waived in `plan.md` §5.2; coefficients agree with R within
   basin-of-attraction tolerances documented in

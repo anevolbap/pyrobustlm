@@ -90,7 +90,12 @@ def lmrob(
         Algorithm parameters; defaults to ``Control()`` (KS2014 preset,
         ``engine_c=True``).
     weights :
-        Optional case weights. Currently raises if non-None (Phase 8+).
+        Optional non-negative per-case weights (length ``len(data)``).
+        Implemented via the ``sqrt(w)``-transform that R's lmrob uses:
+        the transformed design ``(sqrt(w)*X, sqrt(w)*y)`` goes through
+        the unweighted fit. Zero-weight rows are dropped. Non-trivial
+        weights force the legacy NumPy path (the Cython engine doesn't
+        yet know about weights).
     na_action :
         ``"drop"`` (default) drops rows with any NA before fitting.
     seed :
@@ -100,14 +105,28 @@ def lmrob(
     -------
     LmRobResults
     """
-    if weights is not None:
-        raise NotImplementedError("Per-case weights are not yet supported.")
     if kwargs:
         raise TypeError(f"unexpected keyword arguments: {sorted(kwargs)!r}")
     if control is None:
         control = Control()
+    if weights is not None:
+        weights = np.asarray(weights, dtype=np.float64).ravel()
+        if not np.isfinite(weights).all() or (weights < 0).any():
+            raise ValueError("weights must be non-negative and finite")
+        if weights.size != len(data):
+            raise ValueError(f"weights length {weights.size} != number of rows {len(data)}")
+        # Drop zero-weight rows. R does the same: zero-weight observations
+        # contribute nothing to the M-scale or IRWLS.
+        keep = weights > 0
+        if not keep.all():
+            data = data.loc[keep].reset_index(drop=True)
+            weights = weights[keep]
+        # The Cython kernels don't yet know about weights; route through
+        # the NumPy path until #64 lands.
+        if not np.allclose(weights, 1.0):
+            control = replace(control, engine_c=False)
     try:
-        return _lmrob_impl(formula, data, control, na_action, seed)
+        return _lmrob_impl(formula, data, control, na_action, seed, weights)
     except FloatingPointError as exc:
         # ``engine_c=True`` uses an internal Floyd subset-draw which is
         # not byte-identical to ``np.random.choice``. On a few small
@@ -117,7 +136,9 @@ def lmrob(
         # default path stays robust on those datasets.
         if not control.engine_c or "singular" not in str(exc):
             raise
-        return _lmrob_impl(formula, data, replace(control, engine_c=False), na_action, seed)
+        return _lmrob_impl(
+            formula, data, replace(control, engine_c=False), na_action, seed, weights
+        )
 
 
 def _lmrob_impl(
@@ -126,6 +147,7 @@ def _lmrob_impl(
     control: Control,
     na_action: str,
     seed: int | np.random.Generator | None,
+    case_weights: np.ndarray | None = None,
 ) -> LmRobResults:
     # Control.__post_init__ guarantees these are populated; narrow for the
     # type checker.
@@ -155,6 +177,21 @@ def _lmrob_impl(
     n, p = X.shape
     if n <= p:
         raise ValueError(f"need n > p; got n={n}, p={p}")
+
+    # Per-case weights: R's lmrob handles them with a sqrt(w) transform
+    # at the top level (robustbase/R/lmrob.R:96-98). The transformed
+    # design (X_t, y_t) goes through the unweighted fit. After fitting,
+    # ``residuals_`` / ``fitted_`` are reported on the original scale
+    # (y - X @ coef), while ``rweights_`` / ``scale_`` / ``cov_`` come
+    # from the transformed fit (matching R's reporting).
+    X_orig: np.ndarray | None = None
+    y_orig: np.ndarray | None = None
+    if case_weights is not None and not np.allclose(case_weights, 1.0):
+        X_orig = X
+        y_orig = y
+        sqrt_w = np.sqrt(case_weights)
+        X = sqrt_w[:, None] * X
+        y = sqrt_w * y
 
     # ------------------------------------------------------------------
     # Pick init method. ``init="auto"`` chooses M-S when factor columns
@@ -587,13 +624,32 @@ def _lmrob_impl(
             psi_k=psi_k_eff,
         )
 
+    # When weights were applied via sqrt-transform, R reports residuals
+    # and fitted on the *original* scale (y - X @ coef), but rweights /
+    # scale / cov come from the transformed fit. The design returned to
+    # the user is also the original X / y.
+    if X_orig is not None and y_orig is not None:
+        residuals_out = y_orig - X_orig @ coef
+        fitted_out = X_orig @ coef
+        design_x_out = X_orig
+        design_y_out = y_orig
+    else:
+        residuals_out = residuals
+        fitted_out = fitted
+        design_x_out = X
+        design_y_out = y
+
     return LmRobResults(
         coef_=np.asarray(coef, dtype=np.float64),
         scale_=float(sigma),
-        weights_=np.asarray(rweights, dtype=np.float64),
+        weights_=(
+            np.asarray(case_weights, dtype=np.float64)
+            if case_weights is not None
+            else np.ones(n, dtype=np.float64)
+        ),
         rweights_=np.asarray(rweights, dtype=np.float64),
-        residuals_=np.asarray(residuals, dtype=np.float64),
-        fitted_=np.asarray(fitted, dtype=np.float64),
+        residuals_=np.asarray(residuals_out, dtype=np.float64),
+        fitted_=np.asarray(fitted_out, dtype=np.float64),
         cov_=np.asarray(cov, dtype=np.float64),
         df_residual_=n - p,
         converged_=mm.converged,
@@ -603,8 +659,8 @@ def _lmrob_impl(
         control=control,
         init_=init_info,
         rhs_spec_=design.rhs_spec,
-        design_x_=np.asarray(X, dtype=np.float64),
-        design_y_=np.asarray(y, dtype=np.float64),
+        design_x_=np.asarray(design_x_out, dtype=np.float64),
+        design_y_=np.asarray(design_y_out, dtype=np.float64),
     )
 
 
