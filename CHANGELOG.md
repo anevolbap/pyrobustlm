@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.12] - 2026-05-16
+
+### Added
+
+- **Per-case ``weights`` argument to ``lmrob()``.** Mirrors R's lmrob
+  implementation: a sqrt(w)-transform at the top level
+  (robustbase/R/lmrob.R:96-98) routes the transformed design
+  ``(sqrt(w)*X, sqrt(w)*y)`` through the unweighted fit. Zero-weight
+  rows are dropped (R's behaviour). ``residuals_`` / ``fitted_`` are
+  reported on the original scale, while ``rweights_`` / ``scale_`` /
+  ``cov_`` come from the transformed fit. Matches R element-wise on
+  stackloss with non-trivial weights (coef rerr 1.1e-6, scale rerr
+  4.1e-6). Non-trivial weights currently force the NumPy path
+  (``engine_c=False``); full Cython-engine support is a follow-up.
+
 ## [0.5.11] - 2026-05-16
 
 ### Changed
