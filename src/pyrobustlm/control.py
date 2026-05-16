@@ -108,11 +108,10 @@ class Control:
     # (since the monolithic kernel is a single C call that does not
     # parallelise). The Cython subset-draw is not byte-identical to
     # ``np.random.choice``: on a few small classical datasets it lands
-    # in a basin where ``vcov_avar1`` is singular or where the
-    # parametric cov diverges noticeably from R (e.g. ggw on n=21
-    # stackloss, where cov diag is 100x R's). Off by default; opt in
-    # when you want the speedup and can tolerate small-n cov drift.
-    engine_c: bool = False
+    # in a basin where ``vcov_avar1`` is singular; ``lmrob()`` catches
+    # that FloatingPointError and retries with ``engine_c=False`` so
+    # the fit always succeeds.
+    engine_c: bool = True
 
     bb: float = 0.5  # consistency constant (target value of mean(chi))
 

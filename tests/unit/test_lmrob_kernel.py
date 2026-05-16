@@ -109,7 +109,7 @@ def test_engine_c_speedup_at_small_n() -> None:
             lmrob(formula, df, control=ctrl, seed=0)
         return (time.perf_counter() - t0) / reps
 
-    t_default = bench(Control(nResample=500))
+    t_default = bench(Control(nResample=500, engine_c=False))
     t_engine_c = bench(Control(nResample=500, engine_c=True))
 
     assert t_engine_c < t_default, (
