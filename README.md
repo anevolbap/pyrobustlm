@@ -9,11 +9,12 @@ Python port of the `lmrob` MM-estimator from R's
 
 Documentation: [pyrobustlm.readthedocs.io](https://pyrobustlm.readthedocs.io/).
 
-Status: v0.5.5 (alpha). End-to-end pipeline matches R's `lmrob` element-wise
+Status: v0.5.11 (alpha). End-to-end pipeline matches R's `lmrob` element-wise
 on the classical robust regression datasets (`stackloss`, `coleman`,
 `delivery`, `aircraft`, `phosphor`, etc.) within `rtol=1e-3` for both
-coefficients and covariance. See [`plan.md`](plan.md) for the full roadmap
-and [`docs/numerical-notes.md`](docs/numerical-notes.md) for known
+coefficients and covariance. Median wall-clock is **0.93x R** across the
+34-case bench corpus. See [`plan.md`](plan.md) for the full roadmap and
+[`docs/numerical-notes.md`](docs/numerical-notes.md) for known
 divergences from R.
 
 ## What works
@@ -37,7 +38,8 @@ divergences from R.
   finite-sample correction, matching R within `rtol=1e-3`.
 - `summary()` (coefficient table, robust R-squared) and `anova()`
   (Wald + Deviance) matching R element-wise.
-- `Control(engine_c=True)` opt-in monolithic Cython engine; see
+- Default `Control()` runs the monolithic Cython engine (single nogil
+  C block for fast-S, MM, D-scale, and vcov); see
   [Performance](#performance).
 
 ## What does not work yet
@@ -50,16 +52,19 @@ divergences from R.
 
 ## Performance
 
-The default path is pure-NumPy + Cython kernels for the inner loops and
-runs about 5-15x R wall-clock on small-n problems (see
-[`docs/bench-report.md`](docs/bench-report.md)).
+Median wall-clock vs R across the 34-case bench corpus is **0.93x**;
+pyrobustlm is faster than R on more than half of cases (down to 0.32x R
+on `n>=2000` fits) and within 1-2x R on small classical datasets.
 
-`Control(engine_c=True)` opts into a monolithic Cython lmrob engine that
-runs the entire fit (fast-S, MM, D-scale, vcov) in one nogil C block.
-On a single-threaded BLAS box, phosphor MM fits in ~3.6 ms vs R's
-~3 ms (about 1.2x R); KS settings 6-10 ms vs R's 4-7 ms. See
-[`docs/engine_c.md`](docs/engine_c.md) for the trade-off and the
-reproducible bench script `scripts/bench_engine_c.py`.
+The default `Control()` runs the fit through a monolithic Cython engine
+(fast-S, MM, D-scale, and vcov in one nogil C block). At larger n
+(`n*p^2 >= 100k`) `lmrob()` auto-falls-back to a threaded NumPy path
+because the monolithic kernel is a single non-parallel call. To force
+the legacy NumPy path explicitly, pass `Control(engine_c=False)`.
+
+See [`docs/bench-report.md`](docs/bench-report.md) for the full per-case
+table and [`docs/engine_c.md`](docs/engine_c.md) for the trade-off
+discussion.
 
 ## Install (from source)
 

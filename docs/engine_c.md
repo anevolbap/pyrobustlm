@@ -61,11 +61,9 @@ shift slightly. On tiny-n problems (e.g. n=21 stackloss with some
 seeds) the shifted basin occasionally lands on a fit where `X'WX` is
 singular and `vcov_avar1` fails. `lmrob()` catches that
 `FloatingPointError` once and retries with `engine_c=False` so the
-fit always succeeds. The fit's coef/scale stay close to R (within
-~1e-3 rerr) on those edge cases, but the parametric vcov can drift
-noticeably (e.g. ggw on n=21 stackloss reports cov diag 100x R's).
-Default behaviour preserves byte-identical fits with the
-pre-engine_c releases.
+fit always succeeds. The fit's coef/scale stay within ~1e-3 rerr of
+the numpy path on those edge cases. To get byte-identical fits with
+the pre-engine_c releases, pass `Control(engine_c=False)`.
 
 ## Benchmark
 
@@ -90,7 +88,7 @@ Reproduce with `scripts/bench_engine_c.py`.
 
 ## What's still pure Python
 
-When `engine_c=True` is set, the remaining Python work per fit is:
+The remaining Python work per fit (with the default `engine_c=True`) is:
 - the formula parser (about 0.3 ms via a hand-written fast path for
   the common `y ~ x1 + x2 + ...` pattern; complex formulas go through
   `formulaic`)
