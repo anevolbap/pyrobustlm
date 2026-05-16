@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.11] - 2026-05-16
+
+### Changed
+
+- **``Control.engine_c`` defaults to True.** The monolithic Cython
+  kernel is consistently faster (median 0.93x R wall-clock across the
+  34-case bench corpus, down from default-path 2.74x R) and its cov
+  now agrees with the numpy path to ~1e-7. ``lmrob()`` catches the
+  rare ``FloatingPointError`` from a singular ``X' W X`` (basin drift
+  on small classical datasets like stackloss/hbk) and retries with
+  ``engine_c=False`` so the new default never raises on cases the old
+  default handled. Pass ``Control(engine_c=False)`` to force the
+  legacy numpy path.
+
+### Fixed
+
+- **``engine_c=True`` cov for ggw on small n.** The inline
+  ``vcov_avar1`` in the Cython kernel used placeholder values for
+  the ggw ``chi'(x)/psi(x)`` factor (``1/1.6047`` for cases 1 and 4,
+  ``6/case^2`` fallback for the rest), which blew up the cov diagonal
+  by 20-100x on small-n datasets. Ported the correct case-dependent
+  values from ``pyrobustlm._psifuns.chi_prime_over_psi``. psi_ggw on
+  n=21 stackloss with engine_c=True went from cov diag
+  ``[534, 0.44, 11.6, 0.013]`` to ``[29, 0.021, 0.17, 0.0046]``, in
+  agreement with the numpy path.
+
+- **``lmrob()`` auto-falls-back on engine_c singular vcov.** The
+  Cython subset-draw is not byte-identical to ``np.random.choice``,
+  so on a few small classical datasets (stackloss, hbk) it lands in
+  a basin where ``X' W X`` is singular. ``lmrob()`` now catches the
+  resulting ``FloatingPointError`` once and retries with
+  ``engine_c=False``.
+
 ## [0.5.10] - 2026-05-15
 
 ### Perf
