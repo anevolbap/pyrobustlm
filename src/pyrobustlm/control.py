@@ -102,10 +102,16 @@ class Control:
     # the drift; not recommended for reproducibility-sensitive workloads.
     fast_rng: bool = False
     # Use the monolithic Cython engine (pyrobustlm._core._lmrob). When True,
-    # fast-S + survivor refinement run in one nogil C block with one
-    # workspace allocation. Currently bisquare only; ignored for other
-    # families. Off by default while stages 2-6 of the monolithic port
-    # are in flight (MM, D-scale, vcov still come from the Python path).
+    # fast-S + MM + vcov_avar1 run in one nogil C block with one workspace
+    # allocation. On small n this is 5-10x the default Python path; on
+    # large n ``lmrob()`` auto-falls-back to the threaded default path
+    # (since the monolithic kernel is a single C call that does not
+    # parallelise). The Cython subset-draw is not byte-identical to
+    # ``np.random.choice``: on a few small classical datasets it lands
+    # in a basin where ``vcov_avar1`` is singular or where the
+    # parametric cov diverges noticeably from R (e.g. ggw on n=21
+    # stackloss, where cov diag is 100x R's). Off by default; opt in
+    # when you want the speedup and can tolerate small-n cov drift.
     engine_c: bool = False
 
     bb: float = 0.5  # consistency constant (target value of mean(chi))

@@ -58,8 +58,13 @@ The Cython subset-draw uses Floyd's combination algorithm via numpy's
 consumed from the BitGenerator differs, so the basin of attraction can
 shift slightly. On tiny-n problems (e.g. n=21 stackloss with some
 seeds) the shifted basin occasionally lands on a fit where `X'WX` is
-singular and `vcov_avar1` fails. Default behaviour preserves
-byte-identical fits with the pre-engine_c releases.
+singular and `vcov_avar1` fails. `lmrob()` catches that
+`FloatingPointError` once and retries with `engine_c=False` so the
+fit always succeeds. The fit's coef/scale stay close to R (within
+~1e-3 rerr) on those edge cases, but the parametric vcov can drift
+noticeably (e.g. ggw on n=21 stackloss reports cov diag 100x R's).
+Default behaviour preserves byte-identical fits with the
+pre-engine_c releases.
 
 ## Benchmark
 
