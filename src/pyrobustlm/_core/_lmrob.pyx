@@ -1052,15 +1052,17 @@ cdef inline double _chi_prime_factor(int family, const double* tuning) nogil:
         k01_2 = (b_l + c) * (b_l + c)
         denom = s_l * c * (3.0 * c + 2.0 * b_l) + k01_2
         return 6.0 * (s_l - 1.0) / denom
-    # FAM_GGW: factor depends on case. Same constants as our tabulated
-    # asympt_corrfact would imply; for now we use the same as bisquare
-    # which is approximate. The four "fast" ggw cases have specific
-    # tabulated values in pyrobustlm.inference._asympt_corrfact; we use
-    # those.
+    # FAM_GGW: chi'(x) / psi(x) factor, case-dependent. Values mirror
+    # ``pyrobustlm._psifuns.chi_prime_over_psi`` (sampled from R's
+    # ``Mchi(deriv=1)/Mpsi`` at the default tuning per case).
     j = <int>(tuning[0])
-    if j == 1: return 1.0 / 1.6047  # case 1: b=1, 95% eff
-    if j == 4: return 1.0 / 1.6047  # case 4: b=1.5, 95% eff
-    return 6.0 / (tuning[0] * tuning[0])  # fallback
+    if j == 1: return 0.1883291308
+    if j == 2: return 0.3565452618
+    if j == 3: return 2.6680355468
+    if j == 4: return 0.2092091351
+    if j == 5: return 0.4087348267
+    if j == 6: return 2.4955990111
+    return 1.0  # user-specified ggw: needs numerical integration
 
 
 # ---------------------------------------------------------------------------
