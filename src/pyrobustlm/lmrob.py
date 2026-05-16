@@ -174,6 +174,16 @@ def _lmrob_impl(
     # themselves.
     # ------------------------------------------------------------------
     _engine_c_done = False
+    # Predeclare variables that are populated in one of the engine_c
+    # / S / M-S branches below; pyright can't see that the branches
+    # are exhaustive for the cases that reach them.
+    beta_init = np.empty(p, dtype=np.float64)
+    sigma_init = 0.0
+    init_info: dict[str, object] = {}
+    _engine_mm: Any = None
+    _engine_residuals: np.ndarray | None = None
+    _engine_rweights: np.ndarray | None = None
+    _engine_cov_buf: np.ndarray | None = None
     # At larger n the threaded default path beats the single-threaded
     # monolithic kernel (engine_c is one Cython call and does not
     # parallelise internally). Skip the engine_c block in that regime

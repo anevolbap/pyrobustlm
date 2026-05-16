@@ -27,30 +27,39 @@ candidate is sometimes a different starting point. After MM, the final
 beta agrees with R's MM beta to about ``rtol=5e-5`` on stackloss; on
 small-n datasets (pension, starsCYG) the divergence can be ``rtol=1e-1``.
 
+For redescending psi (hampel, ggw) on n=21 stackloss the basin drift
+also leaks into the parametric cov: a few rweights differ from R's by
+about 5e-3 (in 4 of 21 observations near the bisquare/ggw boundary),
+and that propagates through ``X^T diag(rweights) X`` to a cov diagonal
+rerr of about 0.4-0.5 on the most sensitive elements. Coef and scale
+stay within ~1e-3 rerr of R; only the parametric vcov is sensitive on
+this regime. See ``psi_hampel`` and ``psi_ggw`` rows in
+``docs/bench-report.md``.
+
 **Why acceptable.** Plan §5.2 explicitly waives bit-identical RNG
-reproducibility with R.
+reproducibility with R. The cov drift is a function of how close the
+n=21 stackloss observations sit to the psi-redescending region, not an
+algorithmic mismatch; the median cov diag rerr across the 34-case
+corpus is 7.95e-07.
 
 **Where.** Tests at ``tests/validation/test_vs_r_classical.py`` apply
 per-dataset tolerances reflecting this sensitivity.
 
 ### 2. Performance vs R
 
-**Default path** (Cython kernels for the inner loops, NumPy elsewhere)
-runs at about 4-15x R wall-clock on the validation corpus. See
-``docs/bench-report.md`` for the per-case table.
+**Default ``Control()``** (since v0.5.11) routes the entire fit
+through a monolithic Cython kernel. Median wall-clock across the
+34-case bench corpus is **0.93x R**; pyrobustlm is faster than R on
+more than half of cases. Pass ``Control(engine_c=False)`` to force
+the legacy NumPy path (median 2.74x R).
 
-**Opt-in ``Control(engine_c=True)``** routes the entire fit through a
-monolithic Cython kernel. Wall-clock on the four datasets we measure
-side-by-side:
-
-| dataset / setting | default | engine_c | ratio vs R |
+| dataset / setting | engine_c=False | default | ratio vs R |
 |---|---|---|---|
-| stackloss MM     | 22 ms  | 4.0 ms |  1.3x R |
-| stackloss KS2014 | 63 ms  | 7.1 ms |  1.4x R |
-| phosphor MM      | 19 ms  | 3.6 ms |  1.2x R |
-| phosphor KS2014  | 56 ms  | 5.8 ms |  1.1x R |
-| salinity MM      | 21 ms  | 5.2 ms |  1.7x R |
-| delivery MM      | 22 ms  | 5.0 ms |  1.7x R |
+| stackloss MM     | 25 ms | 4.7 ms | 1.2x R |
+| stackloss KS2014 | 71 ms | 6.0 ms | 0.7x R |
+| phosphor MM      | 26 ms | 4.3 ms | 1.4x R |
+| salinity MM      | 28 ms | 4.2 ms | 0.8x R |
+| delivery MM      | 27 ms | 4.2 ms | 1.0x R |
 
 **Why this is the floor.** The Cython kernel performs the same BLAS
 work R's C kernel does (we share OpenBLAS). The remaining gap is one
