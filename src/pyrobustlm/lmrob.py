@@ -421,6 +421,10 @@ def _lmrob_impl(
     # already produced post-MM beta + residuals + rweights).
     # ------------------------------------------------------------------
     if _engine_c_done:
+        # The engine_c block populated these; the asserts narrow the
+        # ``| None`` predeclared types for the static checker.
+        assert _engine_residuals is not None
+        assert _engine_rweights is not None
         mm = _engine_mm
         coef = mm.coef
         sigma = sigma_init
