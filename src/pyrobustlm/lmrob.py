@@ -8,6 +8,7 @@ iteration -> covariance -> :class:`pyrobustlm.results.LmRobResults`.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -86,7 +87,8 @@ def lmrob(
     data :
         DataFrame containing the columns referenced by ``formula``.
     control :
-        Algorithm parameters; defaults to ``Control()`` (KS2014 preset).
+        Algorithm parameters; defaults to ``Control()`` (KS2014 preset,
+        ``engine_c=True``).
     weights :
         Optional case weights. Currently raises if non-None (Phase 8+).
     na_action :
@@ -104,6 +106,27 @@ def lmrob(
         raise TypeError(f"unexpected keyword arguments: {sorted(kwargs)!r}")
     if control is None:
         control = Control()
+    try:
+        return _lmrob_impl(formula, data, control, na_action, seed)
+    except FloatingPointError as exc:
+        # ``engine_c=True`` uses an internal Floyd subset-draw which is
+        # not byte-identical to ``np.random.choice``. On a few small
+        # classical datasets that puts fast-S in a basin where the
+        # final ``X' W X`` is singular for ``vcov_avar1``. Retry once
+        # with engine_c off (numpy choice -- different basin) so the
+        # default path stays robust on those datasets.
+        if not control.engine_c or "singular" not in str(exc):
+            raise
+        return _lmrob_impl(formula, data, replace(control, engine_c=False), na_action, seed)
+
+
+def _lmrob_impl(
+    formula: str,
+    data: pd.DataFrame,
+    control: Control,
+    na_action: str,
+    seed: int | np.random.Generator | None,
+) -> LmRobResults:
     # Control.__post_init__ guarantees these are populated; narrow for the
     # type checker.
     assert control.psi is not None
