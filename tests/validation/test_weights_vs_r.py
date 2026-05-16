@@ -103,3 +103,47 @@ def test_residuals_on_original_scale(stackloss: pd.DataFrame) -> None:
     # residuals should match y - fitted on the original (untransformed) y
     y = stackloss["stack.loss"].to_numpy(dtype=np.float64)
     np.testing.assert_allclose(fit.residuals_, y - fit.fitted_, rtol=1e-12)
+
+
+def test_weights_ks2014_match_r(stackloss: pd.DataFrame) -> None:
+    """``setting="KS2014"`` with weights matches R element-wise.
+
+    R reference values from ``robustbase::lmrob(stack.loss ~ ., data=stackloss,
+    weights=c(rep(1,10),rep(2,11)), setting="KS2014")`` with ``set.seed(1)``.
+    """
+    formula = "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc."
+    w = np.concatenate([np.ones(10), 2.0 * np.ones(11)])
+    fit = lmrob(
+        formula, stackloss, weights=w, control=Control(setting="KS2014", nResample=500), seed=1
+    )
+    r_coef = np.array([-43.981047, 0.808909, 0.946713, -0.08152])
+    np.testing.assert_allclose(fit.coef_, r_coef, atol=1e-3)
+    np.testing.assert_allclose(fit.scale_, 3.15490864, atol=1e-2)
+    r_cov_diag = np.array([72.441138, 0.013057, 0.090525, 0.012151])
+    np.testing.assert_allclose(np.diag(fit.cov_), r_cov_diag, rtol=1e-3)
+
+
+def test_weights_ks2011_match_r(stackloss: pd.DataFrame) -> None:
+    """``setting="KS2011"`` with weights matches R element-wise."""
+    formula = "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc."
+    w = np.concatenate([np.ones(10), 2.0 * np.ones(11)])
+    fit = lmrob(
+        formula, stackloss, weights=w, control=Control(setting="KS2011", nResample=500), seed=1
+    )
+    r_coef = np.array([-43.981047, 0.808909, 0.946713, -0.08152])
+    np.testing.assert_allclose(fit.coef_, r_coef, atol=1e-3)
+    np.testing.assert_allclose(fit.scale_, 3.15490864, atol=1e-2)
+
+
+def test_weights_vcov_w_match_r(stackloss: pd.DataFrame) -> None:
+    """``cov=".vcov.w"`` with weights matches R element-wise."""
+    formula = "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc."
+    w = np.concatenate([np.ones(10), 2.0 * np.ones(11)])
+    fit = lmrob(
+        formula, stackloss, weights=w, control=Control(cov=".vcov.w", nResample=500), seed=1
+    )
+    r_coef = np.array([-43.007449, 0.878068, 0.734852, -0.088959])
+    np.testing.assert_allclose(fit.coef_, r_coef, atol=1e-4)
+    np.testing.assert_allclose(fit.scale_, 2.34053845, atol=1e-4)
+    r_cov_diag = np.array([69.253049, 0.013682, 0.093246, 0.011624])
+    np.testing.assert_allclose(np.diag(fit.cov_), r_cov_diag, atol=1e-2)
