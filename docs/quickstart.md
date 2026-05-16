@@ -125,22 +125,22 @@ is large enough that BLAS dominates Python overhead.
 
 ## The fast Cython engine
 
-`Control(engine_c=True)` opts into a monolithic Cython kernel that
-runs the whole fit (fast-S, MM, D-scale, vcov) in one nogil C block:
+The default `Control()` runs the fit through a monolithic Cython
+kernel that does fast-S, MM, D-scale, and vcov in one nogil C block.
+Median wall-clock is 0.93x R across the bench corpus; small-n
+classical cases drop from 5-10x R to about 1x R. To force the legacy
+numpy-based path, pass `Control(engine_c=False)`:
 
 ```python
 fit = lmrob(
     "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
     df,
-    control=Control(engine_c=True),
+    control=Control(engine_c=False),
     seed=42,
 )
 ```
 
-Median wall-clock with `engine_c=True` is 0.80x R across the bench
-corpus; small-n classical cases drop from 5-10x R to about 1x R.
 On rare small datasets the Cython subset-draw lands in a basin
-where the parametric vcov drifts; `lmrob()` catches the singular
-case and falls back automatically. See
-[the engine_c page](engine_c) for the full trade-off, which mainly
-concerns RNG byte-level reproducibility.
+where the vcov is singular; `lmrob()` catches that and falls back
+automatically. See [the engine_c page](engine_c) for the full
+trade-off, which mainly concerns RNG byte-level reproducibility.

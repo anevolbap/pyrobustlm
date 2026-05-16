@@ -1,9 +1,10 @@
 # The `engine_c=True` fast path
 
-`Control(engine_c=True)` routes the fit through a monolithic Cython
-kernel that runs the entire S-init, survivor refinement, MM iteration,
-optional D-scale (Koller & Stahel 2014), and `vcov_avar1` inside one
-`nogil` C block with a single workspace allocation.
+`Control(engine_c=True)` is the default since v0.5.11. The fit runs
+through a monolithic Cython kernel that does the entire S-init,
+survivor refinement, MM iteration, optional D-scale
+(Koller & Stahel 2014), and `vcov_avar1` inside one `nogil` C block
+with a single workspace allocation.
 
 The kernel mirrors the structure of `robustbase/src/lmrob.c`:
 - LAPACK via `scipy.linalg.cython_lapack` (`dgesv` for the p-subset
