@@ -696,6 +696,131 @@ cdef inline double _refine_to_convergence(
 
 
 # ---------------------------------------------------------------------------
+# Resample-chunk body: runs ``n_iter`` resampling iterations using the
+# caller's ``bitgen``, ``scratch`` and ``best_scales``/``best_betas`` arrays.
+# Sets ``exact_found[0] = 1`` and writes ``exact_beta`` if an exact fit
+# is encountered (caller should short-circuit). Returns 0 on success.
+#
+# Extracted so the parallel entry point can call it once per thread with
+# per-thread scratch + bitgen. ``cy_lmrob_fast_s`` calls it once with the
+# full ``nResample`` range — no behaviour change in the serial path.
+# ---------------------------------------------------------------------------
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+cdef inline int _resample_chunk_body(
+    const double* X_data, const double* y_data,
+    bitgen_t* bg,
+    _Scratch* scr,
+    Py_ssize_t n_iter,
+    Py_ssize_t n, Py_ssize_t p,
+    int family, const double* tuning_data, double b0,
+    int mts, int k_fast_s, int max_iter_scale, double scale_tol,
+    double k0,
+    int best_r,
+    double* best_scales, double* best_betas, int* kept_inout,
+    double* exact_beta, int* exact_found,
+) nogil:
+    cdef int p_int = <int>p
+    cdef int one = 1
+    cdef int info = 0
+    cdef Py_ssize_t i, j, row, swap, try_i
+    cdef double s, max_abs, candidate_scale
+    cdef int got_subset, k_status, worst_i, found
+    cdef uint64_t r_u
+    cdef int kept = kept_inout[0]
+
+    for try_i in range(n_iter):
+        # Draw a p-subset.
+        got_subset = 0
+        for _ in range(mts):
+            for i in range(p):
+                j = n - p + i
+                r_u = _bounded_uint64(bg, <uint64_t>(j + 1))
+                swap = <Py_ssize_t>r_u
+                found = 0
+                for row in range(i):
+                    if scr.perm[row] == swap:
+                        found = 1
+                        break
+                if found:
+                    scr.perm[i] = j
+                else:
+                    scr.perm[i] = swap
+
+            for i in range(p):
+                row = scr.perm[i]
+                scr.sub_y[i] = y_data[row]
+                for j in range(p):
+                    scr.sub_X[i + j * p] = X_data[row * p + j]
+
+            dgesv(&p_int, &one, scr.sub_X, &p_int, scr.ipiv,
+                  scr.sub_y, &p_int, &info)
+            if info == 0:
+                got_subset = 1
+                break
+
+        if not got_subset:
+            continue
+
+        for j in range(p):
+            scr.beta[j] = scr.sub_y[j]
+        _residuals(X_data, y_data, scr.beta, scr.r, n, p)
+
+        max_abs = 0.0
+        for i in range(n):
+            if scr.r[i] >= 0:
+                if scr.r[i] > max_abs:
+                    max_abs = scr.r[i]
+            else:
+                if -scr.r[i] > max_abs:
+                    max_abs = -scr.r[i]
+        if max_abs == 0.0:
+            for j in range(p):
+                exact_beta[j] = scr.beta[j]
+            exact_found[0] = 1
+            kept_inout[0] = kept
+            return 0
+        s = max_abs / k0
+        if s <= 0.0:
+            s = 1.0
+
+        candidate_scale = _k_step_refine(
+            X_data, y_data, s, family, tuning_data, b0,
+            k_fast_s, max_iter_scale, scale_tol,
+            scr, n, p, &k_status,
+        )
+        if k_status == 2:
+            for j in range(p):
+                exact_beta[j] = scr.beta[j]
+            exact_found[0] = 1
+            kept_inout[0] = kept
+            return 0
+        if k_status != 0:
+            continue
+
+        # Best-of-best_r heap.
+        if kept < best_r:
+            best_scales[kept] = candidate_scale
+            for j in range(p):
+                best_betas[kept * p + j] = scr.beta[j]
+            kept += 1
+        else:
+            worst_i = 0
+            for i in range(1, best_r):
+                if best_scales[i] > best_scales[worst_i]:
+                    worst_i = i
+            if candidate_scale < best_scales[worst_i]:
+                best_scales[worst_i] = candidate_scale
+                for j in range(p):
+                    best_betas[worst_i * p + j] = scr.beta[j]
+
+    kept_inout[0] = kept
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Top-level fast-S entry point.
 # ---------------------------------------------------------------------------
 
@@ -765,12 +890,11 @@ def cy_lmrob_fast_s(
     cdef double* beta_out_data = <double*>cnp.PyArray_DATA(beta_out)
     cdef double* tuning_data = <double*>cnp.PyArray_DATA(tuning)
 
-    cdef Py_ssize_t i, j, row, swap, try_i, kept
-    cdef double s, scale, max_abs, candidate_scale
-    cdef int got_subset, status, k_status, converged
+    cdef Py_ssize_t i, j
+    cdef int kept
+    cdef double scale, candidate_scale
+    cdef int status, converged
     cdef int worst_i, total_iters
-    cdef int found
-    cdef uint64_t r_u
     # Initial-scale divisor: use tuning[0] for bisquare/optimal; for
     # ggw we use _GGW_C0[case-1]; for hampel/lqq tuning[2]/tuning[1]
     # serve as the natural scale. Default to 1.0 if the chosen divisor
@@ -788,97 +912,21 @@ def cy_lmrob_fast_s(
     kept = 0
     converged = 0
     total_iters = 0
+    cdef int exact_found = 0
 
     with nogil:
-        # Resampling loop ----------------------------------------------------
-        for try_i in range(nResample):
-            # Draw a p-subset.
-            got_subset = 0
-            for _ in range(mts):
-                for i in range(p):
-                    j = n - p + i
-                    r_u = _bounded_uint64(bg, <uint64_t>(j + 1))
-                    swap = <Py_ssize_t>r_u
-                    found = 0
-                    for row in range(i):
-                        if scr.perm[row] == swap:
-                            found = 1
-                            break
-                    if found:
-                        scr.perm[i] = j
-                    else:
-                        scr.perm[i] = swap
-
-                # Build sub_X (col-major), sub_y.
-                for i in range(p):
-                    row = scr.perm[i]
-                    scr.sub_y[i] = y_data[row]
-                    for j in range(p):
-                        scr.sub_X[i + j * p] = X_data[row * p + j]
-
-                dgesv(&p_int, &one, scr.sub_X, &p_int, scr.ipiv,
-                      scr.sub_y, &p_int, &info)
-                if info == 0:
-                    got_subset = 1
-                    break
-
-            if not got_subset:
-                continue  # try another resample
-
-            for j in range(p):
-                scr.beta[j] = scr.sub_y[j]
-            _residuals(X_data, y_data, scr.beta, scr.r, n, p)
-
-            # Coarse initial scale.
-            max_abs = 0.0
-            for i in range(n):
-                if scr.r[i] >= 0:
-                    if scr.r[i] > max_abs:
-                        max_abs = scr.r[i]
-                else:
-                    if -scr.r[i] > max_abs:
-                        max_abs = -scr.r[i]
-            if max_abs == 0.0:
-                # Exact fit on this subset.
-                for j in range(p):
-                    beta_out_data[j] = scr.beta[j]
-                scale = 0.0
-                status = 2
-                break
-            s = max_abs / k0
-            if s <= 0.0:
-                s = 1.0
-
-            candidate_scale = _k_step_refine(
-                X_data, y_data, s, family, tuning_data, b0,
-                k_fast_s, max_iter_scale, scale_tol,
-                &scr, n, p, &k_status,
-            )
-            if k_status == 2:
-                # Exact fit during refinement.
-                for j in range(p):
-                    beta_out_data[j] = scr.beta[j]
-                scale = 0.0
-                status = 2
-                break
-            if k_status != 0:
-                continue  # LAPACK error on this candidate
-
-            # Insert into the best-r heap.
-            if kept < best_r:
-                best_scales[kept] = candidate_scale
-                for j in range(p):
-                    best_betas[kept * p + j] = scr.beta[j]
-                kept += 1
-            else:
-                worst_i = 0
-                for i in range(1, best_r):
-                    if best_scales[i] > best_scales[worst_i]:
-                        worst_i = i
-                if candidate_scale < best_scales[worst_i]:
-                    best_scales[worst_i] = candidate_scale
-                    for j in range(p):
-                        best_betas[worst_i * p + j] = scr.beta[j]
+        _resample_chunk_body(
+            X_data, y_data, bg, &scr,
+            <Py_ssize_t>nResample, n, p,
+            family, tuning_data, b0,
+            mts, k_fast_s, max_iter_scale, scale_tol,
+            k0, best_r,
+            best_scales, best_betas, &kept,
+            beta_out_data, &exact_found,
+        )
+        if exact_found:
+            scale = 0.0
+            status = 2
 
         # Survivor refinement -----------------------------------------------
         if status == 0:
@@ -1992,13 +2040,12 @@ def cy_lmrob_fit(
     cdef double* tuning_chi_data = <double*>cnp.PyArray_DATA(tuning_chi)
     cdef double* tuning_psi_data = <double*>cnp.PyArray_DATA(tuning_psi)
 
-    cdef Py_ssize_t i, j, row, swap, try_i, kept
-    cdef double s, scale, max_abs, candidate_scale
-    cdef int got_subset, status, k_status
+    cdef Py_ssize_t i, j
+    cdef int kept
+    cdef double scale, candidate_scale
+    cdef int status
     cdef int conv_s, n_iter_s
     cdef int conv_mm, n_iter_mm
-    cdef int found
-    cdef uint64_t r_u
 
     cdef double k0 = tuning_chi_data[0]
     if family == FAM_GGW:
@@ -2015,89 +2062,21 @@ def cy_lmrob_fit(
     n_iter_s = 0
     conv_mm = 0
     n_iter_mm = 0
+    cdef int exact_found = 0
 
     with nogil:
-        # fast-S resampling -------------------------------------------------
-        for try_i in range(nResample):
-            got_subset = 0
-            for _ in range(mts):
-                for i in range(p):
-                    j = n - p + i
-                    r_u = _bounded_uint64(bg, <uint64_t>(j + 1))
-                    swap = <Py_ssize_t>r_u
-                    found = 0
-                    for row in range(i):
-                        if scr.perm[row] == swap:
-                            found = 1
-                            break
-                    if found:
-                        scr.perm[i] = j
-                    else:
-                        scr.perm[i] = swap
-                for i in range(p):
-                    row = scr.perm[i]
-                    scr.sub_y[i] = y_data[row]
-                    for j in range(p):
-                        scr.sub_X[i + j * p] = X_data[row * p + j]
-                dgesv(&p_int, &one, scr.sub_X, &p_int, scr.ipiv,
-                      scr.sub_y, &p_int, &info)
-                if info == 0:
-                    got_subset = 1
-                    break
-
-            if not got_subset:
-                continue
-
-            for j in range(p):
-                scr.beta[j] = scr.sub_y[j]
-            _residuals(X_data, y_data, scr.beta, scr.r, n, p)
-
-            max_abs = 0.0
-            for i in range(n):
-                if scr.r[i] >= 0:
-                    if scr.r[i] > max_abs:
-                        max_abs = scr.r[i]
-                else:
-                    if -scr.r[i] > max_abs:
-                        max_abs = -scr.r[i]
-            if max_abs == 0.0:
-                for j in range(p):
-                    beta_out_data[j] = scr.beta[j]
-                scale = 0.0
-                status = 2
-                break
-            s = max_abs / k0
-            if s <= 0.0:
-                s = 1.0
-
-            candidate_scale = _k_step_refine(
-                X_data, y_data, s, family, tuning_chi_data, b0,
-                k_fast_s, max_iter_scale, scale_tol,
-                &scr, n, p, &k_status,
-            )
-            if k_status == 2:
-                for j in range(p):
-                    beta_out_data[j] = scr.beta[j]
-                scale = 0.0
-                status = 2
-                break
-            if k_status != 0:
-                continue
-
-            if kept < best_r:
-                best_scales[kept] = candidate_scale
-                for j in range(p):
-                    best_betas[kept * p + j] = scr.beta[j]
-                kept += 1
-            else:
-                row = 0  # repurposed as worst_i
-                for i in range(1, best_r):
-                    if best_scales[i] > best_scales[row]:
-                        row = i
-                if candidate_scale < best_scales[row]:
-                    best_scales[row] = candidate_scale
-                    for j in range(p):
-                        best_betas[row * p + j] = scr.beta[j]
+        _resample_chunk_body(
+            X_data, y_data, bg, &scr,
+            <Py_ssize_t>nResample, n, p,
+            family, tuning_chi_data, b0,
+            mts, k_fast_s, max_iter_scale, scale_tol,
+            k0, best_r,
+            best_scales, best_betas, &kept,
+            beta_out_data, &exact_found,
+        )
+        if exact_found:
+            scale = 0.0
+            status = 2
 
         # Survivor refinement and pick best ---------------------------------
         if status == 0:
