@@ -13,6 +13,7 @@
 
 cimport cython
 from cpython.pycapsule cimport PyCapsule_GetPointer
+from cython.parallel cimport prange, parallel
 from libc.math cimport fabs, sqrt, exp, pow as cpow
 from libc.stdint cimport uint64_t
 from libc.stdlib cimport malloc, free
@@ -843,6 +844,8 @@ def cy_lmrob_fast_s(
     int max_iter_scale,
     double scale_tol,
     cnp.ndarray[double, ndim=1, mode="c"] beta_out,
+    object bitgen_capsules=None,
+    int n_workers=1,
 ):
     """Fast-S in a single nogil call. Family-generic.
 
@@ -852,8 +855,15 @@ def cy_lmrob_fast_s(
 
     Runs the full pipeline: ``nResample`` candidates × (subset draw +
     initial solve + ``k_fast_s`` K-step refinements), best-of-``best_r``
-    selection, then survivor refinement to convergence. All in one C
-    block with one workspace allocation.
+    selection, then survivor refinement to convergence.
+
+    When ``n_workers > 1`` and ``bitgen_capsules`` is a list of length
+    ``n_workers``, the resample loop runs in parallel via OpenMP
+    ``prange``. Each thread gets its own scratch, its own bitgen (from
+    the capsule list), and its own best-r heap; the heaps are merged
+    serially after the parallel region and survivor refinement runs on
+    the merged heap. For ``n_workers == 1`` the path is identical to
+    the prior serial implementation.
 
     Returns ``(scale, status, n_iter, converged)`` where status is
     0 (ok), 1 (no non-singular subset found), 2 (exact fit), 3 (LAPACK
@@ -861,36 +871,72 @@ def cy_lmrob_fast_s(
     """
     if family == FAM_GGW and not _ggw_tables_init:
         _init_ggw_tables()
-    cdef bitgen_t* bg = <bitgen_t*>PyCapsule_GetPointer(
-        bitgen_capsule, "BitGenerator"
-    )
+
     cdef Py_ssize_t n = X.shape[0]
     cdef Py_ssize_t p = X.shape[1]
-    cdef int n_int = <int>n
-    cdef int p_int = <int>p
-    cdef int one = 1
-    cdef int info = 0
+    cdef int N = n_workers if n_workers > 0 else 1
+    cdef Py_ssize_t i, j
+    cdef int tid, alloced
+    if N > 1 and (bitgen_capsules is None or len(bitgen_capsules) != N):
+        raise ValueError(
+            f"cy_lmrob_fast_s: n_workers={N} requires bitgen_capsules of length {N}"
+        )
 
-    # Per-thread scratch.
-    cdef _Scratch scr
-    if _alloc_scratch(&scr, n, p) != 0:
-        _free_scratch(&scr)
-        raise MemoryError("cy_lmrob_fast_s: out of memory")
+    # Resolve per-thread bitgen pointers. For n_workers==1 we accept
+    # either bitgen_capsule (singular) or bitgen_capsules[0]; the
+    # caller already knows.
+    cdef bitgen_t** bgs = <bitgen_t**>malloc(N * sizeof(void*))
+    if bgs == NULL:
+        raise MemoryError("cy_lmrob_fast_s: out of memory for bitgen pointers")
+    try:
+        if N == 1:
+            bgs[0] = <bitgen_t*>PyCapsule_GetPointer(
+                bitgen_capsule if bitgen_capsule is not None else bitgen_capsules[0],
+                "BitGenerator",
+            )
+        else:
+            for tid in range(N):
+                bgs[tid] = <bitgen_t*>PyCapsule_GetPointer(
+                    bitgen_capsules[tid], "BitGenerator"
+                )
+    except Exception:
+        free(bgs)
+        raise
 
-    # Best-of-best_r heap kept in two parallel C arrays. Size at most best_r.
-    cdef double* best_scales = <double*>malloc(best_r * sizeof(double))
-    cdef double* best_betas = <double*>malloc(best_r * p * sizeof(double))
-    if best_scales == NULL or best_betas == NULL:
+    # Per-thread scratches.
+    cdef _Scratch* scratches = <_Scratch*>malloc(N * sizeof(_Scratch))
+    if scratches == NULL:
+        free(bgs)
+        raise MemoryError("cy_lmrob_fast_s: out of memory for scratches")
+    alloced = 0
+    for tid in range(N):
+        if _alloc_scratch(&scratches[tid], n, p) != 0:
+            for i in range(alloced):
+                _free_scratch(&scratches[i])
+            free(scratches); free(bgs)
+            raise MemoryError("cy_lmrob_fast_s: out of memory for scratch")
+        alloced += 1
+
+    # Per-thread best-r heaps stacked back-to-back.
+    cdef double* best_scales = <double*>malloc(N * best_r * sizeof(double))
+    cdef double* best_betas = <double*>malloc(N * best_r * p * sizeof(double))
+    cdef int* kepts = <int*>malloc(N * sizeof(int))
+    cdef int* exact_founds = <int*>malloc(N * sizeof(int))
+    cdef double* exact_betas = <double*>malloc(N * p * sizeof(double))
+    if (best_scales == NULL or best_betas == NULL or kepts == NULL
+            or exact_founds == NULL or exact_betas == NULL):
         free(best_scales); free(best_betas)
-        _free_scratch(&scr)
-        raise MemoryError("cy_lmrob_fast_s: out of memory for best-r heap")
+        free(kepts); free(exact_founds); free(exact_betas)
+        for tid in range(N):
+            _free_scratch(&scratches[tid])
+        free(scratches); free(bgs)
+        raise MemoryError("cy_lmrob_fast_s: out of memory for per-thread heaps")
 
     cdef double* X_data = <double*>cnp.PyArray_DATA(X)
     cdef double* y_data = <double*>cnp.PyArray_DATA(y)
     cdef double* beta_out_data = <double*>cnp.PyArray_DATA(beta_out)
     cdef double* tuning_data = <double*>cnp.PyArray_DATA(tuning)
 
-    cdef Py_ssize_t i, j
     cdef int kept
     cdef double scale, candidate_scale
     cdef int status, converged
@@ -912,21 +958,73 @@ def cy_lmrob_fast_s(
     kept = 0
     converged = 0
     total_iters = 0
-    cdef int exact_found = 0
+
+    # Per-thread chunk sizes: split nResample as evenly as possible.
+    cdef Py_ssize_t base_chunk = <Py_ssize_t>(nResample // N)
+    cdef Py_ssize_t remainder = <Py_ssize_t>(nResample - base_chunk * N)
+    cdef Py_ssize_t local_n
+    for tid in range(N):
+        kepts[tid] = 0
+        exact_founds[tid] = 0
 
     with nogil:
-        _resample_chunk_body(
-            X_data, y_data, bg, &scr,
-            <Py_ssize_t>nResample, n, p,
-            family, tuning_data, b0,
-            mts, k_fast_s, max_iter_scale, scale_tol,
-            k0, best_r,
-            best_scales, best_betas, &kept,
-            beta_out_data, &exact_found,
-        )
-        if exact_found:
-            scale = 0.0
-            status = 2
+        if N == 1:
+            _resample_chunk_body(
+                X_data, y_data, bgs[0], &scratches[0],
+                <Py_ssize_t>nResample, n, p,
+                family, tuning_data, b0,
+                mts, k_fast_s, max_iter_scale, scale_tol,
+                k0, best_r,
+                best_scales, best_betas, &kepts[0],
+                &exact_betas[0], &exact_founds[0],
+            )
+        else:
+            for tid in prange(N, schedule="static", num_threads=N):
+                local_n = base_chunk + (1 if tid < remainder else 0)
+                _resample_chunk_body(
+                    X_data, y_data, bgs[tid], &scratches[tid],
+                    local_n, n, p,
+                    family, tuning_data, b0,
+                    mts, k_fast_s, max_iter_scale, scale_tol,
+                    k0, best_r,
+                    best_scales + tid * best_r,
+                    best_betas + tid * best_r * p,
+                    &kepts[tid],
+                    exact_betas + tid * p, &exact_founds[tid],
+                )
+
+        # Merge per-thread heaps into the first slice (slot 0..best_r).
+        # Also detect exact-fit short-circuits (any thread that found one).
+        for tid in range(N):
+            if exact_founds[tid]:
+                for j in range(p):
+                    beta_out_data[j] = exact_betas[tid * p + j]
+                scale = 0.0
+                status = 2
+                break
+        kept = kepts[0]
+        if status == 0 and N > 1:
+            for tid in range(1, N):
+                for i in range(kepts[tid]):
+                    candidate_scale = best_scales[tid * best_r + i]
+                    if kept < best_r:
+                        best_scales[kept] = candidate_scale
+                        for j in range(p):
+                            best_betas[kept * p + j] = best_betas[
+                                (tid * best_r + i) * p + j
+                            ]
+                        kept += 1
+                    else:
+                        worst_i = 0
+                        for j in range(1, best_r):
+                            if best_scales[j] > best_scales[worst_i]:
+                                worst_i = j
+                        if candidate_scale < best_scales[worst_i]:
+                            best_scales[worst_i] = candidate_scale
+                            for j in range(p):
+                                best_betas[worst_i * p + j] = best_betas[
+                                    (tid * best_r + i) * p + j
+                                ]
 
         # Survivor refinement -----------------------------------------------
         if status == 0:
@@ -938,23 +1036,26 @@ def cy_lmrob_fast_s(
                 scale = 1e300
                 for i in range(kept):
                     for j in range(p):
-                        scr.beta[j] = best_betas[i * p + j]
+                        scratches[0].beta[j] = best_betas[i * p + j]
                     candidate_scale = _refine_to_convergence(
                         X_data, y_data,
                         best_scales[i], family, tuning_data, b0,
                         max_it, refine_tol,
                         max_iter_scale, scale_tol,
-                        scr.beta, &scr, n, p,
+                        scratches[0].beta, &scratches[0], n, p,
                         &converged, &total_iters,
                     )
                     if candidate_scale < scale:
                         scale = candidate_scale
                         for j in range(p):
-                            beta_out_data[j] = scr.beta[j]
+                            beta_out_data[j] = scratches[0].beta[j]
                         worst_i = i
 
     free(best_scales); free(best_betas)
-    _free_scratch(&scr)
+    free(kepts); free(exact_founds); free(exact_betas)
+    for tid in range(N):
+        _free_scratch(&scratches[tid])
+    free(scratches); free(bgs)
     return scale, status, total_iters, converged
 
 
@@ -1992,6 +2093,8 @@ def cy_lmrob_fit(
     cnp.ndarray[double, ndim=2, mode="c"] cov_out=None,
     cnp.ndarray[double, ndim=1, mode="c"] tuning_chi_for_cov=None,
     double bb_for_cov=0.5,
+    object bitgen_capsules=None,
+    int n_workers=1,
 ):
     """Full fast-S + MM fit in a single nogil block.
 
@@ -2010,27 +2113,67 @@ def cy_lmrob_fit(
     if family == FAM_GGW and not _ggw_tables_init:
         _init_ggw_tables()
 
-    cdef bitgen_t* bg = <bitgen_t*>PyCapsule_GetPointer(
-        bitgen_capsule, "BitGenerator"
-    )
-
     cdef Py_ssize_t n = X.shape[0]
     cdef Py_ssize_t p = X.shape[1]
     cdef int n_int = <int>n
     cdef int p_int = <int>p
     cdef int one = 1
     cdef int info = 0
+    cdef int N = n_workers if n_workers > 0 else 1
+    cdef Py_ssize_t i, j
+    cdef int tid, alloced
+    if N > 1 and (bitgen_capsules is None or len(bitgen_capsules) != N):
+        raise ValueError(
+            f"cy_lmrob_fit: n_workers={N} requires bitgen_capsules of length {N}"
+        )
 
-    cdef _Scratch scr
-    if _alloc_scratch(&scr, n, p) != 0:
-        _free_scratch(&scr)
-        raise MemoryError("cy_lmrob_fit: out of memory")
-    cdef double* best_scales = <double*>malloc(best_r * sizeof(double))
-    cdef double* best_betas = <double*>malloc(best_r * p * sizeof(double))
-    if best_scales == NULL or best_betas == NULL:
+    # Per-thread bitgen pointers.
+    cdef bitgen_t** bgs = <bitgen_t**>malloc(N * sizeof(void*))
+    if bgs == NULL:
+        raise MemoryError("cy_lmrob_fit: out of memory for bitgen pointers")
+    try:
+        if N == 1:
+            bgs[0] = <bitgen_t*>PyCapsule_GetPointer(
+                bitgen_capsule if bitgen_capsule is not None else bitgen_capsules[0],
+                "BitGenerator",
+            )
+        else:
+            for tid in range(N):
+                bgs[tid] = <bitgen_t*>PyCapsule_GetPointer(
+                    bitgen_capsules[tid], "BitGenerator"
+                )
+    except Exception:
+        free(bgs)
+        raise
+
+    # Per-thread scratches.
+    cdef _Scratch* scratches = <_Scratch*>malloc(N * sizeof(_Scratch))
+    if scratches == NULL:
+        free(bgs)
+        raise MemoryError("cy_lmrob_fit: out of memory for scratches")
+    alloced = 0
+    for tid in range(N):
+        if _alloc_scratch(&scratches[tid], n, p) != 0:
+            for i in range(alloced):
+                _free_scratch(&scratches[i])
+            free(scratches); free(bgs)
+            raise MemoryError("cy_lmrob_fit: out of memory for scratch")
+        alloced += 1
+
+    # Per-thread best-r heaps stacked back-to-back.
+    cdef double* best_scales = <double*>malloc(N * best_r * sizeof(double))
+    cdef double* best_betas = <double*>malloc(N * best_r * p * sizeof(double))
+    cdef int* kepts = <int*>malloc(N * sizeof(int))
+    cdef int* exact_founds = <int*>malloc(N * sizeof(int))
+    cdef double* exact_betas = <double*>malloc(N * p * sizeof(double))
+    if (best_scales == NULL or best_betas == NULL or kepts == NULL
+            or exact_founds == NULL or exact_betas == NULL):
         free(best_scales); free(best_betas)
-        _free_scratch(&scr)
-        raise MemoryError("cy_lmrob_fit: out of memory for best-r heap")
+        free(kepts); free(exact_founds); free(exact_betas)
+        for tid in range(N):
+            _free_scratch(&scratches[tid])
+        free(scratches); free(bgs)
+        raise MemoryError("cy_lmrob_fit: out of memory for per-thread heaps")
 
     cdef double* X_data = <double*>cnp.PyArray_DATA(X)
     cdef double* y_data = <double*>cnp.PyArray_DATA(y)
@@ -2040,10 +2183,9 @@ def cy_lmrob_fit(
     cdef double* tuning_chi_data = <double*>cnp.PyArray_DATA(tuning_chi)
     cdef double* tuning_psi_data = <double*>cnp.PyArray_DATA(tuning_psi)
 
-    cdef Py_ssize_t i, j
     cdef int kept
     cdef double scale, candidate_scale
-    cdef int status
+    cdef int status, worst_i
     cdef int conv_s, n_iter_s
     cdef int conv_mm, n_iter_mm
 
@@ -2062,21 +2204,71 @@ def cy_lmrob_fit(
     n_iter_s = 0
     conv_mm = 0
     n_iter_mm = 0
-    cdef int exact_found = 0
+
+    cdef Py_ssize_t base_chunk = <Py_ssize_t>(nResample // N)
+    cdef Py_ssize_t remainder = <Py_ssize_t>(nResample - base_chunk * N)
+    cdef Py_ssize_t local_n
+    for tid in range(N):
+        kepts[tid] = 0
+        exact_founds[tid] = 0
 
     with nogil:
-        _resample_chunk_body(
-            X_data, y_data, bg, &scr,
-            <Py_ssize_t>nResample, n, p,
-            family, tuning_chi_data, b0,
-            mts, k_fast_s, max_iter_scale, scale_tol,
-            k0, best_r,
-            best_scales, best_betas, &kept,
-            beta_out_data, &exact_found,
-        )
-        if exact_found:
-            scale = 0.0
-            status = 2
+        if N == 1:
+            _resample_chunk_body(
+                X_data, y_data, bgs[0], &scratches[0],
+                <Py_ssize_t>nResample, n, p,
+                family, tuning_chi_data, b0,
+                mts, k_fast_s, max_iter_scale, scale_tol,
+                k0, best_r,
+                best_scales, best_betas, &kepts[0],
+                &exact_betas[0], &exact_founds[0],
+            )
+        else:
+            for tid in prange(N, schedule="static", num_threads=N):
+                local_n = base_chunk + (1 if tid < remainder else 0)
+                _resample_chunk_body(
+                    X_data, y_data, bgs[tid], &scratches[tid],
+                    local_n, n, p,
+                    family, tuning_chi_data, b0,
+                    mts, k_fast_s, max_iter_scale, scale_tol,
+                    k0, best_r,
+                    best_scales + tid * best_r,
+                    best_betas + tid * best_r * p,
+                    &kepts[tid],
+                    exact_betas + tid * p, &exact_founds[tid],
+                )
+
+        # Merge per-thread heaps and detect exact-fit.
+        for tid in range(N):
+            if exact_founds[tid]:
+                for j in range(p):
+                    beta_out_data[j] = exact_betas[tid * p + j]
+                scale = 0.0
+                status = 2
+                break
+        kept = kepts[0]
+        if status == 0 and N > 1:
+            for tid in range(1, N):
+                for i in range(kepts[tid]):
+                    candidate_scale = best_scales[tid * best_r + i]
+                    if kept < best_r:
+                        best_scales[kept] = candidate_scale
+                        for j in range(p):
+                            best_betas[kept * p + j] = best_betas[
+                                (tid * best_r + i) * p + j
+                            ]
+                        kept += 1
+                    else:
+                        worst_i = 0
+                        for j in range(1, best_r):
+                            if best_scales[j] > best_scales[worst_i]:
+                                worst_i = j
+                        if candidate_scale < best_scales[worst_i]:
+                            best_scales[worst_i] = candidate_scale
+                            for j in range(p):
+                                best_betas[worst_i * p + j] = best_betas[
+                                    (tid * best_r + i) * p + j
+                                ]
 
         # Survivor refinement and pick best ---------------------------------
         if status == 0:
@@ -2086,19 +2278,19 @@ def cy_lmrob_fit(
                 scale = 1e300
                 for i in range(kept):
                     for j in range(p):
-                        scr.beta[j] = best_betas[i * p + j]
+                        scratches[0].beta[j] = best_betas[i * p + j]
                     candidate_scale = _refine_to_convergence(
                         X_data, y_data,
                         best_scales[i], family, tuning_chi_data, b0,
                         max_it_s, refine_tol,
                         max_iter_scale, scale_tol,
-                        scr.beta, &scr, n, p,
+                        scratches[0].beta, &scratches[0], n, p,
                         &conv_s, &n_iter_s,
                     )
                     if candidate_scale < scale:
                         scale = candidate_scale
                         for j in range(p):
-                            beta_out_data[j] = scr.beta[j]
+                            beta_out_data[j] = scratches[0].beta[j]
 
         # MM step -----------------------------------------------------------
         if status == 0 and scale > 0.0:
@@ -2109,7 +2301,7 @@ def cy_lmrob_fit(
             _mm_loop(
                 X_data, y_data, scale, family, tuning_psi_data,
                 max_it_mm, rel_tol_mm,
-                beta_out_data, &scr, n, p,
+                beta_out_data, &scratches[0], n, p,
                 &conv_mm, &n_iter_mm,
             )
 
@@ -2140,7 +2332,10 @@ def cy_lmrob_fit(
         init_res = <double*>malloc(n * sizeof(double))
         if init_res == NULL:
             free(best_scales); free(best_betas)
-            _free_scratch(&scr)
+            free(kepts); free(exact_founds); free(exact_betas)
+            for tid in range(N):
+                _free_scratch(&scratches[tid])
+            free(scratches); free(bgs)
             raise MemoryError("cy_lmrob_fit: out of memory for init_residuals")
         if tuning_chi_for_cov is not None:
             tuning_chi_ptr = <double*>cnp.PyArray_DATA(tuning_chi_for_cov)
@@ -2162,5 +2357,8 @@ def cy_lmrob_fit(
         vcov_status = -1  # not computed
 
     free(best_scales); free(best_betas)
-    _free_scratch(&scr)
+    free(kepts); free(exact_founds); free(exact_betas)
+    for tid in range(N):
+        _free_scratch(&scratches[tid])
+    free(scratches); free(bgs)
     return scale, status, n_iter_s, conv_s, n_iter_mm, conv_mm, vcov_status

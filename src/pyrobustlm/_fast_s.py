@@ -579,6 +579,14 @@ def fast_s(
         for i, v in enumerate(cfg.k_chi[:3]):
             tuning[i] = float(v)
         family_id = _FAMILY_IDS[cfg.psi_chi]
+        # Optional OpenMP parallelism via per-thread bitgens.
+        ec_workers = _resolve_n_workers(cfg.n_workers, cfg.nResample)
+        if ec_workers > 1:
+            seedseq = _to_seed_sequence(seed)
+            child_seeds = seedseq.spawn(ec_workers)
+            capsules = [np.random.default_rng(s).bit_generator.capsule for s in child_seeds]
+        else:
+            capsules = None
         scale, status, n_iter, converged = _CY_LMROB_FAST_S(
             X,
             y,
@@ -595,6 +603,8 @@ def fast_s(
             cfg.max_iter_scale,
             cfg.scale_tol,
             beta_out,
+            bitgen_capsules=capsules,
+            n_workers=ec_workers,
         )
         if status == 1:
             raise RuntimeError("fast_s: no non-singular subsamples were found")

@@ -131,10 +131,7 @@ def lmrob(
         # transformed residual is past the psi-redescending cutoff,
         # making ``mean(psi'(r/s)) = 0`` and dividing by zero downstream.
         # Force the NumPy path for that combo.
-        if (
-            not np.allclose(weights, 1.0)
-            and control.cov == ".vcov.w"
-        ):
+        if not np.allclose(weights, 1.0) and control.cov == ".vcov.w":
             control = replace(control, engine_c=False)
     try:
         return _lmrob_impl(formula, data, control, na_action, seed, weights)
@@ -232,20 +229,14 @@ def _lmrob_impl(
     _engine_residuals: np.ndarray | None = None
     _engine_rweights: np.ndarray | None = None
     _engine_cov_buf: np.ndarray | None = None
-    # At larger n the threaded default path beats the single-threaded
-    # monolithic kernel (engine_c is one Cython call and does not
-    # parallelise internally). Skip the engine_c block in that regime
-    # so users who set ``engine_c=True`` still get the fastest fit;
-    # also enable auto-threading on the fallback so the win materialises
-    # without the user having to also set ``n_workers``.
-    # Threshold matches the auto-threading heuristic in ``_fast_s``.
-    _engine_c_too_big = n * p * p >= 100_000
+    # engine_c now parallelises internally via OpenMP prange on the
+    # resample loop, so the previous ``n*p^2 >= 100k`` auto-fallback to
+    # the threaded NumPy path is no longer needed. ``control.n_workers``
+    # is honoured directly by the monolithic kernel.
+    _engine_c_too_big = False
     _eff_n_workers = control.n_workers
-    if control.engine_c and _engine_c_too_big and _eff_n_workers == 1:
-        _eff_n_workers = 0  # auto
     if (
         control.engine_c
-        and not _engine_c_too_big
         and init_method == "S"
         and psi_family in _CY_FAMILY_IDS
         and _CY_LMROB_FIT is not None
@@ -290,6 +281,19 @@ def _lmrob_impl(
         # which is fine: the Cython kernel writes the full p*p block.
         _want_inline_vcov = cov_kind == ".vcov.avar1"
         _cov_buf = _big[2 * p + 2 * n :].reshape((p, p)) if _want_inline_vcov else None
+        # Resolve effective worker count and pre-spawn per-thread bitgens
+        # for the engine_c parallel resample loop. The resolution mirrors
+        # ``_fast_s._resolve_n_workers``.
+        from pyrobustlm._fast_s import _resolve_n_workers as _resolve_nw
+
+        _ec_workers = _resolve_nw(_eff_n_workers, control.nResample)
+        if _ec_workers > 1:
+            _ec_caps = [
+                np.random.default_rng(_s).bit_generator.capsule
+                for _s in np.random.SeedSequence(s_seed).spawn(_ec_workers)
+            ]
+        else:
+            _ec_caps = None
         scale_e, status_e, n_iter_s, _conv_s, n_iter_mm, conv_mm, _vcov_status = _CY_LMROB_FIT(
             X_c,
             y_c,
@@ -315,6 +319,8 @@ def _lmrob_impl(
             _cov_buf,
             _tuning_chi,
             control.bb,
+            bitgen_capsules=_ec_caps,
+            n_workers=_ec_workers,
         )
         if status_e == 1:
             raise RuntimeError("lmrob: no non-singular subsamples found")
