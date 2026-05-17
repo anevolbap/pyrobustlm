@@ -41,11 +41,21 @@ incdir_scipy_parent = run_command(
 ).stdout().strip()
 
 # -----------------------------------------------------------------------------
-# OpenMP (best-effort; falls back to no-op on platforms without it)
+# OpenMP (best-effort; falls back to no-op on platforms without it).
+# Skipped on Windows: the MSVC OpenMP runtime (vcomp140.dll) isn't always
+# bundled with the Python install, and the meson-detected dependency tends
+# to link against it. Cython's ``prange`` falls back to a serial loop
+# when compiled without OpenMP, which is acceptable for the rare Windows
+# user; macOS/Linux still get parallelism.
 # -----------------------------------------------------------------------------
-omp_dep = dependency('openmp', required: false)
-if not omp_dep.found()
-  message('OpenMP not found; building without parallel kernels.')
+if host_machine.system() == 'windows'
+  omp_dep = dependency('', required: false)
+  message('OpenMP disabled on Windows; engine_c will run serially.')
+else
+  omp_dep = dependency('openmp', required: false)
+  if not omp_dep.found()
+    message('OpenMP not found; building without parallel kernels.')
+  endif
 endif
 
 # -----------------------------------------------------------------------------

@@ -285,12 +285,13 @@ def _lmrob_impl(
         # for the engine_c parallel resample loop. The resolution mirrors
         # ``_fast_s._resolve_n_workers``.
         from pyrobustlm._fast_s import _resolve_n_workers as _resolve_nw
+        from pyrobustlm._fast_s import _to_seed_sequence
 
         _ec_workers = _resolve_nw(_eff_n_workers, control.nResample)
         if _ec_workers > 1:
             _ec_caps = [
                 np.random.default_rng(_s).bit_generator.capsule
-                for _s in np.random.SeedSequence(s_seed).spawn(_ec_workers)
+                for _s in _to_seed_sequence(s_seed).spawn(_ec_workers)
             ]
         else:
             _ec_caps = None
