@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -13,6 +15,8 @@ from pyrobustlm._fast_s import (
     _split_iters,
     fast_s,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _make_problem(n: int, p: int, seed: int = 0) -> tuple[np.ndarray, np.ndarray]:
@@ -110,7 +114,7 @@ def test_classical_dataset_parity(n_workers: int) -> None:
 
     from pyrobustlm import Control, lmrob
 
-    df = pd.read_csv("tests/data/stackloss.csv")
+    df = pd.read_csv(REPO_ROOT / "tests" / "data" / "stackloss.csv")
     fit = lmrob(
         "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
         df,
