@@ -93,9 +93,10 @@ def lmrob(
         Optional non-negative per-case weights (length ``len(data)``).
         Implemented via the ``sqrt(w)``-transform that R's lmrob uses:
         the transformed design ``(sqrt(w)*X, sqrt(w)*y)`` goes through
-        the unweighted fit. Zero-weight rows are dropped. Non-trivial
-        weights force the legacy NumPy path (the Cython engine doesn't
-        yet know about weights).
+        the unweighted fit. Zero-weight rows are dropped. Compatible
+        with both the default Cython engine and the legacy NumPy path
+        (the transform is applied before any path dispatch, so the
+        Cython kernel never needs to know about weights itself).
     na_action :
         ``"drop"`` (default) drops rows with any NA before fitting.
     seed :
@@ -121,9 +122,19 @@ def lmrob(
         if not keep.all():
             data = data.loc[keep].reset_index(drop=True)
             weights = weights[keep]
-        # The Cython kernels don't yet know about weights; route through
-        # the NumPy path until #64 lands.
-        if not np.allclose(weights, 1.0):
+        # Non-trivial weights flow through the engine_c block too:
+        # ``_lmrob_impl`` applies the sqrt(w)-transform to (X, y) before
+        # any path dispatch, so the Cython kernel sees a transformed
+        # design and never needs to know about weights itself. One
+        # exception: ``cov=".vcov.w"`` with non-trivial weights on small
+        # n can land the engine_c basin in a corner where every
+        # transformed residual is past the psi-redescending cutoff,
+        # making ``mean(psi'(r/s)) = 0`` and dividing by zero downstream.
+        # Force the NumPy path for that combo.
+        if (
+            not np.allclose(weights, 1.0)
+            and control.cov == ".vcov.w"
+        ):
             control = replace(control, engine_c=False)
     try:
         return _lmrob_impl(formula, data, control, na_action, seed, weights)
