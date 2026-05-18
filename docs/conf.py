@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Sphinx configuration for pyrobustlm."""
+"""Sphinx configuration for pylmrob."""
 
 from __future__ import annotations
 
@@ -12,12 +12,12 @@ from pathlib import Path
 _repo_root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_repo_root / "src"))
 
-from pyrobustlm._version import __version__ as _pkg_version  # noqa: E402
+from pylmrob._version import __version__ as _pkg_version  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Project metadata
 # ---------------------------------------------------------------------------
-project = "pyrobustlm"
+project = "pylmrob"
 author = "anevolbap"
 copyright = f"{datetime.now(timezone.utc).year}, {author}"
 

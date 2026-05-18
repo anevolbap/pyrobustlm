@@ -17,17 +17,17 @@ from typing import Any
 
 import numpy as np
 
-from pyrobustlm import _psifuns as _pf
+from pylmrob import _psifuns as _pf
 
 
 def _try_import_cpsi() -> Any | None:
-    """Return the compiled ``pyrobustlm._core._psi`` module, or ``None``.
+    """Return the compiled ``pylmrob._core._psi`` module, or ``None``.
 
     Imported lazily through ``importlib`` so static type checkers don't
     flag the Cython extension as missing.
     """
     try:
-        return importlib.import_module("pyrobustlm._core._psi")
+        return importlib.import_module("pylmrob._core._psi")
     except ImportError:
         return None
 

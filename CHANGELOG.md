@@ -1,11 +1,22 @@
 # Changelog
 
-All notable changes to `pyrobustlm` will be documented in this file.
+All notable changes to `pylmrob` will be documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+## [0.5.13] - 2026-05-18
+
+### Changed
+
+- **Renamed the package from ``pyrobustlm`` to ``pylmrob``** to mirror
+  R's ``robustbase::lmrob`` directly (the function this package ports).
+  ``pyrobustlm`` was never published to PyPI, so there is no user
+  migration path; if you were using the editable install or TestPyPI
+  build, switch ``from pyrobustlm import ...`` to ``from pylmrob
+  import ...``. The GitHub repository name is unchanged.
 
 ## [0.5.12] - 2026-05-16
 
@@ -43,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   the ggw ``chi'(x)/psi(x)`` factor (``1/1.6047`` for cases 1 and 4,
   ``6/case^2`` fallback for the rest), which blew up the cov diagonal
   by 20-100x on small-n datasets. Ported the correct case-dependent
-  values from ``pyrobustlm._psifuns.chi_prime_over_psi``. psi_ggw on
+  values from ``pylmrob._psifuns.chi_prime_over_psi``. psi_ggw on
   n=21 stackloss with engine_c=True went from cov diag
   ``[534, 0.44, 11.6, 0.013]`` to ``[29, 0.021, 0.17, 0.0046]``, in
   agreement with the numpy path.
@@ -77,7 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   | hampel | 130 ms | 125 ms | -5% |
 
   Median runtime ratio ``py engine_c / R`` across the full bench corpus
-  drops from 1.02x to 0.80x: pyrobustlm now beats R on more than half
+  drops from 1.02x to 0.80x: pylmrob now beats R on more than half
   of cases. The worst remaining engine_c case
   (``synth_ggw_n500_p10``) is 1.91x R.
 
@@ -345,7 +356,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - **``Control(engine_c=True)``: monolithic Cython lmrob engine.** New
-  module ``pyrobustlm._core._lmrob`` runs the whole fast-S + survivor
+  module ``pylmrob._core._lmrob`` runs the whole fast-S + survivor
   refinement + MM iteration + D-scale (KS2014/KS2011) in one nogil C
   block with a single workspace allocation. Mirrors the structure of
   ``robustbase/src/lmrob.c::R_lmrob_S``, ``rwls``, and
@@ -449,7 +460,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   ``myst-parser``, ``napoleon`` (numpy-style), ``intersphinx`` to
   numpy/scipy/pandas, and ``sphinx-autodoc-typehints``.
 - **Cython resampling kernel for the bisquare default.** New module
-  ``pyrobustlm._core._fast_s`` runs the per-iteration body
+  ``pylmrob._core._fast_s`` runs the per-iteration body
   (initial p-subset solve, k-step refinement, m-scale, IRWLS) in
   ``nogil`` C with LAPACK calls via ``scipy.linalg.cython_lapack``
   (``dgesv`` for the subset solve, ``dgels`` for IRWLS). This is the
@@ -510,7 +521,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   On the ``education`` reference, M-S now matches R within ~2% on
   coefficients and ~0.6% on scale at ``nResample=2000`` (was 30%+ off).
 - **Design-adaptive D-scale (Koller & Stahel 2014).** New module
-  ``pyrobustlm.d_scale`` ports ``robustbase::lmrob..D..fit`` and the
+  ``pylmrob.d_scale`` ports ``robustbase::lmrob..D..fit`` and the
   ``R_find_D_scale`` C iteration. ``setting="KS2014"`` and
   ``setting="KS2011"`` now run the full SMDM pipeline (S-init, MM,
   D-scale, MM with new scale). Matches R's C kernel to ``rtol=1e-4``
@@ -569,7 +580,7 @@ First public release. End-to-end MM regression that matches R's
 - **Psi/chi/wgt.** All six robustbase families (`bisquare`, `huber`,
   `hampel`, `optimal`, `lqq`, `ggw`). Match R's `Mpsi`/`Mchi`/`Mwgt` to
   `rtol=1e-12` (1e-7 for ggw rho's polynomial approximation).
-- **M-scale.** `pyrobustlm.scale.m_scale` matches R's `find_scale` to
+- **M-scale.** `pylmrob.scale.m_scale` matches R's `find_scale` to
   `rtol=1e-9`.
 - **Fast-S** resampling estimator and **MM** IRWLS iteration.
 - **M-S** initial estimator for designs with categorical predictors
@@ -578,7 +589,7 @@ First public release. End-to-end MM regression that matches R's
 - **Inference.** `vcov_avar1` (sandwich) ported from
   `robustbase/R/lmrob.MM.R:510-577`, matching R element-wise to `rtol=1e-3`.
   `vcov_w` implements the asymptotic-correction-factor branch.
-- **Public API.** `pyrobustlm.lmrob(formula, data, ...)`, `LmRob`
+- **Public API.** `pylmrob.lmrob(formula, data, ...)`, `LmRob`
   scikit-learn-style estimator, `Control` with KS2014/KS2011/MM presets.
 - **Predict on new data.** `LmRobResults.predict(DataFrame)` re-applies
   the formula's design transformation (factor encoding, `I(x**2)`, etc.)
@@ -607,18 +618,18 @@ First public release. End-to-end MM regression that matches R's
 See [`docs/numerical-notes.md`](docs/numerical-notes.md) for the full list
 of documented divergences from R.
 
-[Unreleased]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.8...HEAD
-[0.5.8]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.7...v0.5.8
-[0.5.7]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.6...v0.5.7
-[0.5.6]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.5...v0.5.6
-[0.5.5]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.4...v0.5.5
-[0.5.4]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.3...v0.5.4
-[0.5.3]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.2...v0.5.3
-[0.5.2]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.1...v0.5.2
-[0.5.1]: https://github.com/anevolbap/pyrobustlm/compare/v0.5.0...v0.5.1
-[0.5.0]: https://github.com/anevolbap/pyrobustlm/compare/v0.4.1...v0.5.0
-[0.4.1]: https://github.com/anevolbap/pyrobustlm/compare/v0.4.0...v0.4.1
-[0.4.0]: https://github.com/anevolbap/pyrobustlm/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/anevolbap/pyrobustlm/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/anevolbap/pyrobustlm/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/anevolbap/pyrobustlm/releases/tag/v0.1.0
+[Unreleased]: https://github.com/anevolbap/pylmrob/compare/v0.5.8...HEAD
+[0.5.8]: https://github.com/anevolbap/pylmrob/compare/v0.5.7...v0.5.8
+[0.5.7]: https://github.com/anevolbap/pylmrob/compare/v0.5.6...v0.5.7
+[0.5.6]: https://github.com/anevolbap/pylmrob/compare/v0.5.5...v0.5.6
+[0.5.5]: https://github.com/anevolbap/pylmrob/compare/v0.5.4...v0.5.5
+[0.5.4]: https://github.com/anevolbap/pylmrob/compare/v0.5.3...v0.5.4
+[0.5.3]: https://github.com/anevolbap/pylmrob/compare/v0.5.2...v0.5.3
+[0.5.2]: https://github.com/anevolbap/pylmrob/compare/v0.5.1...v0.5.2
+[0.5.1]: https://github.com/anevolbap/pylmrob/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/anevolbap/pylmrob/compare/v0.4.1...v0.5.0
+[0.4.1]: https://github.com/anevolbap/pylmrob/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/anevolbap/pylmrob/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/anevolbap/pylmrob/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/anevolbap/pylmrob/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/anevolbap/pylmrob/releases/tag/v0.1.0

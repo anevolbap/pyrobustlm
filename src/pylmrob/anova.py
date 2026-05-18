@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from pyrobustlm.results import LmRobResults
+from pylmrob.results import LmRobResults
 
 
 @dataclass
@@ -106,13 +106,13 @@ def _deviance_pair(full: LmRobResults, reduced: LmRobResults) -> tuple[int, floa
     """
     from scipy.stats import chi2 as chi2_dist
 
-    from pyrobustlm import psi as _psi_mod
-    from pyrobustlm._mm import mm_iterate
+    from pylmrob import psi as _psi_mod
+    from pylmrob._mm import mm_iterate
 
     if full.design_x_ is None or full.design_y_ is None:
         raise RuntimeError(
             "anova(test='Deviance') requires the full fit to carry its design "
-            "matrix; refit with the current pyrobustlm to populate design_x_."
+            "matrix; refit with the current pylmrob to populate design_x_."
         )
     if reduced.design_x_ is None:
         raise RuntimeError("reduced fit is missing design_x_; refit and try again")
@@ -164,7 +164,7 @@ def _deviance_pair(full: LmRobResults, reduced: LmRobResults) -> tuple[int, floa
     # Our ``psi.rho`` is the normalised chi (chi(inf)=1); R's ``Mpsi(deriv=-1)``
     # is the unnormalised rho. Scale by ``rho_inf = 1 / chi_prime_factor`` to
     # recover R's convention before differencing.
-    from pyrobustlm._psifuns import _chi_prime_factor
+    from pylmrob._psifuns import _chi_prime_factor
 
     psi_k_arr = np.asarray(psi_k, dtype=float)
     rho_inf = 1.0 / _chi_prime_factor(psi_family, psi_k_arr)

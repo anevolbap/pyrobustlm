@@ -19,8 +19,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
-    from pyrobustlm.control import Control
-    from pyrobustlm.results import LmRobResults
+    from pylmrob.control import Control
+    from pylmrob.results import LmRobResults
 
 
 # R's summary.lmrob: tabulated correc factor for default tunings of each family.
@@ -53,8 +53,8 @@ def _numeric_correc(psi_family: str, tuning: tuple[float, ...]) -> float:
     """Generic ``E[wgt(r)] / E[r psi(r)]`` under the standard normal."""
     from scipy import integrate
 
-    from pyrobustlm.psi import psi as _psi
-    from pyrobustlm.psi import wgt as _wgt
+    from pylmrob.psi import psi as _psi
+    from pylmrob.psi import wgt as _wgt
 
     inv_sqrt2pi = 1.0 / np.sqrt(2.0 * np.pi)
 
@@ -75,7 +75,7 @@ def _numeric_correc(psi_family: str, tuning: tuple[float, ...]) -> float:
 
 
 def _is_default_tuning(psi_family: str, tuning: tuple[float, ...]) -> bool:
-    from pyrobustlm.psi import _PSI_TUNING_DEFAULT_PSI
+    from pylmrob.psi import _PSI_TUNING_DEFAULT_PSI
 
     default = _PSI_TUNING_DEFAULT_PSI.get(psi_family.lower())
     if default is None or len(default) != len(tuning):

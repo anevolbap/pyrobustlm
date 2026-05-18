@@ -1,4 +1,4 @@
-pyrobustlm
+pylmrob
 ==========
 
 This project is a Python port of the `lmrob` MM-estimator and supporting

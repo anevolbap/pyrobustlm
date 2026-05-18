@@ -24,12 +24,12 @@ from typing import Any
 
 import numpy as np
 
-from pyrobustlm import psi as _psi
+from pylmrob import psi as _psi
 
 
 def _try_cpsi() -> Any | None:
     try:
-        return importlib.import_module("pyrobustlm._core._psi")
+        return importlib.import_module("pylmrob._core._psi")
     except ImportError:
         return None
 

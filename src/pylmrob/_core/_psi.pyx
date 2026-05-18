@@ -3,7 +3,7 @@
 #
 # Cython-accelerated bisquare psi/wgt/rho/psi_prime + the m_scale iteration.
 # Used by the resampling loop in fast_s for the (extremely common) bisquare
-# default. Pure-NumPy implementations in pyrobustlm._psifuns remain canonical.
+# default. Pure-NumPy implementations in pylmrob._psifuns remain canonical.
 
 cimport cython
 from libc.math cimport fabs, sqrt, exp, pow as cpow

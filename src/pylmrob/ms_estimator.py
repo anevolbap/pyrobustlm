@@ -27,9 +27,9 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import linprog
 
-from pyrobustlm import psi as _psi
-from pyrobustlm._fast_s import _draw_nonsingular_subset
-from pyrobustlm.scale import m_scale
+from pylmrob import psi as _psi
+from pylmrob._fast_s import _draw_nonsingular_subset
+from pylmrob.scale import m_scale
 
 
 @dataclass

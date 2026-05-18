@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
-    from pyrobustlm.results import LmRobResults
+    from pylmrob.results import LmRobResults
 
 
 def plot(results: LmRobResults) -> object:
@@ -22,7 +22,7 @@ def plot(results: LmRobResults) -> object:
     (c) Robust weights vs index, (d) Residuals vs Leverage proxy.
 
     Requires ``matplotlib`` (an optional install dep). Install with
-    ``pip install pyrobustlm[plot]`` or just add matplotlib to your env.
+    ``pip install pylmrob[plot]`` or just add matplotlib to your env.
     """
     import importlib
 
@@ -31,7 +31,7 @@ def plot(results: LmRobResults) -> object:
     except ImportError as exc:
         raise ImportError(
             "diagnostics.plot requires matplotlib; install with "
-            "`pip install matplotlib` or `pip install pyrobustlm[plot]`."
+            "`pip install matplotlib` or `pip install pylmrob[plot]`."
         ) from exc
     from scipy.stats import norm
 

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Shared pytest fixtures for the pyrobustlm test suite.
+"""Shared pytest fixtures for the pylmrob test suite.
 
 Phase 1 fills in the rpy2 bridge and the JSON reference loader.
 For Phase 0 we only set up the basics (RNG, tolerances) and a graceful
@@ -72,7 +72,7 @@ def _rpy2_available() -> bool:
 class _RBridge:
     """Convenience wrapper around an rpy2 session.
 
-    Exposes the R primitives that pyrobustlm tests need to diff against:
+    Exposes the R primitives that pylmrob tests need to diff against:
 
     - ``Mpsi``, ``Mchi``, ``Mwgt`` (+ ``deriv`` argument for higher derivatives)
     - ``lmrob_mscale``  → ``robustbase::lmrob.mscale``

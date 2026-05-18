@@ -13,7 +13,7 @@ requires = [
 build-backend = "mesonpy"
 
 [project]
-name = "pyrobustlm"
+name = "pylmrob"
 description = "Python port of robustbase::lmrob (MM regression)"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -71,11 +71,11 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/anevolbap/pyrobustlm"
-Documentation = "https://pyrobustlm.readthedocs.io/"
-Source = "https://github.com/anevolbap/pyrobustlm"
-Issues = "https://github.com/anevolbap/pyrobustlm/issues"
-Changelog = "https://github.com/anevolbap/pyrobustlm/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/anevolbap/pylmrob"
+Documentation = "https://pylmrob.readthedocs.io/"
+Source = "https://github.com/anevolbap/pylmrob"
+Issues = "https://github.com/anevolbap/pylmrob/issues"
+Changelog = "https://github.com/anevolbap/pylmrob/blob/main/CHANGELOG.md"
 
 [tool.meson-python.args]
 setup = ["--default-library=static"]
@@ -105,22 +105,22 @@ ignore = [
 "tests/*" = ["N"]
 # Names mirrored from R's lmrob.control() and from the math literature
 # (E[psi^2], E[D psi], etc.). We want to keep them for grep-ability.
-"src/pyrobustlm/control.py" = ["N815"]
-"src/pyrobustlm/psi.py" = ["N802"]
-"src/pyrobustlm/_fast_s.py" = ["N815"]
+"src/pylmrob/control.py" = ["N815"]
+"src/pylmrob/psi.py" = ["N802"]
+"src/pylmrob/_fast_s.py" = ["N815"]
 # _psifuns.py: capitalised constants (R1, R2, ...) match the published
 # polynomial coefficients in the optimal psi family.
-"src/pyrobustlm/_psifuns.py" = ["N802", "N806", "RUF059"]
+"src/pylmrob/_psifuns.py" = ["N802", "N806", "RUF059"]
 # _mm.py: ``it`` is the iteration counter; ruff thinks it's unused.
-"src/pyrobustlm/_mm.py" = ["B007"]
-"src/pyrobustlm/ms_estimator.py" = ["B007"]
-"src/pyrobustlm/inference.py" = ["N806"]
+"src/pylmrob/_mm.py" = ["B007"]
+"src/pylmrob/ms_estimator.py" = ["B007"]
+"src/pylmrob/inference.py" = ["N806"]
 
 [tool.ty.environment]
 python-version = "3.10"
 
 [tool.ty.src]
-include = ["src/pyrobustlm"]
+include = ["src/pylmrob"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"

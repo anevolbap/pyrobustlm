@@ -10,7 +10,7 @@ large-n case at 0.62x R) could drop further.
 
 ## Where the parallel opportunity lives
 
-In `src/pyrobustlm/_core/_lmrob.pyx`, inside `cy_lmrob_fast_s`:
+In `src/pylmrob/_core/_lmrob.pyx`, inside `cy_lmrob_fast_s`:
 
     for try_i in range(nResample):
         # draw a p-subset (Floyd via bitgen)

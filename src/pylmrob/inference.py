@@ -31,7 +31,7 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import NDArray
 
-from pyrobustlm import psi as _psi
+from pylmrob import psi as _psi
 
 
 def vcov_avar1(
@@ -97,7 +97,7 @@ def vcov_avar1(
     # In robustbase: Mpsi(., deriv=1) = psi' (the unnormalised psi-prime).
     # Mchi is the normalised rho such that chi(infinity) = 1, so its
     # derivative chi' = (1/rho_unnorm(inf)) * psi.
-    from pyrobustlm._psifuns import chi_prime as _chi_prime
+    from pylmrob._psifuns import chi_prime as _chi_prime
 
     w_pp = _psi.psi_prime(r_s, psi_family, psi_k)  # Mpsi(r.s, deriv=1) = psi'
     w0_pp = _chi_prime(r0_s, chi_family, chi_k)  # Mchi(r0.s, deriv=1) = chi'

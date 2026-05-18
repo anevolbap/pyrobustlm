@@ -9,9 +9,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from pyrobustlm import Control, lmrob
-from pyrobustlm.formula import model_matrix
-from pyrobustlm.ms_estimator import _l1_fit, m_s_fit
+from pylmrob import Control, lmrob
+from pylmrob.formula import model_matrix
+from pylmrob.ms_estimator import _l1_fit, m_s_fit
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

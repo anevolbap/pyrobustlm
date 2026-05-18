@@ -2,7 +2,7 @@
 """Per-case weights match R's lmrob element-wise.
 
 R's implementation applies a sqrt(w)-transform at the R level before
-calling the unweighted C kernel (robustbase/R/lmrob.R:96-98). pyrobustlm
+calling the unweighted C kernel (robustbase/R/lmrob.R:96-98). pylmrob
 mirrors this in ``_lmrob_impl``.
 """
 
@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pyrobustlm import Control, lmrob
+from pylmrob import Control, lmrob
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 

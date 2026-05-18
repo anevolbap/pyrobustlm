@@ -17,15 +17,15 @@ def _make_problem(n: int, p: int, seed: int = 0) -> tuple[np.ndarray, np.ndarray
 
 def test_kernel_import() -> None:
     """The monolithic kernel module should be importable."""
-    from pyrobustlm._core._lmrob import cy_lmrob_fast_s  # noqa: F401
+    from pylmrob._core._lmrob import cy_lmrob_fast_s  # noqa: F401
 
 
 def test_kernel_matches_fast_rng_path() -> None:
     """The monolithic kernel and the fast_rng=True NumPy path land on the
     same fit (same Cython bitgen draw sequence, identical math)."""
-    from pyrobustlm._core._lmrob import cy_lmrob_fast_s
+    from pylmrob._core._lmrob import cy_lmrob_fast_s
 
-    from pyrobustlm._fast_s import FastSConfig, fast_s
+    from pylmrob._fast_s import FastSConfig, fast_s
 
     X, y = _make_problem(200, 6, seed=1)
     p = X.shape[1]
@@ -64,7 +64,7 @@ def test_engine_c_via_lmrob_api() -> None:
     """Control(engine_c=True) end-to-end produces sensible fits."""
     import pandas as pd
 
-    from pyrobustlm import Control, lmrob
+    from pylmrob import Control, lmrob
 
     X, y = _make_problem(200, 6, seed=2)
     df = pd.DataFrame(X[:, 1:], columns=[f"x{i}" for i in range(X.shape[1] - 1)])
@@ -91,7 +91,7 @@ def test_engine_c_speedup_at_small_n() -> None:
 
     import pandas as pd
 
-    from pyrobustlm import Control, lmrob
+    from pylmrob import Control, lmrob
 
     X, y = _make_problem(200, 6, seed=3)
     df = pd.DataFrame(X[:, 1:], columns=[f"x{i}" for i in range(X.shape[1] - 1)])
@@ -121,7 +121,7 @@ def test_engine_c_ignored_for_non_bisquare() -> None:
     """``engine_c=True`` silently falls back for non-bisquare families."""
     import pandas as pd
 
-    from pyrobustlm import Control, lmrob
+    from pylmrob import Control, lmrob
 
     X, y = _make_problem(200, 6, seed=4)
     df = pd.DataFrame(X[:, 1:], columns=[f"x{i}" for i in range(X.shape[1] - 1)])

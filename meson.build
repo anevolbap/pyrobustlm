@@ -1,7 +1,7 @@
 project(
-  'pyrobustlm',
+  'pylmrob',
   'c', 'cython',
-  version: '0.5.12',
+  version: '0.5.13',
   license: 'GPL-3.0-or-later',
   meson_version: '>=1.4.0',
   default_options: [
@@ -82,4 +82,4 @@ c_args_common = [
 # -----------------------------------------------------------------------------
 # Subdirs
 # -----------------------------------------------------------------------------
-subdir('src/pyrobustlm')
+subdir('src/pylmrob')

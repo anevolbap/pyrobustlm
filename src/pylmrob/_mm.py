@@ -16,7 +16,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from pyrobustlm._fast_s import _irwls_step
+from pylmrob._fast_s import _irwls_step
 
 
 @dataclass

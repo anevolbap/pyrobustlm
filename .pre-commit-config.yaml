@@ -27,7 +27,7 @@ repos:
         entry: uvx ty check
         language: system
         pass_filenames: false
-        files: ^src/pyrobustlm/.*\.py$
+        files: ^src/pylmrob/.*\.py$
 
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v3.4.0

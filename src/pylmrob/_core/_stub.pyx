@@ -10,7 +10,7 @@ from libc.math cimport sqrt
 
 def hello() -> str:
     """Return a string, proving the extension imports."""
-    return "pyrobustlm._core._stub OK"
+    return "pylmrob._core._stub OK"
 
 
 @cython.boundscheck(False)

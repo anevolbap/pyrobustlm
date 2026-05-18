@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pyrobustlm.d_scale import d_scale, find_d_scale, kappa, tau
+from pylmrob.d_scale import d_scale, find_d_scale, kappa, tau
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -107,7 +107,7 @@ def test_d_iteration_matches_r_kernel(stackloss_df):
     rweights), which propagates through tau via the hat diagonal. This
     test isolates the D-iteration itself by feeding identical inputs.
     """
-    from pyrobustlm import Control, lmrob
+    from pylmrob import Control, lmrob
 
     fit = lmrob(
         "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
@@ -168,7 +168,7 @@ def test_lmrob_setting_KS2014_runs_d_step():
     populates init_['d_scale'] (R's setting='KS2014' uses method='SMDM').
     """
     df = pd.read_csv(REPO_ROOT / "tests" / "data" / "stackloss.csv")
-    from pyrobustlm import Control, lmrob
+    from pylmrob import Control, lmrob
 
     fit = lmrob(
         "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",

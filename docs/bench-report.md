@@ -1,6 +1,6 @@
 # Benchmark report
 
-Element-wise comparison between `pyrobustlm` and `robustbase::lmrob` on a fixed corpus of fits. Re-generate with::
+Element-wise comparison between `pylmrob` and `robustbase::lmrob` on a fixed corpus of fits. Re-generate with::
 
     Rscript scripts/benchmark.R
     python  scripts/benchmark.py
@@ -16,7 +16,7 @@ Element-wise comparison between `pyrobustlm` and `robustbase::lmrob` on a fixed 
 
 ## Environment
 
-- pyrobustlm: 0.5.10
+- pylmrob: 0.5.10
 - Python: 3.11.2
 - Platform: Linux-6.1.0-47-amd64-x86_64-with-glibc2.36
 - robustbase: 0.99.7

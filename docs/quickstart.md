@@ -8,14 +8,14 @@ A 5-minute tour. We will fit the classic `stackloss` dataset with
 From source (PyPI publication is pending):
 
 ```bash
-pip install git+https://github.com/anevolbap/pyrobustlm
+pip install git+https://github.com/anevolbap/pylmrob
 ```
 
 ## Fit
 
 ```python
 import pandas as pd
-from pyrobustlm import Control, lmrob
+from pylmrob import Control, lmrob
 
 df = pd.read_csv("stackloss.csv")
 fit = lmrob(
@@ -53,7 +53,7 @@ summ.adj_r_squared
 `anova` runs a robust Wald or Deviance test on nested fits:
 
 ```python
-from pyrobustlm import anova
+from pylmrob import anova
 
 full = lmrob("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, seed=42)
 red  = lmrob("stack.loss ~ Air.Flow + Water.Temp", df, seed=42)

@@ -22,7 +22,7 @@ cnp.import_array()
 
 
 # Family enum. Keep these in sync with the dispatch table in
-# pyrobustlm/_fast_s.py (`_FAMILY_IDS`).
+# pylmrob/_fast_s.py (`_FAMILY_IDS`).
 cdef enum:
     FAM_BISQUARE = 0
     FAM_HAMPEL = 1
@@ -129,7 +129,7 @@ cdef _init_ggw_tables():
     _GGW_END[3] = 11.4974874371859
     _GGW_END[4] = 8.15075376884422
     _GGW_END[5] = 3.17587939698492
-    # (a, b, c) lookup; mirrors _GGW_ABC in pyrobustlm.scale.
+    # (a, b, c) lookup; mirrors _GGW_ABC in pylmrob.scale.
     _GGW_ABC_A[0] = 0.0; _GGW_ABC_B[0] = 0.0; _GGW_ABC_C[0] = 0.0  # unused
     _GGW_ABC_A[1] = 0.648;     _GGW_ABC_B[1] = 1.0; _GGW_ABC_C[1] = 1.694
     _GGW_ABC_A[2] = 0.4760508; _GGW_ABC_B[2] = 1.0; _GGW_ABC_C[2] = 1.2442567

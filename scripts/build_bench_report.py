@@ -103,7 +103,7 @@ def main() -> None:
     body: list[str] = [
         "# Benchmark report",
         "",
-        "Element-wise comparison between `pyrobustlm` and `robustbase::lmrob` "
+        "Element-wise comparison between `pylmrob` and `robustbase::lmrob` "
         "on a fixed corpus of fits. Re-generate with::",
         "",
         "    Rscript scripts/benchmark.R",
@@ -129,7 +129,7 @@ def main() -> None:
         "",
         "## Environment",
         "",
-        f"- pyrobustlm: {next(iter(py_cases.values()))['pyrobustlm_version']}",
+        f"- pylmrob: {next(iter(py_cases.values()))['pylmrob_version']}",
         f"- Python: {sys.version.split()[0]}",
         f"- Platform: {platform.platform()}",
         f"- robustbase: {next(iter(r_cases.values()))['rb_version']}",

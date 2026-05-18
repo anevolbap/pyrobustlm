@@ -1,13 +1,13 @@
-# pyrobustlm
+# pylmrob
 
-[![CI](https://github.com/anevolbap/pyrobustlm/actions/workflows/ci.yml/badge.svg)](https://github.com/anevolbap/pyrobustlm/actions/workflows/ci.yml)
-[![Docs](https://readthedocs.org/projects/pyrobustlm/badge/?version=latest)](https://pyrobustlm.readthedocs.io/)
+[![CI](https://github.com/anevolbap/pylmrob/actions/workflows/ci.yml/badge.svg)](https://github.com/anevolbap/pylmrob/actions/workflows/ci.yml)
+[![Docs](https://readthedocs.org/projects/pylmrob/badge/?version=latest)](https://pylmrob.readthedocs.io/)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
 
 Python port of the `lmrob` MM-estimator from R's
 [`robustbase`](https://cran.r-project.org/package=robustbase) package.
 
-Documentation: [pyrobustlm.readthedocs.io](https://pyrobustlm.readthedocs.io/).
+Documentation: [pylmrob.readthedocs.io](https://pylmrob.readthedocs.io/).
 
 Status: v0.5.11 (alpha). End-to-end pipeline matches R's `lmrob` element-wise
 on the classical robust regression datasets (`stackloss`, `coleman`,
@@ -54,7 +54,7 @@ divergences from R.
 ## Performance
 
 Median wall-clock vs R across the 34-case bench corpus is **0.93x**;
-pyrobustlm is faster than R on more than half of cases (down to 0.32x R
+pylmrob is faster than R on more than half of cases (down to 0.32x R
 on `n>=2000` fits) and within 1-2x R on small classical datasets.
 
 The default `Control()` runs the fit through a monolithic Cython engine
@@ -73,8 +73,8 @@ Requires Python 3.10+, a C compiler, and (for the validation harness) a
 local R install with `robustbase`.
 
 ```bash
-git clone https://github.com/anevolbap/pyrobustlm
-cd pyrobustlm
+git clone https://github.com/anevolbap/pylmrob
+cd pylmrob
 uv venv
 uv pip install --no-build-isolation -e ".[dev]"
 pytest
@@ -84,7 +84,7 @@ pytest
 
 ```python
 import pandas as pd
-from pyrobustlm import lmrob, Control
+from pylmrob import lmrob, Control
 
 df = pd.read_csv("stackloss.csv")
 fit = lmrob(
@@ -117,7 +117,7 @@ fit.confint(level=0.95)
 ## Documentation
 
 The Sphinx docs are hosted at
-[pyrobustlm.readthedocs.io](https://pyrobustlm.readthedocs.io/) and
+[pylmrob.readthedocs.io](https://pylmrob.readthedocs.io/) and
 built on every push (config in [`.readthedocs.yaml`](.readthedocs.yaml)).
 To build locally:
 
@@ -135,7 +135,7 @@ numerical-notes log of documented divergences from R.
 [`statsmodels.robust.RLM`](https://www.statsmodels.org/stable/rlm.html)
 implements M-estimators (Huber, Tukey, Hampel) but **not** MM-estimators.
 It will not give you the high-breakdown-point + high-efficiency combo that
-`lmrob` provides. If you need MM, use `pyrobustlm`. If you only need M
+`lmrob` provides. If you need MM, use `pylmrob`. If you only need M
 with no contamination concerns, `RLM` is fine and has a more mature API.
 
 ## License
@@ -145,7 +145,7 @@ GPL-3.0-or-later, matching `robustbase`. See [`LICENSE`](LICENSE) and
 
 ## Citing
 
-If you use `pyrobustlm` in research, please cite the project alongside
+If you use `pylmrob` in research, please cite the project alongside
 `robustbase`. Citation metadata is in [`CITATION.cff`](CITATION.cff)
 (GitHub shows a "Cite this repository" button on the sidebar). The
 references include the key papers: Yohai (1987) on MM-estimators,
