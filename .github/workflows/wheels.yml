@@ -1,14 +1,17 @@
 name: Build wheels
 
-# Manual trigger only for the first release; once we've confirmed that
-# wheels build and ``pip install pylmrob`` works from TestPyPI, flip
-# to ``push: tags: ["v*"]`` so tagging publishes to real PyPI
-# automatically.
+# Auto-publishes to PyPI when a ``v*`` tag is pushed (the publish job's
+# ``if:`` includes that condition). ``workflow_dispatch`` is kept for
+# ad-hoc TestPyPI runs and for re-publishing if a tag's release ever
+# needs a redo.
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       target:
-        description: "Publish target"
+        description: "Publish target (workflow_dispatch only)"
         required: true
         default: "testpypi"
         type: choice
