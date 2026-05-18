@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.15] - 2026-05-18
+
+### Added
+
+- **``pylmrob.bootstrap(fit, n_boot=1000, level=0.95, ...)``.**
+  Case-resampling bootstrap returning a ``BootstrapResult`` with the
+  full coefficient distribution, percentile and basic CIs, standard
+  errors, and bias estimate. Useful when the asymptotic Wald CI is
+  unreliable (small n, near-singular X, heavy contamination); doesn't
+  replace ``fit.confint()``. Deterministic given ``(seed, n_workers)``;
+  ThreadPool-parallel via the ``n_workers`` argument.
+
+### Docs
+
+- New **theory page** (``docs/theory.md``) with a short conceptual
+  tour: M-estimator, M-scale equation, the two-stage MM-estimator,
+  the Koller-Stahel D-scale refinement, guidance on picking a psi
+  family.
+
+- New **FAQ / troubleshooting page** (``docs/faq.md``) covering
+  convergence failures, singular vcov, Wald vs bootstrap CIs,
+  bit-identical R reproducibility, ``nResample`` tuning, performance
+  levers, ``predict()`` pitfalls.
+
 ## [0.5.14] - 2026-05-18
 
 ### Added
