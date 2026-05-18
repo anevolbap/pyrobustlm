@@ -1,7 +1,7 @@
 project(
   'pylmrob',
   'c', 'cython',
-  version: '0.5.13',
+  version: '0.5.14',
   license: 'GPL-3.0-or-later',
   meson_version: '>=1.4.0',
   default_options: [
