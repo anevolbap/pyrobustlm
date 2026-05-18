@@ -7,12 +7,43 @@ package does not require it at import time.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
 
 if TYPE_CHECKING:
     from pylmrob.results import LmRobResults
+
+
+@dataclass
+class DiagnosticsTable:
+    """Per-observation diagnostic statistics returned by ``fit.diagnostics()``.
+
+    Attributes
+    ----------
+    leverage :
+        Diagonal of the robust hat matrix ``H = X (X' W X)^-1 X' W``.
+        Values in ``[0, 1]``; the average is ``p / n``.
+    cooks_distance :
+        Robust Cook's distance per observation; large values mark
+        influential points.
+    std_residuals :
+        Residuals divided by the M-scale ``sigma``. ``|z| > 2.5`` is a
+        common informal outlier flag.
+    rweights :
+        Robustness weights ``psi(r/sigma) / (r/sigma)`` from the fit.
+        Observations with weight close to zero were effectively dropped.
+    outliers :
+        Boolean mask, ``|std_residuals| > outlier_threshold``. Default
+        threshold is ``2.5``.
+    """
+
+    leverage: np.ndarray
+    cooks_distance: np.ndarray
+    std_residuals: np.ndarray
+    rweights: np.ndarray
+    outliers: np.ndarray
 
 
 def plot(results: LmRobResults) -> object:

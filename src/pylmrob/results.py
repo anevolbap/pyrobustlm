@@ -177,6 +177,47 @@ class LmRobResults:
         se = np.sqrt(var)
         return np.column_stack([point, point - q * se, point + q * se])
 
+    def diagnostics(self, outlier_threshold: float = 2.5) -> object:
+        """Per-observation diagnostic statistics.
+
+        Returns a :class:`pylmrob.diagnostics.DiagnosticsTable` with
+        leverage, robust Cook's distance, standardized residuals, the
+        robust weights, and a boolean outlier flag
+        (``|std_residuals| > outlier_threshold``).
+
+        Requires the fit to have a stashed design matrix
+        (``design_x_``); the default ``lmrob()`` call always stashes it.
+        """
+        if self.design_x_ is None:
+            raise RuntimeError(
+                "diagnostics() needs the design matrix; fit was created without design_x_"
+            )
+        from pylmrob.diagnostics import DiagnosticsTable, cooks_distance, hatvalues
+
+        h = hatvalues(self, self.design_x_)
+        cd = cooks_distance(self, self.design_x_)
+        sigma = max(self.scale_, 1e-300)
+        z = self.residuals_ / sigma
+        outliers = np.abs(z) > outlier_threshold
+        return DiagnosticsTable(
+            leverage=h,
+            cooks_distance=cd,
+            std_residuals=z,
+            rweights=self.rweights_,
+            outliers=outliers,
+        )
+
+    def anova(self, *others: LmRobResults, test: str = "Wald") -> object:
+        """Method-style spelling of :func:`pylmrob.anova`.
+
+        Equivalent to ``pylmrob.anova(self, *others, test=test)``; lets
+        you write ``full.anova(reduced)`` instead of the free-function
+        form, matching R's idiom.
+        """
+        from pylmrob.anova import anova as _anova
+
+        return _anova(self, *others, test=test)
+
     def summary(self) -> SummaryLmRob:
         """Return a ``SummaryLmRob`` matching R's ``summary.lmrob``.
 
@@ -189,5 +230,21 @@ class LmRobResults:
         return make_summary(self)
 
     def __repr__(self) -> str:
-        coefs = ", ".join(f"{n}={v:.4g}" for n, v in zip(self.term_names_, self.coef_, strict=True))
-        return f"LmRobResults({coefs}; scale={self.scale_:.4g})"
+        """Compact R-style ``print.lmrob`` output.
+
+        For the full coefficient table with std errors, t / p values and
+        R-squared, call ``print(self.summary())``.
+        """
+        method = self.control.method or "MM"
+        lines: list[str] = [
+            f'lmrob(method="{method}", psi="{self.control.psi}")',
+            "",
+            "Coefficients:",
+        ]
+        # Column-aligned coefficient row matching R's print.
+        name_w = max(11, max((len(n) for n in self.term_names_), default=11))
+        header = "  ".join(f"{n:>{name_w}}" for n in self.term_names_)
+        values = "  ".join(f"{v:>{name_w}.4g}" for v in self.coef_)
+        lines.append(header)
+        lines.append(values)
+        return "\n".join(lines)
