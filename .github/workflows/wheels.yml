@@ -29,8 +29,10 @@ jobs:
             arch: x86_64
           - os: ubuntu-latest
             arch: aarch64
-          - os: macos-13           # Intel runner
-            arch: x86_64
+          # macos-13 (Intel) dropped: the free runner queue is unusable
+          # in 2026 (5+ hour waits) as GitHub winds down Intel mac
+          # capacity. Apple Silicon covers all Macs sold since late
+          # 2020; Intel users can install from the sdist.
           - os: macos-14           # Apple Silicon runner
             arch: arm64
           - os: windows-latest
