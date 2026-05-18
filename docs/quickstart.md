@@ -76,6 +76,52 @@ y_hat = fit.predict(new)
 The fit stores the formula's design transformation, so factor encoding
 and `I(x**2)` style transforms are re-applied to `new`.
 
+### Confidence and prediction intervals
+
+Pass `interval="confidence"` to get the interval for the mean
+response, or `interval="prediction"` to also include residual noise
+for a single new observation:
+
+```python
+band = fit.predict(new, interval="confidence", level=0.95)
+# band has columns (fit, lwr, upr)
+fit_hat, lwr, upr = band[:, 0], band[:, 1], band[:, 2]
+```
+
+Both bands use the t-distribution with `fit.df_residual_` degrees of
+freedom, matching R's `predict.lmrob`.
+
+## Coefficient statistics
+
+`confint()` returns Wald confidence intervals on the coefficients.
+Property aliases match R / statsmodels conventions so existing code
+slots in:
+
+```python
+fit.confint(level=0.95)       # (p, 2) lower/upper
+fit.conf_int(alpha=0.05)      # same thing, statsmodels spelling
+fit.params                    # coef_, statsmodels alias
+fit.bse                       # standard_errors_
+fit.tvalues                   # coef / se
+fit.pvalues                   # 2 * (1 - cdf(|t|))
+```
+
+## sklearn-style API
+
+For pipeline-style code there's a class wrapper:
+
+```python
+from pylmrob import LmRob
+
+est = LmRob().fit(X, y)
+est.predict(X_new)
+est.score(X_test, y_test)     # OLS R^2, sklearn convention
+```
+
+`LmRob` supports `get_params` / `set_params`, so it plugs into
+`sklearn.model_selection.cross_val_score`, `GridSearchCV`, etc. The
+underlying `LmRobResults` is at `est.result_`.
+
 ## Use a different psi family
 
 ```python
