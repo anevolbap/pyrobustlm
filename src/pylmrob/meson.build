@@ -14,6 +14,7 @@ python_sources = [
   'diagnostics.py',
   'formula.py',
   'anova.py',
+  'bootstrap.py',
   'ms_estimator.py',
   'summary.py',
   '_utils.py',

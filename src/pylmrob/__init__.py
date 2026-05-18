@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pylmrob._version import __version__
 from pylmrob.anova import anova
+from pylmrob.bootstrap import bootstrap
 from pylmrob.control import Control
 from pylmrob.lmrob import LmRob, lmrob
 
@@ -17,5 +18,6 @@ __all__ = [
     "LmRob",
     "__version__",
     "anova",
+    "bootstrap",
     "lmrob",
 ]
