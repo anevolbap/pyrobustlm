@@ -727,6 +727,36 @@ class LmRob:
         cols = [f"x{i}" for i in range(X.shape[1])]
         return self._result.predict(pd.DataFrame(X, columns=cols))
 
+    def score(self, X: np.ndarray, y: np.ndarray) -> float:
+        """Standard ``R^2`` on a test set, sklearn convention.
+
+        ``1 - SS_res / SS_tot`` where SS_res = sum((y - y_hat)^2). This is
+        the OLS coefficient of determination, not the robust R^2 reported
+        by ``summary()`` (use ``self.result_.summary().r_squared`` for
+        that). Returning OLS R^2 keeps ``LmRob`` compatible with sklearn
+        utilities (``cross_val_score``, ``GridSearchCV``) that assume the
+        regressor scorer contract.
+        """
+        y = np.asarray(y, dtype=np.float64)
+        y_hat = self.predict(X)
+        ss_res = float(np.sum((y - y_hat) ** 2))
+        ss_tot = float(np.sum((y - np.mean(y)) ** 2))
+        if ss_tot <= 0.0:
+            return 0.0
+        return 1.0 - ss_res / ss_tot
+
+    def get_params(self, deep: bool = True) -> dict:
+        """Return the ``__init__`` parameters, sklearn convention."""
+        return {"control": self.control}
+
+    def set_params(self, **params: object) -> LmRob:
+        """Set ``__init__`` parameters in place, sklearn convention."""
+        for key, value in params.items():
+            if not hasattr(self, key):
+                raise ValueError(f"Invalid parameter {key!r} for LmRob")
+            setattr(self, key, value)
+        return self
+
     @property
     def result_(self) -> LmRobResults:
         if self._result is None:

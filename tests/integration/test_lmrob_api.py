@@ -171,3 +171,74 @@ def test_predict_array_wrong_shape_raises():
     fit = lmrob("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, seed=0)
     with pytest.raises(ValueError, match="design has 2 columns"):
         fit.predict(np.zeros((3, 2)))
+
+
+def test_predict_confidence_interval_brackets_fit():
+    """``predict(interval='confidence')`` returns (n, 3) with lwr <= fit <= upr."""
+    df = _load_dataset("stackloss")
+    fit = lmrob("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, seed=0)
+    out = fit.predict(df, interval="confidence", level=0.95)
+    assert out.shape == (df.shape[0], 3)
+    point, lwr, upr = out[:, 0], out[:, 1], out[:, 2]
+    np.testing.assert_allclose(point, fit.fitted_, rtol=1e-12)
+    assert np.all(lwr <= point)
+    assert np.all(point <= upr)
+
+
+def test_predict_prediction_interval_wider_than_confidence():
+    """A prediction interval includes residual noise; it must be wider."""
+    df = _load_dataset("stackloss")
+    fit = lmrob("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, seed=0)
+    ci = fit.predict(df, interval="confidence", level=0.95)
+    pi = fit.predict(df, interval="prediction", level=0.95)
+    # Widths
+    ci_w = ci[:, 2] - ci[:, 1]
+    pi_w = pi[:, 2] - pi[:, 1]
+    assert np.all(pi_w > ci_w)
+
+
+def test_predict_bad_interval_raises():
+    df = _load_dataset("stackloss")
+    fit = lmrob("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, seed=0)
+    with pytest.raises(ValueError, match="interval must be"):
+        fit.predict(df, interval="bogus")
+
+
+def test_statsmodels_style_aliases():
+    """``params``, ``bse``, ``tvalues``, ``pvalues``, ``conf_int`` mirror coef_/etc."""
+    df = _load_dataset("stackloss")
+    fit = lmrob("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, seed=0)
+    np.testing.assert_array_equal(fit.params, fit.coef_)
+    np.testing.assert_array_equal(fit.bse, fit.standard_errors_)
+    # tvalues = coef / se
+    expected_t = fit.coef_ / fit.standard_errors_
+    np.testing.assert_allclose(fit.tvalues, expected_t, rtol=1e-12)
+    # conf_int(alpha=0.05) == confint(level=0.95)
+    np.testing.assert_allclose(fit.conf_int(0.05), fit.confint(0.95), rtol=1e-12)
+    # pvalues are finite and in [0, 1]
+    p = fit.pvalues
+    assert np.all((p >= 0.0) & (p <= 1.0))
+
+
+def test_lmrob_sklearn_score_and_params():
+    """``LmRob.score``, ``get_params``, ``set_params`` follow the sklearn convention."""
+    from pylmrob import Control, LmRob
+
+    rng = np.random.default_rng(0)
+    X = rng.standard_normal((50, 3))
+    y = X @ [1.0, 2.0, 0.5] + rng.standard_normal(50)
+
+    est = LmRob()
+    est.fit(X, y)
+    score = est.score(X, y)
+    # OLS R^2 between fit and y; should be positive and bounded.
+    assert 0.0 <= score <= 1.0
+
+    params = est.get_params()
+    assert "control" in params
+    new_ctrl = Control(nResample=300)
+    est.set_params(control=new_ctrl)
+    assert est.control is new_ctrl
+
+    with pytest.raises(ValueError, match="Invalid parameter"):
+        est.set_params(bogus=1)
