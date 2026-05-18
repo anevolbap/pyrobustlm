@@ -60,8 +60,43 @@ class LmRobResults:
         hi = self.coef_ + z * se
         return np.column_stack([lo, hi])
 
-    def predict(self, new_data: object) -> np.ndarray:
-        """Predict on new data.
+    # ------------------------------------------------------------------
+    # statsmodels-style attribute aliases. Let pylmrob fits drop into
+    # statsmodels.regression-shaped code without adapters.
+    # ------------------------------------------------------------------
+
+    @property
+    def params(self) -> np.ndarray:
+        return self.coef_
+
+    @property
+    def bse(self) -> np.ndarray:
+        return self.standard_errors_
+
+    @property
+    def tvalues(self) -> np.ndarray:
+        se = self.standard_errors_
+        with np.errstate(divide="ignore", invalid="ignore"):
+            return np.where(se > 0, self.coef_ / np.where(se > 0, se, 1.0), np.nan)
+
+    @property
+    def pvalues(self) -> np.ndarray:
+        from scipy.stats import t as t_dist
+
+        return 2.0 * t_dist.sf(np.abs(self.tvalues), df=self.df_residual_)
+
+    def conf_int(self, alpha: float = 0.05) -> np.ndarray:
+        """``statsmodels`` spelling of :meth:`confint`. Uses ``1 - alpha``."""
+        return self.confint(level=1.0 - alpha)
+
+    def predict(
+        self,
+        new_data: object,
+        *,
+        interval: str = "none",
+        level: float = 0.95,
+    ) -> np.ndarray:
+        """Predict on new data, optionally with confidence/prediction bands.
 
         Accepts either:
 
@@ -70,6 +105,21 @@ class LmRobResults:
           factor encoding, interactions, ``I(x**2)`` transforms, etc.
         - a 2-D NumPy array already shaped ``(n, p)``, matching the original
           design (intercept column included if the formula had one).
+
+        Parameters
+        ----------
+        interval :
+            ``"none"`` (default) returns the point predictions, shape ``(n,)``.
+            ``"confidence"`` returns ``(n, 3)`` columns ``(fit, lwr, upr)``
+            with the confidence interval for the *mean* response at each
+            new observation (Var = X^T cov X).
+            ``"prediction"`` returns ``(n, 3)`` with the prediction interval
+            for a single *new* observation (Var = sigma^2 + X^T cov X).
+        level :
+            Confidence level for the interval. Default 0.95.
+
+        Bands use the t-distribution with ``df_residual_`` degrees of
+        freedom, mirroring R's ``predict.lm`` / ``predict.lmrob`` convention.
         """
         # pandas is a hard dependency, but only required when ``new_data`` is
         # a DataFrame. We dispatch by duck-typing to avoid a top-level import.
@@ -110,7 +160,22 @@ class LmRobResults:
                 f"predict: design has {arr.shape[1]} columns but the fit "
                 f"has {self.coef_.size} coefficients"
             )
-        return arr @ self.coef_
+        point = arr @ self.coef_
+        if interval == "none":
+            return point
+        if interval not in ("confidence", "prediction"):
+            raise ValueError(
+                f"interval must be one of 'none', 'confidence', 'prediction'; got {interval!r}"
+            )
+        # Var(X beta) per row = sum((X cov) * X, axis=1) = diag(X cov X^T).
+        var_fit = np.einsum("ij,jk,ik->i", arr, self.cov_, arr)
+        var_fit = np.maximum(var_fit, 0.0)  # numerical safety
+        var = var_fit + (self.scale_**2 if interval == "prediction" else 0.0)
+        from scipy.stats import t as t_dist
+
+        q = t_dist.ppf((1.0 + level) / 2.0, df=self.df_residual_)
+        se = np.sqrt(var)
+        return np.column_stack([point, point - q * se, point + q * se])
 
     def summary(self) -> SummaryLmRob:
         """Return a ``SummaryLmRob`` matching R's ``summary.lmrob``.
