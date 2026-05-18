@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from pyrobustlm._fast_s import (
+from pylmrob._fast_s import (
     FastSConfig,
     _auto_use_threads,
     _resolve_n_workers,
@@ -83,7 +83,7 @@ def test_n_workers_via_control() -> None:
     """Control.n_workers propagates to FastSConfig and runs end-to-end."""
     import pandas as pd
 
-    from pyrobustlm import Control, lmrob
+    from pylmrob import Control, lmrob
 
     X, y = _make_problem(n=100, p=4, seed=1)
     df = pd.DataFrame(X, columns=["intercept", "x1", "x2", "x3"])
@@ -112,7 +112,7 @@ def test_classical_dataset_parity(n_workers: int) -> None:
     within basin tolerance."""
     import pandas as pd
 
-    from pyrobustlm import Control, lmrob
+    from pylmrob import Control, lmrob
 
     df = pd.read_csv(REPO_ROOT / "tests" / "data" / "stackloss.csv")
     fit = lmrob(

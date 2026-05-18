@@ -21,7 +21,7 @@ Turn it on when you want the fastest end-to-end fit and you can
 tolerate basin-of-attraction drift (see below):
 
 ```python
-from pyrobustlm import lmrob, Control
+from pylmrob import lmrob, Control
 
 fit = lmrob(formula, df, control=Control(engine_c=True), seed=42)
 ```
@@ -98,6 +98,6 @@ The remaining Python work per fit (with the default `engine_c=True`) is:
 The user-facing array API (`LmRob.fit(X, y)`) skips formula parsing
 entirely. The total wall-clock floor is approximately the underlying
 BLAS work (the same R does internally) plus one Python/C boundary
-cross. We pay that crossing because `pyrobustlm` keeps a Python
+cross. We pay that crossing because `pylmrob` keeps a Python
 public API; R can stay in C from `R_lmrob_S` all the way to the
 returned `SEXP`.

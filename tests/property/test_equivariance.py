@@ -21,7 +21,7 @@ import pandas as pd
 import pytest
 from hypothesis import HealthCheck, given, settings
 
-from pyrobustlm import Control, lmrob
+from pylmrob import Control, lmrob
 
 
 def _toy_dataset(n: int = 80, p: int = 3, seed: int = 0) -> pd.DataFrame:

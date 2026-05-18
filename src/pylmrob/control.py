@@ -101,7 +101,7 @@ class Control:
     # small-n datasets. Opt in when you want raw speed and can tolerate
     # the drift; not recommended for reproducibility-sensitive workloads.
     fast_rng: bool = False
-    # Use the monolithic Cython engine (pyrobustlm._core._lmrob). When True,
+    # Use the monolithic Cython engine (pylmrob._core._lmrob). When True,
     # fast-S + MM + vcov_avar1 run in one nogil C block with one workspace
     # allocation. On small n this is 5-10x the default Python path; on
     # large n ``lmrob()`` auto-falls-back to the threaded default path

@@ -19,6 +19,6 @@ python_sources = [
   '_utils.py',
 ]
 
-py.install_sources(python_sources, subdir: 'pyrobustlm')
+py.install_sources(python_sources, subdir: 'pylmrob')
 
 subdir('_core')

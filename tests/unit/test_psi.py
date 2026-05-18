@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from pyrobustlm import psi as P
+from pylmrob import psi as P
 
 GRID = np.linspace(-6.0, 6.0, 1001)
 

@@ -5,7 +5,7 @@
 # tuples and dump (coefficients, scale, cov, residuals, weights, runtime)
 # to JSON files under tests/bench/r/.
 #
-# Pair: scripts/benchmark.py runs the same corpus with pyrobustlm and writes
+# Pair: scripts/benchmark.py runs the same corpus with pylmrob and writes
 # tests/bench/py/. scripts/build_bench_report.py merges them into
 # docs/bench-report.md.
 

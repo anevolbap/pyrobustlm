@@ -12,7 +12,7 @@ phase. Algorithm summary:
     2. For each survivor, refine to convergence.
     3. Return the best.
 
-This module is consumed by ``pyrobustlm.lmrob`` for the initial S estimate
+This module is consumed by ``pylmrob.lmrob`` for the initial S estimate
 when ``init="S"``.
 """
 
@@ -27,8 +27,8 @@ import numpy as np
 from numpy.random import SeedSequence
 from numpy.typing import NDArray
 
-from pyrobustlm import _psifuns as _pf
-from pyrobustlm.scale import _cython_wgt, _mad, m_scale
+from pylmrob import _psifuns as _pf
+from pylmrob.scale import _cython_wgt, _mad, m_scale
 
 # Generic Cython kernel signature. Returns ``(scale, status)`` where
 # ``status`` is 0 (ok), 1 (singular subset), 2 (exact fit), 3 (LAPACK error).
@@ -50,7 +50,7 @@ _CyIterFn = Callable[
 
 
 # Maps psi-family name to the Cython family id. Keep in sync with the
-# enum in src/pyrobustlm/_core/_fast_s.pyx.
+# enum in src/pylmrob/_core/_fast_s.pyx.
 _FAMILY_IDS: dict[str, int] = {
     "bisquare": 0,
     "biweight": 0,
@@ -65,7 +65,7 @@ def _try_import_cy_iter() -> _CyIterFn | None:
     try:
         import importlib
 
-        mod = importlib.import_module("pyrobustlm._core._fast_s")
+        mod = importlib.import_module("pylmrob._core._fast_s")
         return mod.cy_resample_iter  # type: ignore[attr-defined,no-any-return]
     except Exception:
         return None
@@ -75,7 +75,7 @@ def _try_import_cy_refine() -> Callable[..., tuple[float, int, int, int]] | None
     try:
         import importlib
 
-        mod = importlib.import_module("pyrobustlm._core._fast_s")
+        mod = importlib.import_module("pylmrob._core._fast_s")
         return mod.cy_refine_to_convergence  # type: ignore[attr-defined,no-any-return]
     except Exception:
         return None
@@ -85,7 +85,7 @@ def _try_import_cy_draw_and_iter() -> Callable[..., tuple[float, int]] | None:
     try:
         import importlib
 
-        mod = importlib.import_module("pyrobustlm._core._fast_s")
+        mod = importlib.import_module("pylmrob._core._fast_s")
         return mod.cy_draw_and_iter  # type: ignore[attr-defined,no-any-return]
     except Exception:
         return None
@@ -95,7 +95,7 @@ def _try_import_cy_lmrob_fast_s() -> Callable[..., tuple[float, int, int, int]] 
     try:
         import importlib
 
-        mod = importlib.import_module("pyrobustlm._core._lmrob")
+        mod = importlib.import_module("pylmrob._core._lmrob")
         return mod.cy_lmrob_fast_s  # type: ignore[attr-defined,no-any-return]
     except Exception:
         return None
@@ -133,7 +133,7 @@ class FastSConfig:
     # so the basin of attraction can shift.
     fast_rng: bool = False
     # Bisquare-only end-to-end Cython fast-S engine
-    # (``pyrobustlm._core._lmrob``). When True, the entire resampling +
+    # (``pylmrob._core._lmrob``). When True, the entire resampling +
     # survivor refinement runs in one nogil C block with all workspace
     # pre-allocated. Currently bisquare only; other families fall back.
     # Off by default while stages 2-6 of the monolithic port are in

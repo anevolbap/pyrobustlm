@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Public interface to psi/chi/weight functions.
 
-The numerical kernels live in :mod:`pyrobustlm._psifuns` (NumPy reference)
-and will be mirrored by :mod:`pyrobustlm._core._psi` (Cython) in a future
+The numerical kernels live in :mod:`pylmrob._psifuns` (NumPy reference)
+and will be mirrored by :mod:`pylmrob._core._psi` (Cython) in a future
 performance pass.
 
 R cross-reference:
@@ -21,7 +21,7 @@ from typing import Literal
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pyrobustlm import _psifuns
+from pylmrob import _psifuns
 
 # Public type aliases. ``PsiFamily`` is the constrained Literal users should
 # pass; functions also accept plain ``str`` for runtime convenience and

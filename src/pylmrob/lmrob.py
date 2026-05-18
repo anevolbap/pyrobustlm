@@ -2,7 +2,7 @@
 """Top-level ``lmrob`` entry points.
 
 End-to-end pipeline: formula -> design matrix -> fast-S init -> MM
-iteration -> covariance -> :class:`pyrobustlm.results.LmRobResults`.
+iteration -> covariance -> :class:`pylmrob.results.LmRobResults`.
 """
 
 from __future__ import annotations
@@ -13,15 +13,15 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from pyrobustlm import psi as _psi
-from pyrobustlm._fast_s import FastSConfig, fast_s
-from pyrobustlm._mm import mm_iterate
-from pyrobustlm.control import Control
-from pyrobustlm.d_scale import d_scale
-from pyrobustlm.formula import model_matrix
-from pyrobustlm.inference import vcov_avar1, vcov_w
-from pyrobustlm.ms_estimator import m_s_fit
-from pyrobustlm.results import LmRobResults
+from pylmrob import psi as _psi
+from pylmrob._fast_s import FastSConfig, fast_s
+from pylmrob._mm import mm_iterate
+from pylmrob.control import Control
+from pylmrob.d_scale import d_scale
+from pylmrob.formula import model_matrix
+from pylmrob.inference import vcov_avar1, vcov_w
+from pylmrob.ms_estimator import m_s_fit
+from pylmrob.results import LmRobResults
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -44,7 +44,7 @@ def _load_cy() -> tuple[_CyFn | None, _CyFn | None, _CyFn | None, _CyFn | None]:
     try:
         import importlib
 
-        mod = importlib.import_module("pyrobustlm._core._lmrob")
+        mod = importlib.import_module("pylmrob._core._lmrob")
         return (
             getattr(mod, "cy_lmrob_fit", None),
             getattr(mod, "cy_lmrob_d_scale", None),
@@ -284,8 +284,8 @@ def _lmrob_impl(
         # Resolve effective worker count and pre-spawn per-thread bitgens
         # for the engine_c parallel resample loop. The resolution mirrors
         # ``_fast_s._resolve_n_workers``.
-        from pyrobustlm._fast_s import _resolve_n_workers as _resolve_nw
-        from pyrobustlm._fast_s import _to_seed_sequence
+        from pylmrob._fast_s import _resolve_n_workers as _resolve_nw
+        from pylmrob._fast_s import _to_seed_sequence
 
         _ec_workers = _resolve_nw(_eff_n_workers, control.nResample)
         if _ec_workers > 1:
@@ -612,7 +612,7 @@ def _lmrob_impl(
         # Pre-compute tau if it isn't already populated by the D-step.
         # vcov_w with corrfact="tau"/"hybrid"/"tauold" needs it.
         if tau_vec is None:
-            from pyrobustlm.d_scale import tau as _compute_tau
+            from pylmrob.d_scale import tau as _compute_tau
 
             sw = np.sqrt(np.maximum(rweights, 0.0))
             Xw = X * sw[:, None]

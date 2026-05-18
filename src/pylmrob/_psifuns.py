@@ -2,7 +2,7 @@
 """Pure-NumPy reference implementations of the six robustbase psi families.
 
 Direct port of ``robustbase/src/lmrob.c`` (rho_/psi_/psip_/wgt_ huber, biwgt,
-hmpl, opt, ggw, lqq). The Cython kernels in ``pyrobustlm._core._psi`` will
+hmpl, opt, ggw, lqq). The Cython kernels in ``pylmrob._core._psi`` will
 mirror this module element-for-element; the Python version keeps the math
 testable without the Cython build.
 
@@ -577,7 +577,7 @@ def _ggw_unpack(k: NDArray[np.float64]) -> tuple[float, float, float, int]:
       rho via numerical integration).
 
     Note: this is the *internal* form. For the user-facing form
-    ``c(min_slope, b, eff, bdp)``, see :func:`pyrobustlm.psi.psi`.
+    ``c(min_slope, b, eff, bdp)``, see :func:`pylmrob.psi.psi`.
     """
     k = np.atleast_1d(np.asarray(k, dtype=np.float64)).ravel()
     if k.size == 0:

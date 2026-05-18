@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
-    from pyrobustlm.control import Control
-    from pyrobustlm.summary import SummaryLmRob
+    from pylmrob.control import Control
+    from pylmrob.summary import SummaryLmRob
 
 
 @dataclass
@@ -97,7 +97,7 @@ class LmRobResults:
                 )
                 arr = np.column_stack([np.ones(feat.shape[0]), feat]) if has_intercept else feat
             else:
-                from pyrobustlm.formula import apply_spec
+                from pylmrob.formula import apply_spec
 
                 arr = apply_spec(self.rhs_spec_, new_data)
         else:
@@ -119,7 +119,7 @@ class LmRobResults:
         ``str(fit.summary())`` or just ``print(fit.summary())``) and exposes
         the underlying coefficient table and R-squared as attributes.
         """
-        from pyrobustlm.summary import make_summary
+        from pylmrob.summary import make_summary
 
         return make_summary(self)
 

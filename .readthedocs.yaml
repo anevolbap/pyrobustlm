@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Read the Docs config for pyrobustlm. Build the Sphinx site from docs/.
+# Read the Docs config for pylmrob. Build the Sphinx site from docs/.
 
 version: 2
 

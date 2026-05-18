@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pyrobustlm import Control, lmrob
+from pylmrob import Control, lmrob
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REFERENCE_DIR = REPO_ROOT / "tests" / "reference"

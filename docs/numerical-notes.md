@@ -49,7 +49,7 @@ per-dataset tolerances reflecting this sensitivity.
 
 **Default ``Control()``** (since v0.5.11) routes the entire fit
 through a monolithic Cython kernel. Median wall-clock across the
-34-case bench corpus is **0.93x R**; pyrobustlm is faster than R on
+34-case bench corpus is **0.93x R**; pylmrob is faster than R on
 more than half of cases. Pass ``Control(engine_c=False)`` to force
 the legacy NumPy path (median 2.74x R).
 
@@ -106,7 +106,7 @@ matrix matches R element-wise to ``rtol=1e-3``.
 
 ### 5. Cython resampling kernel (bisquare hot path)
 
-**What.** ``pyrobustlm._core._fast_s.cy_resample_iter_bisquare`` runs one
+**What.** ``pylmrob._core._fast_s.cy_resample_iter_bisquare`` runs one
 fast-S resampling iteration in ``nogil`` C: dgesv for the p-subset solve,
 dgels for the IRWLS step, and an inlined m_scale iteration matching
 ``lmrob.c::find_scale``. The bisquare path of ``fast_s`` dispatches to
@@ -134,7 +134,7 @@ moving RNG into Cython (``np.random.cython`` extension or a struct-based
 PCG64) or porting ``_refine_to_convergence`` to the same kernel. Both
 deferred.
 
-**Where.** ``src/pyrobustlm/_core/_fast_s.pyx`` and
+**Where.** ``src/pylmrob/_core/_fast_s.pyx`` and
 ``tests/unit/test_fast_s_parallel.py``.
 
 ### 6. Thread-based parallel resampling

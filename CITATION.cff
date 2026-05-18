@@ -1,6 +1,6 @@
 cff-version: 1.2.0
-message: "If you use pyrobustlm in academic work, please cite it as below."
-title: "pyrobustlm: Python port of robustbase::lmrob (MM regression for robust linear models)"
+message: "If you use pylmrob in academic work, please cite it as below."
+title: "pylmrob: Python port of robustbase::lmrob (MM regression for robust linear models)"
 abstract: >-
   Python port of R's robustbase::lmrob, the MM-estimator for robust
   linear regression. Implements the full fast-S resampling + MM
@@ -14,8 +14,8 @@ authors:
   - given-names: Pablo
     family-names: Vena
     alias: anevolbap
-repository-code: "https://github.com/anevolbap/pyrobustlm"
-url: "https://pyrobustlm.readthedocs.io/"
+repository-code: "https://github.com/anevolbap/pylmrob"
+url: "https://pylmrob.readthedocs.io/"
 license: GPL-3.0-or-later
 keywords:
   - robust regression
@@ -25,12 +25,12 @@ keywords:
   - cython
 preferred-citation:
   type: software
-  title: "pyrobustlm"
+  title: "pylmrob"
   authors:
     - given-names: Pablo
       family-names: Vena
       alias: anevolbap
-  url: "https://github.com/anevolbap/pyrobustlm"
+  url: "https://github.com/anevolbap/pylmrob"
 references:
   - type: article
     authors:

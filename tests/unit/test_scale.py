@@ -6,7 +6,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from pyrobustlm.scale import _mad, m_scale
+from pylmrob.scale import _mad, m_scale
 
 
 @pytest.mark.parametrize("seed", [0, 1, 2, 7, 42])

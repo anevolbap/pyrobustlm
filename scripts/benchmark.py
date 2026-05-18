@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Run pyrobustlm on the same corpus as scripts/benchmark.R.
+"""Run pylmrob on the same corpus as scripts/benchmark.R.
 
 Writes ``tests/bench/py/<name>.json`` for each fit with coefficients,
 scale, covariance, residuals, weights, and timing data. Pair with
@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from pyrobustlm import Control, lmrob
+from pylmrob import Control, lmrob
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -155,7 +155,7 @@ def _serialize(result: dict, name: str, psi_family: str) -> None:
         "runtime_min_sec": result["runtime_min_sec"],
         "runtime_median_sec": result["runtime_median_sec"],
         "py_version": __import__("sys").version.split()[0],
-        "pyrobustlm_version": __import__("pyrobustlm").__version__,
+        "pylmrob_version": __import__("pylmrob").__version__,
     }
     (OUT_DIR / f"{name}.json").write_text(json.dumps(out, indent=2))
 

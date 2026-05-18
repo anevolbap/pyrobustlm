@@ -2,7 +2,7 @@ core_sources = [
   '__init__.py',
 ]
 
-py.install_sources(core_sources, subdir: 'pyrobustlm/_core')
+py.install_sources(core_sources, subdir: 'pylmrob/_core')
 
 # -----------------------------------------------------------------------------
 # Stub Cython extension to validate the toolchain end-to-end.
@@ -21,7 +21,7 @@ py.extension_module(
   cython_args: cython_args,
   dependencies: cython_deps,
   install: true,
-  subdir: 'pyrobustlm/_core',
+  subdir: 'pylmrob/_core',
 )
 
 py.extension_module(
@@ -31,7 +31,7 @@ py.extension_module(
   cython_args: cython_args,
   dependencies: cython_deps,
   install: true,
-  subdir: 'pyrobustlm/_core',
+  subdir: 'pylmrob/_core',
 )
 
 py.extension_module(
@@ -41,7 +41,7 @@ py.extension_module(
   cython_args: cython_args,
   dependencies: cython_deps,
   install: true,
-  subdir: 'pyrobustlm/_core',
+  subdir: 'pylmrob/_core',
 )
 
 py.extension_module(
@@ -51,5 +51,5 @@ py.extension_module(
   cython_args: cython_args,
   dependencies: cython_deps,
   install: true,
-  subdir: 'pyrobustlm/_core',
+  subdir: 'pylmrob/_core',
 )

@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pyrobustlm import Control, anova, lmrob
+from pylmrob import Control, anova, lmrob
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

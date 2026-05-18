@@ -1,4 +1,4 @@
-# `pyrobustlm` — Python port of R `robustbase::lmrob`
+# `pylmrob` — Python port of R `robustbase::lmrob`
 
 > **Audience:** Claude Code (or any contributor) implementing this project end-to-end.
 > **Goal:** A production-grade Python implementation of the `lmrob` MM-estimator with feature parity, numerically equivalent results (to converged tolerance), and runtime ≥ R's C-backed implementation.
@@ -92,14 +92,14 @@ Read in this order, with the goal of producing `docs/r-source-map.md` mapping ev
 
 ### 2.2 Package name
 
-`pyrobustlm`. Reasoning: `robustbase` and `robustbase-py-optimized` are taken on PyPI; `pyrobust` is too generic. Pin name in `pyproject.toml` Phase 0.
+`pylmrob`. Reasoning: `robustbase` and `robustbase-py-optimized` are taken on PyPI; `pyrobust` is too generic. Pin name in `pyproject.toml` Phase 0.
 
 ---
 
 ## 3. Repository Layout
 
 ```
-pyrobustlm/
+pylmrob/
 ├── pyproject.toml              # meson-python build, deps, metadata
 ├── meson.build                 # top-level build
 ├── LICENSE                     # GPL-3.0
@@ -116,7 +116,7 @@ pyrobustlm/
 │   ├── r-source-map.md         # mapping R/C functions → Python modules
 │   ├── api/                    # Sphinx
 │   └── numerical-notes.md      # known divergences from R, tolerances
-├── src/pyrobustlm/
+├── src/pylmrob/
 │   ├── __init__.py
 │   ├── _version.py
 │   ├── control.py              # Control dataclass, presets
@@ -193,7 +193,7 @@ Each phase has: **Inputs**, **Tasks** (each a single Claude Code session worth),
 - `pip install -e .` succeeds locally.
 - `pytest` runs (zero tests OK).
 - CI is green.
-- `import pyrobustlm; pyrobustlm.__version__` works.
+- `import pylmrob; pylmrob.__version__` works.
 
 **Validation:** `make ci-local` runs lint + type + test.
 
@@ -247,7 +247,7 @@ pytest tests/conftest.py -k "test_reference_loader"
 def test_psi_matches_r(r_session, family, kind):
     x = np.linspace(-5, 5, 1001)
     k = default_tuning(family)
-    py = getattr(pyrobustlm.psi, kind)(x, family, k)
+    py = getattr(pylmrob.psi, kind)(x, family, k)
     r  = r_session.Mpsi(x, k, family) if kind == "psi" else ...
     assert_allclose(py, r, rtol=1e-12, atol=1e-14)
 ```
@@ -259,7 +259,7 @@ def test_psi_matches_r(r_session, family, kind):
 **Validation:**
 ```bash
 pytest tests/unit/test_psi.py -v
-python -m pyrobustlm.benchmarks.psi  # ensure ≤ 2× R speed for vectorized eval
+python -m pylmrob.benchmarks.psi  # ensure ≤ 2× R speed for vectorized eval
 ```
 
 ---
@@ -518,8 +518,8 @@ Multi-threaded (4 cores): each row should be 2–3× faster; R does not parallel
 
 **Acceptance:**
 
-- `pip install pyrobustlm` works on all target platforms in clean venvs.
-- `import pyrobustlm; pyrobustlm.lmrob(...)` works without compilation on user machine.
+- `pip install pylmrob` works on all target platforms in clean venvs.
+- `import pylmrob; pylmrob.lmrob(...)` works without compilation on user machine.
 - Docs build clean.
 
 ---
@@ -617,18 +617,18 @@ Process:
 
 | R | Python | Phase |
 |---|---|---|
-| `lmrob(formula, data, ...)` | `pyrobustlm.lmrob(formula, data, ...)` | 8 |
-| `lmrob.control(...)` | `pyrobustlm.Control(...)` | 8 |
-| `lmrob.S(x, y, control)` | `pyrobustlm._core.fast_s(X, y, control)` | 4 |
-| `lmrob..M..fit(...)` | `pyrobustlm._core.mm_iterate(...)` | 6 |
-| `lmrob.M.S(x, y, control)` | `pyrobustlm.ms_estimator.m_s_fit(...)` | 5 |
-| `Mpsi(x, c, "bisquare")` | `pyrobustlm.psi.psi(x, "bisquare", c)` | 2 |
-| `Mchi(x, c, "bisquare")` | `pyrobustlm.psi.rho(x, "bisquare", c)` | 2 |
-| `Mwgt(x, c, "bisquare")` | `pyrobustlm.psi.wgt(x, "bisquare", c)` | 2 |
-| `lmrob.mscale(r, control)` | `pyrobustlm.scale.m_scale(r, ...)` | 3 |
-| `.vcov.avar1`, `.vcov.w` | `pyrobustlm.inference.vcov_*` | 7 |
+| `lmrob(formula, data, ...)` | `pylmrob.lmrob(formula, data, ...)` | 8 |
+| `lmrob.control(...)` | `pylmrob.Control(...)` | 8 |
+| `lmrob.S(x, y, control)` | `pylmrob._core.fast_s(X, y, control)` | 4 |
+| `lmrob..M..fit(...)` | `pylmrob._core.mm_iterate(...)` | 6 |
+| `lmrob.M.S(x, y, control)` | `pylmrob.ms_estimator.m_s_fit(...)` | 5 |
+| `Mpsi(x, c, "bisquare")` | `pylmrob.psi.psi(x, "bisquare", c)` | 2 |
+| `Mchi(x, c, "bisquare")` | `pylmrob.psi.rho(x, "bisquare", c)` | 2 |
+| `Mwgt(x, c, "bisquare")` | `pylmrob.psi.wgt(x, "bisquare", c)` | 2 |
+| `lmrob.mscale(r, control)` | `pylmrob.scale.m_scale(r, ...)` | 3 |
+| `.vcov.avar1`, `.vcov.w` | `pylmrob.inference.vcov_*` | 7 |
 | `summary.lmrob(fit)` | `fit.summary()` | 8 |
-| `plot.lmrob(fit)` | `pyrobustlm.diagnostics.plot(fit)` | 9 |
+| `plot.lmrob(fit)` | `pylmrob.diagnostics.plot(fit)` | 9 |
 
 ---
 

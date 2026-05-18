@@ -33,7 +33,7 @@ cdef double _MAX_EX2_SQR_HALF = 37.7 * 37.7 / 2.0
 
 
 # ---------------------------------------------------------------------------
-# Family enum. Mirrors pyrobustlm._fast_s._FAMILY_IDS for now; will be
+# Family enum. Mirrors pylmrob._fast_s._FAMILY_IDS for now; will be
 # the single source of truth once the monolithic kernel is the default.
 # ---------------------------------------------------------------------------
 cdef enum:
@@ -1202,7 +1202,7 @@ cdef inline double _chi_prime_factor(int family, const double* tuning) nogil:
         denom = s_l * c * (3.0 * c + 2.0 * b_l) + k01_2
         return 6.0 * (s_l - 1.0) / denom
     # FAM_GGW: chi'(x) / psi(x) factor, case-dependent. Values mirror
-    # ``pyrobustlm._psifuns.chi_prime_over_psi`` (sampled from R's
+    # ``pylmrob._psifuns.chi_prime_over_psi`` (sampled from R's
     # ``Mchi(deriv=1)/Mpsi`` at the default tuning per case).
     j = <int>(tuning[0])
     if j == 1: return 0.1883291308
@@ -1215,7 +1215,7 @@ cdef inline double _chi_prime_factor(int family, const double* tuning) nogil:
 
 
 # ---------------------------------------------------------------------------
-# vcov_avar1: ports pyrobustlm.inference.vcov_avar1 into a single nogil
+# vcov_avar1: ports pylmrob.inference.vcov_avar1 into a single nogil
 # kernel. Per-element psi/chi via the helpers above; matrix ops via
 # dgesv (inversion) and dsyev (posdefify).
 # ---------------------------------------------------------------------------
@@ -1542,7 +1542,7 @@ def cy_lmrob_vcov_avar1(
     """Asymptotic sandwich covariance per robustbase ``.vcov.avar1``.
 
     All five lmrob-supported families. Mirrors
-    pyrobustlm.inference.vcov_avar1 element-wise.
+    pylmrob.inference.vcov_avar1 element-wise.
 
     Returns ``status``: 0 ok, 3 LAPACK error.
     """
@@ -1659,15 +1659,15 @@ cdef inline void _chi_eval(
 
 # ---------------------------------------------------------------------------
 # Design-adaptive D-scale (Koller & Stahel 2014). Mirrors
-# robustbase/src/lmrob.c::R_find_D_scale and pyrobustlm.d_scale.
+# robustbase/src/lmrob.c::R_find_D_scale and pylmrob.d_scale.
 # ---------------------------------------------------------------------------
 # Kappa and (tfact, tcorr) for tau, per family at default tuning. Mirrors
-# the tables in pyrobustlm.d_scale (_TAU_FAST_TABLE) and lmrob.kappa
+# the tables in pylmrob.d_scale (_TAU_FAST_TABLE) and lmrob.kappa
 # tabulation. For non-default tuning the caller falls back to the Python
 # path; this kernel only handles the common defaults.
 
 # Computed via scipy.integrate.quad on the default-tuning psi.r/wgt
-# integrand (see pyrobustlm.d_scale.kappa) at runtime in Python; the
+# integrand (see pylmrob.d_scale.kappa) at runtime in Python; the
 # values below were captured for the family defaults and re-used here.
 cdef double _DSCALE_KAPPA_BISQUARE = 0.8280771566048320
 cdef double _DSCALE_KAPPA_HAMPEL = 0.8569775805834327
@@ -1963,7 +1963,7 @@ def cy_lmrob_d_scale(
 
 # ---------------------------------------------------------------------------
 # MM iteration kernel. Port of robustbase/src/lmrob.c::rwls and the existing
-# pyrobustlm._mm.mm_iterate. IRWLS with fixed scale and the L1 convergence
+# pylmrob._mm.mm_iterate. IRWLS with fixed scale and the L1 convergence
 # test ``d_beta <= rel_tol * max(rel_tol, ||beta||_1)``.
 # ---------------------------------------------------------------------------
 

@@ -33,7 +33,7 @@ jobs:
         run: ruff format --check src tests
       - name: ty (type check)
         # Astral's ty is the project's standard type checker (replaces mypy).
-        run: ty check src/pyrobustlm
+        run: ty check src/pylmrob
 
   test:
     name: Tests (${{ matrix.os }} / py${{ matrix.python-version }})

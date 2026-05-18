@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""pyrobustlm: Python port of robustbase::lmrob (MM regression).
+"""pylmrob: Python port of robustbase::lmrob (MM regression).
 
 See plan.md for the full roadmap. The public surface listed below is
 provisional; most symbols are stubs until their phase lands.
@@ -7,10 +7,10 @@ provisional; most symbols are stubs until their phase lands.
 
 from __future__ import annotations
 
-from pyrobustlm._version import __version__
-from pyrobustlm.anova import anova
-from pyrobustlm.control import Control
-from pyrobustlm.lmrob import LmRob, lmrob
+from pylmrob._version import __version__
+from pylmrob.anova import anova
+from pylmrob.control import Control
+from pylmrob.lmrob import LmRob, lmrob
 
 __all__ = [
     "Control",
