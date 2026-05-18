@@ -33,11 +33,16 @@ print(fit.summary())
 
 ## Status
 
-`pylmrob` is at v0.2.0 and not yet on PyPI. Installation is from source:
+Alpha. Available on PyPI:
 
 ```bash
-pip install git+https://github.com/anevolbap/pylmrob
+pip install pylmrob
 ```
+
+Feature parity with R's `lmrob` for the common path (all five psi
+families, S/M-S init, MM, KS2014/KS2011 settings, per-case weights,
+both vcov flavours, anova). Median wall-clock 0.93x R across the bench
+corpus.
 
 R parity (vs `robustbase` 0.99-7) on the classical datasets:
 
@@ -59,6 +64,7 @@ divergences from R.
 :maxdepth: 2
 
 quickstart
+examples/stackloss_tour
 api
 porting-from-r
 engine_c
