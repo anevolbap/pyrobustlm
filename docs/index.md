@@ -64,11 +64,13 @@ divergences from R.
 :maxdepth: 2
 
 quickstart
+theory
 examples/stackloss_tour
 api
 porting-from-r
 engine_c
 numerical-notes
+faq
 ```
 
 ## Indices
