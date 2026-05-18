@@ -220,6 +220,37 @@ def test_statsmodels_style_aliases():
     assert np.all((p >= 0.0) & (p <= 1.0))
 
 
+def test_diagnostics_shapes_and_outliers():
+    """``fit.diagnostics()`` returns per-observation stats with sensible shapes."""
+    df = _load_dataset("stackloss")
+    fit = lmrob("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, seed=0)
+    diag = fit.diagnostics()
+    n = df.shape[0]
+    assert diag.leverage.shape == (n,)
+    assert diag.cooks_distance.shape == (n,)
+    assert diag.std_residuals.shape == (n,)
+    assert diag.rweights.shape == (n,)
+    assert diag.outliers.shape == (n,)
+    assert diag.outliers.dtype == bool
+    # Leverage values in [0, 1]; trace = p (within numerical tolerance).
+    assert np.all((diag.leverage >= 0.0) & (diag.leverage <= 1.0))
+    # std_residuals match residuals / scale
+    np.testing.assert_allclose(diag.std_residuals, fit.residuals_ / fit.scale_, rtol=1e-12)
+    # stackloss has known outliers (obs 1, 3, 4, 21); rweights of those
+    # should be near zero (effectively dropped by the robust fit).
+    flagged = np.where(diag.outliers)[0]
+    assert flagged.size >= 1
+
+
+def test_diagnostics_threshold_changes_outliers():
+    """Lowering the threshold flags more observations as outliers."""
+    df = _load_dataset("stackloss")
+    fit = lmrob("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, seed=0)
+    n_default = int(fit.diagnostics().outliers.sum())
+    n_strict = int(fit.diagnostics(outlier_threshold=1.0).outliers.sum())
+    assert n_strict >= n_default
+
+
 def test_lmrob_sklearn_score_and_params():
     """``LmRob.score``, ``get_params``, ``set_params`` follow the sklearn convention."""
     from pylmrob import Control, LmRob

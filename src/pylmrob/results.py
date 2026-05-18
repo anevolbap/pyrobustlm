@@ -177,6 +177,36 @@ class LmRobResults:
         se = np.sqrt(var)
         return np.column_stack([point, point - q * se, point + q * se])
 
+    def diagnostics(self, outlier_threshold: float = 2.5) -> object:
+        """Per-observation diagnostic statistics.
+
+        Returns a :class:`pylmrob.diagnostics.DiagnosticsTable` with
+        leverage, robust Cook's distance, standardized residuals, the
+        robust weights, and a boolean outlier flag
+        (``|std_residuals| > outlier_threshold``).
+
+        Requires the fit to have a stashed design matrix
+        (``design_x_``); the default ``lmrob()`` call always stashes it.
+        """
+        if self.design_x_ is None:
+            raise RuntimeError(
+                "diagnostics() needs the design matrix; fit was created without design_x_"
+            )
+        from pylmrob.diagnostics import DiagnosticsTable, cooks_distance, hatvalues
+
+        h = hatvalues(self, self.design_x_)
+        cd = cooks_distance(self, self.design_x_)
+        sigma = max(self.scale_, 1e-300)
+        z = self.residuals_ / sigma
+        outliers = np.abs(z) > outlier_threshold
+        return DiagnosticsTable(
+            leverage=h,
+            cooks_distance=cd,
+            std_residuals=z,
+            rweights=self.rweights_,
+            outliers=outliers,
+        )
+
     def summary(self) -> SummaryLmRob:
         """Return a ``SummaryLmRob`` matching R's ``summary.lmrob``.
 
