@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.14] - 2026-05-18
+
+### Added
+
+- **Prediction intervals.** ``LmRobResults.predict`` gains
+  ``interval='confidence'|'prediction'`` and ``level=`` keyword args.
+  Returns ``(n, 3)`` with ``(fit, lwr, upr)`` columns using the
+  t-distribution at ``df_residual``. Matches R's ``predict.lmrob``.
+
+- **statsmodels-style attribute aliases on ``LmRobResults``**:
+  ``params``, ``bse``, ``tvalues``, ``pvalues``, ``conf_int(alpha)``.
+  Property forwarders over the existing fields; pylmrob fits drop into
+  ``statsmodels.regression``-shaped code without an adapter.
+
+- **sklearn-style ``LmRob.score`` / ``get_params`` / ``set_params``.**
+  Makes the estimator compatible with ``cross_val_score``,
+  ``GridSearchCV``, and other sklearn pipeline tooling. ``score``
+  returns OLS R² on the test set (sklearn convention).
+
+- **``LmRobResults.diagnostics()``.** Returns a ``DiagnosticsTable``
+  with per-observation leverage, robust Cook's distance, standardized
+  residuals, robust weights, and an outlier flag. Wires the existing
+  ``hatvalues`` / ``cooks_distance`` helpers in ``pylmrob.diagnostics``.
+
+- **``LmRobResults.anova(*others, test=)``** as a method-style spelling
+  of the existing free function. Matches R's idiom.
+
+- **R-style ``__repr__``.** Prints a call line and an aligned
+  coefficient table; ``print(fit.summary())`` still has the verbose
+  per-coef stats and R-squared.
+
+- **Stackloss walkthrough.** ``docs/examples/stackloss_tour.md`` is a
+  complete robust-regression tutorial: OLS vs lmrob, outlier
+  identification, CI/PI bands, nested-model test, statsmodels-style
+  access, sklearn cross-validation. Hooked into the docs toctree.
+
 ## [0.5.13] - 2026-05-18
 
 ### Changed
