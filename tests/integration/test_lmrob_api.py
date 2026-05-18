@@ -220,6 +220,32 @@ def test_statsmodels_style_aliases():
     assert np.all((p >= 0.0) & (p <= 1.0))
 
 
+def test_method_anova_matches_function_anova():
+    """``fit.anova(other)`` and ``anova(fit, other)`` produce the same table."""
+    from pylmrob import anova as anova_fn
+
+    df = _load_dataset("stackloss")
+    full = lmrob("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, seed=42)
+    red = lmrob("stack.loss ~ Air.Flow + Water.Temp", df, seed=42)
+    np.testing.assert_array_equal(full.anova(red).table, anova_fn(full, red).table)
+    np.testing.assert_array_equal(
+        full.anova(red, test="Deviance").table,
+        anova_fn(full, red, test="Deviance").table,
+    )
+
+
+def test_repr_is_r_style():
+    """``repr(fit)`` shows the R-style print.lmrob header + coefficient row."""
+    df = _load_dataset("stackloss")
+    fit = lmrob("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, seed=0)
+    text = repr(fit)
+    assert "Coefficients:" in text
+    assert 'lmrob(method="MM"' in text
+    # Term names appear in a header row
+    for name in fit.term_names_:
+        assert name in text
+
+
 def test_diagnostics_shapes_and_outliers():
     """``fit.diagnostics()`` returns per-observation stats with sensible shapes."""
     df = _load_dataset("stackloss")
