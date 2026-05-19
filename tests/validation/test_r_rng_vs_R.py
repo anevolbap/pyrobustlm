@@ -116,7 +116,10 @@ def test_sample_noreplace_matches_robustbase_c(seed: int, n: int) -> None:
     """
     out = subprocess.run(
         ["Rscript", "-e", script],
-        capture_output=True, check=True, text=True, timeout=20,
+        capture_output=True,
+        check=True,
+        text=True,
+        timeout=20,
     )
     expected = np.array(
         [int(line) for line in out.stdout.splitlines() if line],

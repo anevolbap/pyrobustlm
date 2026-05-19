@@ -407,17 +407,29 @@ def _resample_chunk_r(
 
         if use_cython:
             scale, status = cy_iter(  # type: ignore[misc]
-                X, y, idx, family_id, tuning, cfg.b0,
-                cfg.k_fast_s, cfg.max_iter_scale, cfg.scale_tol, beta_buf,
+                X,
+                y,
+                idx,
+                family_id,
+                tuning,
+                cfg.b0,
+                cfg.k_fast_s,
+                cfg.max_iter_scale,
+                cfg.scale_tol,
+                beta_buf,
             )
             if status == 1 or status == 3:
                 continue
             if status == 2:
                 return _ChunkResult(
-                    [], [],
+                    [],
+                    [],
                     FastSResult(
-                        coef=beta_buf.copy(), scale=0.0, converged=True,
-                        n_iter=0, n_candidates_kept=1,
+                        coef=beta_buf.copy(),
+                        scale=0.0,
+                        converged=True,
+                        n_iter=0,
+                        n_candidates_kept=1,
                     ),
                 )
             beta_t = beta_buf.copy()
@@ -432,24 +444,37 @@ def _resample_chunk_r(
             s_t = _mad(r)
             if s_t == 0.0:
                 return _ChunkResult(
-                    [], [],
+                    [],
+                    [],
                     FastSResult(
-                        coef=beta_t, scale=0.0, converged=True,
-                        n_iter=0, n_candidates_kept=1,
+                        coef=beta_t,
+                        scale=0.0,
+                        converged=True,
+                        n_iter=0,
+                        n_candidates_kept=1,
                     ),
                 )
             for _kk in range(cfg.k_fast_s):
                 s_t = m_scale(
-                    y - X @ beta_t, family=cfg.psi_chi, k=cfg.k_chi,
-                    b0=cfg.b0, max_iter=cfg.max_iter_scale, tol=cfg.scale_tol,
-                    init_scale=s_t, p=p,
+                    y - X @ beta_t,
+                    family=cfg.psi_chi,
+                    k=cfg.k_chi,
+                    b0=cfg.b0,
+                    max_iter=cfg.max_iter_scale,
+                    tol=cfg.scale_tol,
+                    init_scale=s_t,
+                    p=p,
                 )
                 if s_t == 0.0:
                     return _ChunkResult(
-                        [], [],
+                        [],
+                        [],
                         FastSResult(
-                            coef=beta_t, scale=0.0, converged=True,
-                            n_iter=0, n_candidates_kept=1,
+                            coef=beta_t,
+                            scale=0.0,
+                            converged=True,
+                            n_iter=0,
+                            n_candidates_kept=1,
                         ),
                     )
                 beta_t = _irwls_step(X, y, beta_t, s_t, cfg.psi_chi, cfg.k_chi)

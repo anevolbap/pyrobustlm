@@ -31,7 +31,9 @@ def _have_r() -> bool:
         return False
     out = subprocess.run(
         ["Rscript", "-e", 'cat(requireNamespace("robustbase", quietly=TRUE))'],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     return out.stdout.strip() == "TRUE"
 
@@ -59,7 +61,10 @@ def _r_lmrob_simple(seed: int) -> tuple[np.ndarray, float]:
     """
     out = subprocess.run(
         ["Rscript", "-e", script],
-        capture_output=True, check=True, text=True, timeout=30,
+        capture_output=True,
+        check=True,
+        text=True,
+        timeout=30,
     )
     lines = [float(x) for x in out.stdout.splitlines() if x]
     return np.array(lines[:-1], dtype=np.float64), lines[-1]
