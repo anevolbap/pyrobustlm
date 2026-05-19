@@ -77,11 +77,23 @@ def test_rng_r_rejects_n_workers_gt_1() -> None:
         Control(rng="R", n_workers=4)
 
 
-def test_rng_r_forces_simple_subsampling() -> None:
-    """``subsampling="nonsingular"`` (or anything else) silently downgrades
-    to ``"simple"`` because we don't yet port robustbase's LU-pivot path."""
-    ctrl = Control(rng="R", subsampling="nonsingular")
-    assert ctrl.subsampling == "simple"
+def test_rng_r_respects_subsampling_choice() -> None:
+    """Both ``simple`` and ``nonsingular`` (LU-pivot) subsampling are
+    supported under rng='R'; Control no longer forces simple."""
+    assert Control(rng="R", subsampling="simple").subsampling == "simple"
+    assert Control(rng="R", subsampling="nonsingular").subsampling == "nonsingular"
+
+
+def test_rng_r_nonsingular_smoke(stackloss: pd.DataFrame) -> None:
+    """End-to-end fit with the LU-pivot subset draw runs and converges."""
+    fit = lmrob(
+        "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
+        stackloss,
+        control=Control(rng="R", subsampling="nonsingular"),
+        seed=42,
+    )
+    assert fit.converged_
+    assert np.isfinite(fit.coef_).all()
 
 
 def test_rng_r_disables_engine_c() -> None:

@@ -155,16 +155,15 @@ class Control:
         # rng="R" implies a serial, R-call-order resample path. Force
         # the matching control values now so the rest of the pipeline
         # doesn't have to special-case combinations that don't make sense.
+        # Both "simple" and "nonsingular" subsampling are now supported
+        # via r_set_seed + r_sample_noreplace / r_subsample_nonsingular,
+        # so we honour whichever the user requested.
         if self.rng == "R":
             if self.n_workers != 1:
                 raise ValueError(
                     "rng='R' requires n_workers=1 (R's unif_rand stream is"
                     " sequential); got n_workers=" + str(self.n_workers)
                 )
-            if self.subsampling != "simple":
-                # robustbase defaults to nonsingular; we don't yet port
-                # the LU-pivot row-swap from subsample() in lmrob.c.
-                self.subsampling = "simple"
             self.engine_c = False
 
         # Fill in default tuning constants matching R.
