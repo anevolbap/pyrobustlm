@@ -78,6 +78,8 @@ def test_state_matches_R_for_seed_42() -> None:
 
 
 def _have_robustbase() -> bool:
+    if not _have_r():
+        return False
     out = subprocess.run(
         ["Rscript", "-e", 'cat(requireNamespace("robustbase", quietly=TRUE))'],
         capture_output=True,
