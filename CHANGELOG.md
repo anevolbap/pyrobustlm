@@ -11,12 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **``pylmrob.bootstrap(fit, n_boot=1000, level=0.95, ...)``.**
-  Case-resampling bootstrap returning a ``BootstrapResult`` with the
-  full coefficient distribution, percentile and basic CIs, standard
-  errors, and bias estimate. Useful when the asymptotic Wald CI is
-  unreliable (small n, near-singular X, heavy contamination); doesn't
-  replace ``fit.confint()``. Deterministic given ``(seed, n_workers)``;
+- **``pylmrob.bootstrap(fit, n_boot=1000, level=0.95, ...)``** and
+  the method-style spelling **``fit.bootstrap(...)``** on
+  ``LmRobResults``. Case-resampling bootstrap returning a
+  ``BootstrapResult`` with the full coefficient distribution,
+  percentile and basic CIs, standard errors, and bias estimate.
+  Useful when the asymptotic Wald CI is unreliable (small n,
+  near-singular X, heavy contamination); doesn't replace
+  ``fit.confint()``. Deterministic given ``(seed, n_workers)``;
   ThreadPool-parallel via the ``n_workers`` argument.
 
 ### Docs
@@ -30,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   convergence failures, singular vcov, Wald vs bootstrap CIs,
   bit-identical R reproducibility, ``nResample`` tuning, performance
   levers, ``predict()`` pitfalls.
+
+- **Bootstrap sections in quickstart and stackloss tour** showing
+  how to call ``fit.bootstrap()`` and compare percentile vs Wald
+  intervals.
 
 ## [0.5.14] - 2026-05-18
 

@@ -130,6 +130,24 @@ print("PI width:", pi[:, 2] - pi[:, 1])
 print("CI width:", band[:, 2] - band[:, 1])
 ```
 
+## Bootstrap inference
+
+On `n = 21` the asymptotic Wald CI can be over-optimistic. The
+case-resampling bootstrap is a sanity check:
+
+```python
+boot = fit.bootstrap(n_boot=2000, seed=42, n_workers=4)
+print(f"converged: {boot.n_converged}/{boot.n_boot}")
+for name, w_lo, w_hi, b_lo, b_hi in zip(
+    fit.term_names_, *fit.confint().T, *boot.percentile_ci.T
+):
+    print(f"  {name:<11} Wald=[{w_lo:7.3f}, {w_hi:7.3f}]  boot=[{b_lo:7.3f}, {b_hi:7.3f}]")
+```
+
+On this dataset the bootstrap CIs are noticeably wider than the Wald
+intervals: the parametric vcov assumes the inlier mass is large enough
+for the asymptotic theory, which is borderline on `n = 21`.
+
 ## Nested-model test
 
 `anova()` runs a Wald or Deviance test between two nested fits.

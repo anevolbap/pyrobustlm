@@ -91,6 +91,27 @@ fit_hat, lwr, upr = band[:, 0], band[:, 1], band[:, 2]
 Both bands use the t-distribution with `fit.df_residual_` degrees of
 freedom, matching R's `predict.lmrob`.
 
+## Bootstrap inference
+
+When the asymptotic Wald CI looks suspicious (small n, heavy
+contamination, near-singular X) reach for the bootstrap. Each replicate
+resamples ``n`` rows with replacement and refits ``lmrob``:
+
+```python
+boot = fit.bootstrap(n_boot=1000, level=0.95, seed=42)
+print(boot.percentile_ci)   # (p, 2): bootstrap-percentile lower/upper
+print(boot.se)              # bootstrap standard error per coef
+print(boot.n_converged)     # most replicates should converge; a few may not
+```
+
+The bootstrap is significantly more expensive than ``confint()`` (each
+replicate is a full ``lmrob`` fit), so pass ``n_workers > 1`` to
+parallelise across replicates:
+
+```python
+boot = fit.bootstrap(n_boot=2000, n_workers=4, seed=42)
+```
+
 ## Coefficient statistics
 
 `confint()` returns Wald confidence intervals on the coefficients.
