@@ -14,8 +14,8 @@ authors:
   - given-names: Pablo
     family-names: Vena
     alias: anevolbap
-repository-code: "https://github.com/anevolbap/pylmrob"
-url: "https://pylmrob.readthedocs.io/"
+repository-code: "https://github.com/anevolbap/pyrobustlm"
+url: "https://github.com/anevolbap/pyrobustlm"
 license: GPL-3.0-or-later
 keywords:
   - robust regression
@@ -30,7 +30,7 @@ preferred-citation:
     - given-names: Pablo
       family-names: Vena
       alias: anevolbap
-  url: "https://github.com/anevolbap/pylmrob"
+  url: "https://github.com/anevolbap/pyrobustlm"
 references:
   - type: article
     authors:
