@@ -85,14 +85,27 @@ rng = r_set_seed(42)
 perm = r_sample_noreplace(rng, 21, 21)  # byte-identical to robustbase's perm
 ```
 
-This still does **not** guarantee byte-identical *lmrob fits* on the
-same seed. The fast-S resample kernel inside `pylmrob` still calls
-NumPy's `Generator.integers`, not `r_sample_noreplace`. Wiring it
-through is the next step.
+For end-to-end lmrob fits, pass `Control(rng="R")`:
 
-If you need bit-identical *fits* today, drive R via `rpy2`. If you need
-a bit-identical uniform *stream* or *subset draw* (e.g., for reference
-data generation), `r_set_seed` and `r_sample_noreplace` work now.
+```python
+fit = lmrob(formula, df, control=Control(rng="R"), seed=42)
+```
+
+`rng="R"` makes the fast-S resample loop consume the same `unif_rand`
+stream R does, so it picks the same subsets as
+`lmrob(..., subsampling="simple")` after `set.seed(seed)`. R-mode is
+sequential (forces `n_workers=1`), disables `engine_c`, and forces
+`subsampling="simple"` (the LU-pivot path used by R's default
+`subsampling="nonsingular"` isn't yet ported).
+
+Stackloss-class agreement with R is `rtol=1e-4` across seeds {1, 42,
+12345}. The residual gap is from refinement-step LAPACK ordering, not
+from the draws. True byte-identical fits would require bit-identical
+LAPACK calls, which depends on your BLAS install.
+
+If you need bit-identical *fits* today and tolerate the rpy2
+dependency, drive R directly. Otherwise `Control(rng="R")` is the
+closest pylmrob gets.
 
 ## How do I pick `nResample`?
 

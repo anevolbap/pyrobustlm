@@ -28,6 +28,7 @@ from numpy.random import SeedSequence
 from numpy.typing import NDArray
 
 from pylmrob import _psifuns as _pf
+from pylmrob.rng import RState, r_sample_noreplace, r_set_seed
 from pylmrob.scale import _cython_wgt, _mad, m_scale
 
 # Generic Cython kernel signature. Returns ``(scale, status)`` where
@@ -173,6 +174,35 @@ def _draw_nonsingular_subset(
         except np.linalg.LinAlgError:
             continue
         if sv[-1] > rcond * sv[0]:
+            return idx
+    return None
+
+
+def _draw_nonsingular_subset_r(
+    X: NDArray[np.float64],
+    rstate: RState,
+    p: int,
+    mts: int,
+    tol_inv: float = 1e-7,
+) -> NDArray[np.int64] | None:
+    """R-mode subset draw: full permutation via ``r_sample_noreplace``,
+    take the first ``p`` rows, redraw on singular up to ``mts`` tries.
+
+    Matches the ``ss = 0`` (simple) branch of robustbase's ``subsample()``
+    in ``lmrob.c``: one ``sample_noreplace(n, n)`` call per attempt, then
+    a rank check on the leading p-subset. ``tol_inv`` is robustbase's
+    ``tolInverse`` (default 1e-7).
+    """
+    n = X.shape[0]
+    for _ in range(mts):
+        perm = r_sample_noreplace(rstate, n, n)
+        idx = perm[:p]
+        sub = X[idx]
+        try:
+            sv = np.linalg.svd(sub, compute_uv=False)
+        except np.linalg.LinAlgError:
+            continue
+        if sv[-1] > tol_inv * sv[0]:
             return idx
     return None
 
@@ -331,6 +361,133 @@ class _ChunkResult:
     early_exact_fit: FastSResult | None
 
 
+def _resample_chunk_r(
+    X: NDArray[np.float64],
+    y: NDArray[np.float64],
+    cfg: FastSConfig,
+    seed_seq: SeedSequence,
+    n_iter: int,
+) -> _ChunkResult:
+    """R-mode resample chunk. Driven by ``pylmrob.r_set_seed`` so the
+    ``unif_rand`` stream is byte-identical to R.
+
+    ``seed_seq`` must carry a single integer entropy value (the user's
+    R seed). The function passes it directly to ``r_set_seed``; spawning
+    is not supported (R-mode is serial).
+    """
+    if not seed_seq.entropy:
+        raise ValueError("rng='R' requires an explicit integer seed")
+    # SeedSequence.entropy may be an int, sequence of ints, or None.
+    # In R-mode fast_s() passes the user's int seed directly.
+    entropy = seed_seq.entropy
+    seed_int = int(entropy if isinstance(entropy, int) else entropy[0])
+    rstate = r_set_seed(seed_int)
+
+    p = X.shape[1]
+    best_betas: list[NDArray[np.float64]] = []
+    best_scales: list[float] = []
+    tol_inv = float(getattr(cfg, "tol_inv", 1e-7))
+
+    cy_iter = _CY_ITER
+    use_cython = cy_iter is not None and cfg.psi_chi in _FAMILY_IDS
+    beta_buf = np.empty(p, dtype=np.float64)
+    tuning = np.zeros(3, dtype=np.float64)
+    family_id = _FAMILY_IDS.get(cfg.psi_chi, -1)
+    if use_cython:
+        for i, v in enumerate(cfg.k_chi[:3]):
+            tuning[i] = float(v)
+
+    for _ in range(n_iter):
+        idx = _draw_nonsingular_subset_r(X, rstate, p, cfg.mts, tol_inv=tol_inv)
+        if idx is None:
+            continue
+
+        if use_cython:
+            scale, status = cy_iter(  # type: ignore[misc]
+                X,
+                y,
+                idx,
+                family_id,
+                tuning,
+                cfg.b0,
+                cfg.k_fast_s,
+                cfg.max_iter_scale,
+                cfg.scale_tol,
+                beta_buf,
+            )
+            if status == 1 or status == 3:
+                continue
+            if status == 2:
+                return _ChunkResult(
+                    [],
+                    [],
+                    FastSResult(
+                        coef=beta_buf.copy(),
+                        scale=0.0,
+                        converged=True,
+                        n_iter=0,
+                        n_candidates_kept=1,
+                    ),
+                )
+            beta_t = beta_buf.copy()
+            s_t = float(scale)
+        else:
+            # NumPy fallback (ggw and friends).
+            try:
+                beta_t = np.linalg.solve(X[idx], y[idx]).astype(np.float64, copy=False)
+            except np.linalg.LinAlgError:
+                continue
+            r = y - X @ beta_t
+            s_t = _mad(r)
+            if s_t == 0.0:
+                return _ChunkResult(
+                    [],
+                    [],
+                    FastSResult(
+                        coef=beta_t,
+                        scale=0.0,
+                        converged=True,
+                        n_iter=0,
+                        n_candidates_kept=1,
+                    ),
+                )
+            for _kk in range(cfg.k_fast_s):
+                s_t = m_scale(
+                    y - X @ beta_t,
+                    family=cfg.psi_chi,
+                    k=cfg.k_chi,
+                    b0=cfg.b0,
+                    max_iter=cfg.max_iter_scale,
+                    tol=cfg.scale_tol,
+                    init_scale=s_t,
+                    p=p,
+                )
+                if s_t == 0.0:
+                    return _ChunkResult(
+                        [],
+                        [],
+                        FastSResult(
+                            coef=beta_t,
+                            scale=0.0,
+                            converged=True,
+                            n_iter=0,
+                            n_candidates_kept=1,
+                        ),
+                    )
+                beta_t = _irwls_step(X, y, beta_t, s_t, cfg.psi_chi, cfg.k_chi)
+
+        if len(best_scales) < cfg.best_r:
+            best_betas.append(beta_t)
+            best_scales.append(s_t)
+        else:
+            worst_i = int(np.argmax(best_scales))
+            if s_t < best_scales[worst_i]:
+                best_betas[worst_i] = beta_t
+                best_scales[worst_i] = s_t
+
+    return _ChunkResult(best_betas, best_scales, None)
+
+
 def _resolve_n_workers(req: int, n_iter: int) -> int:
     """Map ``cfg.n_workers`` to a concrete worker count.
 
@@ -424,6 +581,13 @@ def _resample_chunk(
     Each call has its own BitGenerator (``cfg.rng`` family); the return
     value is reduced together with other chunk outputs in :func:`fast_s`.
     """
+    # rng="R" routes the draws through pylmrob.r_set_seed +
+    # r_sample_noreplace, byte-identical to robustbase. The seed must
+    # already have been baked into seed_seq as a deterministic integer
+    # (see fast_s() below).
+    if cfg.rng == "R":
+        return _resample_chunk_r(X, y, cfg, seed_seq, n_iter)
+
     rng = make_generator(seed_seq, kind=cfg.rng)
     p = X.shape[1]
     best_betas: list[NDArray[np.float64]] = []
@@ -649,12 +813,19 @@ def fast_s(
     # ------------------------------------------------------------------
     # Resampling loop (optionally parallel via a thread pool)
     # ------------------------------------------------------------------
-    if cfg.n_workers == 0 and not _auto_use_threads(n, p, cfg.nResample):
+    # R-mode forces n_workers=1 in Control; bypass auto-threading too.
+    if cfg.rng == "R":
+        n_workers = 1
+        if seed is None or isinstance(seed, np.random.Generator):
+            raise ValueError("rng='R' requires an explicit integer seed")
+        seed_seq = SeedSequence(int(seed))
+    elif cfg.n_workers == 0 and not _auto_use_threads(n, p, cfg.nResample):
         # Auto mode but problem is small enough that threading hurts.
         n_workers = 1
+        seed_seq = _to_seed_sequence(seed)
     else:
         n_workers = _resolve_n_workers(cfg.n_workers, cfg.nResample)
-    seed_seq = _to_seed_sequence(seed)
+        seed_seq = _to_seed_sequence(seed)
 
     if n_workers == 1:
         result = _resample_chunk(X, y, cfg, seed_seq, cfg.nResample)

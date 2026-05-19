@@ -78,6 +78,8 @@ def test_state_matches_R_for_seed_42() -> None:
 
 
 def _have_robustbase() -> bool:
+    if not _have_r():
+        return False
     out = subprocess.run(
         ["Rscript", "-e", 'cat(requireNamespace("robustbase", quietly=TRUE))'],
         capture_output=True,
@@ -116,7 +118,10 @@ def test_sample_noreplace_matches_robustbase_c(seed: int, n: int) -> None:
     """
     out = subprocess.run(
         ["Rscript", "-e", script],
-        capture_output=True, check=True, text=True, timeout=20,
+        capture_output=True,
+        check=True,
+        text=True,
+        timeout=20,
     )
     expected = np.array(
         [int(line) for line in out.stdout.splitlines() if line],

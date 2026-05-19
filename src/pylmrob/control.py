@@ -101,17 +101,20 @@ class Control:
     # small-n datasets. Opt in when you want raw speed and can tolerate
     # the drift; not recommended for reproducibility-sensitive workloads.
     fast_rng: bool = False
-    # BitGenerator backing the resample RNG. ``"PCG64"`` (default) is
-    # the modern NumPy default: fast, statistically better than
-    # Mersenne Twister, but produces a different subset-draw sequence
-    # than R's ``lmrob`` (R uses MT). ``"MT19937"`` lets you opt in to
-    # numpy's Mersenne Twister implementation; combined with
-    # ``pylmrob.r_set_seed(<r_seed>)`` it gets fits closer to R on
-    # the same seed. Strict byte-identical agreement with R's fits is
-    # not promised even with MT19937: R's ``set.seed`` scrambles the
-    # integer seed through Marsaglia's PRNG to fill 624 MT state words,
-    # and pylmrob's seed-to-state path differs.
-    rng: Literal["PCG64", "MT19937"] = "PCG64"
+    # BitGenerator backing the resample RNG.
+    #
+    # - ``"PCG64"`` (default): the modern NumPy default. Fast and
+    #   statistically better than MT19937, but produces a different
+    #   subset-draw sequence than R.
+    # - ``"MT19937"``: NumPy's Mersenne Twister. Closer to R's family
+    #   but the seed-to-state path and the 64-bit-vs-32-bit raw output
+    #   still differ from R's ``RNG.c``.
+    # - ``"R"``: drive the resample loop from ``pylmrob.r_set_seed`` and
+    #   ``r_sample_noreplace``, which is byte-identical to robustbase's
+    #   draw sequence. Implies ``n_workers=1``, ``engine_c=False``, and
+    #   ``subsampling="simple"`` (set automatically); R's
+    #   ``subsampling="nonsingular"`` LU-pivot path isn't yet ported.
+    rng: Literal["PCG64", "MT19937", "R"] = "PCG64"
     # Use the monolithic Cython engine (pylmrob._core._lmrob). When True,
     # fast-S + MM + vcov_avar1 run in one nogil C block with one workspace
     # allocation. On small n this is 5-10x the default Python path; on
@@ -148,6 +151,21 @@ class Control:
                 self.method = "MM"
             if self.cov is None:
                 self.cov = ".vcov.avar1"
+
+        # rng="R" implies a serial, R-call-order resample path. Force
+        # the matching control values now so the rest of the pipeline
+        # doesn't have to special-case combinations that don't make sense.
+        if self.rng == "R":
+            if self.n_workers != 1:
+                raise ValueError(
+                    "rng='R' requires n_workers=1 (R's unif_rand stream is"
+                    " sequential); got n_workers=" + str(self.n_workers)
+                )
+            if self.subsampling != "simple":
+                # robustbase defaults to nonsingular; we don't yet port
+                # the LU-pivot row-swap from subsample() in lmrob.c.
+                self.subsampling = "simple"
+            self.engine_c = False
 
         # Fill in default tuning constants matching R.
         if self.tuning_psi is None:
