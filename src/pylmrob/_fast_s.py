@@ -28,6 +28,7 @@ from numpy.random import SeedSequence
 from numpy.typing import NDArray
 
 from pylmrob import _psifuns as _pf
+from pylmrob.rng import RState, r_sample_noreplace, r_set_seed
 from pylmrob.scale import _cython_wgt, _mad, m_scale
 
 # Generic Cython kernel signature. Returns ``(scale, status)`` where
@@ -179,7 +180,7 @@ def _draw_nonsingular_subset(
 
 def _draw_nonsingular_subset_r(
     X: NDArray[np.float64],
-    rstate: object,
+    rstate: RState,
     p: int,
     mts: int,
     tol_inv: float = 1e-7,
@@ -192,11 +193,9 @@ def _draw_nonsingular_subset_r(
     a rank check on the leading p-subset. ``tol_inv`` is robustbase's
     ``tolInverse`` (default 1e-7).
     """
-    from pylmrob.rng import r_sample_noreplace
-
     n = X.shape[0]
     for _ in range(mts):
-        perm = r_sample_noreplace(rstate, n, n)  # type: ignore[arg-type]
+        perm = r_sample_noreplace(rstate, n, n)
         idx = perm[:p]
         sub = X[idx]
         try:
@@ -376,8 +375,6 @@ def _resample_chunk_r(
     R seed). The function passes it directly to ``r_set_seed``; spawning
     is not supported (R-mode is serial).
     """
-    from pylmrob.rng import r_set_seed
-
     if not seed_seq.entropy:
         raise ValueError("rng='R' requires an explicit integer seed")
     # SeedSequence.entropy may be an int, sequence of ints, or None.
