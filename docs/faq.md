@@ -73,19 +73,26 @@ rng.unif_rand_n(10)  # byte-identical to R's runif(10) after set.seed(42)
 convention from `RNG.c`. Verified against R 4.2 in
 `tests/validation/test_r_rng_vs_R.py`.
 
-This still does **not** guarantee byte-identical *lmrob fits* with R's
-`lmrob` on the same seed. What's still missing:
+A companion helper :func:`pylmrob.r_sample_noreplace` ports robustbase's
+`sample_noreplace` from `lmrob.c`: a Knuth-style swap-and-replace that
+draws `k` distinct indices from `0..n-1` using one `unif_rand` per
+output. Fast-S uses this with `k = n` to permute the rows before
+picking the first `p` that give a non-singular submatrix.
 
-- The fast-S resample kernel calls NumPy's `Generator.integers`, not
-  `unif_rand`. To match R, the kernel would need to call `r_set_seed`
-  and then call `unif_rand` in the exact order `lmrob.c` does
-  (subset draw, restart, refinement). Not yet wired in.
-- Some R paths use `norm_rand` (Box-Muller) for extra rejection steps;
-  not covered by `r_set_seed` either.
+```python
+from pylmrob import r_set_seed, r_sample_noreplace
+rng = r_set_seed(42)
+perm = r_sample_noreplace(rng, 21, 21)  # byte-identical to robustbase's perm
+```
+
+This still does **not** guarantee byte-identical *lmrob fits* on the
+same seed. The fast-S resample kernel inside `pylmrob` still calls
+NumPy's `Generator.integers`, not `r_sample_noreplace`. Wiring it
+through is the next step.
 
 If you need bit-identical *fits* today, drive R via `rpy2`. If you need
-a bit-identical uniform *stream* (e.g., for reference data generation),
-`r_set_seed` works now.
+a bit-identical uniform *stream* or *subset draw* (e.g., for reference
+data generation), `r_set_seed` and `r_sample_noreplace` work now.
 
 ## How do I pick `nResample`?
 

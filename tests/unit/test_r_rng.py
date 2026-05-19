@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from pylmrob.rng import RState, r_set_seed
+from pylmrob.rng import RState, r_sample_noreplace, r_set_seed
 
 _UINT32_MASK = 0xFFFF_FFFF
 
@@ -130,3 +130,50 @@ def test_unif_rand_finite(seed: int) -> None:
     """No edge-case seeds produce NaN or inf."""
     draws = r_set_seed(seed).unif_rand_n(100)
     assert np.isfinite(draws).all()
+
+
+def test_sample_noreplace_is_permutation_when_k_equals_n() -> None:
+    out = r_sample_noreplace(r_set_seed(42), 20, 20)
+    assert out.shape == (20,)
+    assert sorted(out.tolist()) == list(range(20))
+
+
+def test_sample_noreplace_partial_distinct() -> None:
+    """k < n: output has k distinct values from 0..n-1."""
+    out = r_sample_noreplace(r_set_seed(42), 100, 10)
+    assert out.shape == (10,)
+    assert len(set(out.tolist())) == 10
+    assert all(0 <= v < 100 for v in out.tolist())
+
+
+def test_sample_noreplace_matches_robustbase_c() -> None:
+    """Bit-identical to robustbase's ``sample_noreplace`` in ``lmrob.c``.
+
+    Captured from a direct ``.C(robustbase:::R_subsample, ..., sample=TRUE)``
+    call with ``set.seed(42)``, ``n = 10``: ``ind_space`` after the call.
+    """
+    out = r_sample_noreplace(r_set_seed(42), 10, 10)
+    expected = [9, 8, 2, 5, 3, 7, 4, 0, 1, 6]
+    assert out.tolist() == expected
+
+
+def test_sample_noreplace_rejects_bad_k() -> None:
+    rng = r_set_seed(42)
+    with pytest.raises(ValueError, match="0 <= k <= n"):
+        r_sample_noreplace(rng, 5, 6)
+    with pytest.raises(ValueError, match="0 <= k <= n"):
+        r_sample_noreplace(rng, 5, -1)
+
+
+def test_sample_noreplace_consumes_exactly_k_draws() -> None:
+    """``r_sample_noreplace(rng, n, k)`` calls ``unif_rand`` exactly k times."""
+    rng_a = r_set_seed(42)
+    r_sample_noreplace(rng_a, 50, 7)
+    next_a = rng_a.unif_rand()
+
+    rng_b = r_set_seed(42)
+    for _ in range(7):
+        rng_b.unif_rand()
+    next_b = rng_b.unif_rand()
+
+    assert next_a == next_b
