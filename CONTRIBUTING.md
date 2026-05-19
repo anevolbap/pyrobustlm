@@ -60,8 +60,7 @@ CI runs the full matrix on push.
 
 ## Reference reading
 
-The internals follow the algorithms documented in the papers linked from the
-[README](README.md#references). For a guided tour:
+Internal guides:
 
 - [`docs/theory.md`](docs/theory.md) - M / S / MM estimators.
 - [`docs/porting-from-r.md`](docs/porting-from-r.md) - mapping from
@@ -70,3 +69,22 @@ The internals follow the algorithms documented in the papers linked from the
   ports which R / C file in `robustbase`.
 - [`docs/numerical-notes.md`](docs/numerical-notes.md) - known divergences
   from R and their causes.
+
+Papers (DOI links):
+
+- Yohai, V. J. (1987). High Breakdown-Point and High Efficiency Robust
+  Estimates for Regression. *Annals of Statistics*, 15(2).
+  [doi:10.1214/aos/1176350366](https://doi.org/10.1214/aos/1176350366).
+- Salibian-Barrera, M. and Yohai, V. J. (2006). A Fast Algorithm for
+  S-Regression Estimates. *JCGS*, 15(2).
+  [doi:10.1198/106186006X113629](https://doi.org/10.1198/106186006X113629).
+- Koller, M. and Stahel, W. A. (2011). Sharpening Wald-type Inference in
+  Robust Regression for Small Samples. *CSDA*, 55(8).
+  [doi:10.1016/j.csda.2011.02.014](https://doi.org/10.1016/j.csda.2011.02.014).
+- Koller, M. and Stahel, W. A. (2017). Nonsingular Subsampling for
+  Regression S-estimators with Categorical Predictors. *Computational
+  Statistics*, 32(2).
+  [doi:10.1007/s00180-016-0679-x](https://doi.org/10.1007/s00180-016-0679-x).
+- Maronna, R. A. and Yohai, V. J. (2000). Robust regression with both
+  continuous and categorical predictors. *JSPI*, 89(1-2).
+  [doi:10.1016/S0378-3758(99)00208-6](https://doi.org/10.1016/S0378-3758(99)00208-6).

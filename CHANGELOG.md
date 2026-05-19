@@ -22,6 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   one ``unif_rand`` per output. Verified bit-identical to robustbase's
   C implementation via ``.C(R_subsample, ..., sample = TRUE)`` for
   ``n`` in {10, 25, 100} and seeds {1, 42, 12345}.
+- **``Control(rng="R")``**: route the fast-S resample loop through
+  ``r_set_seed`` + ``r_sample_noreplace`` so subset draws are
+  byte-identical to robustbase. Implies ``n_workers=1``,
+  ``engine_c=False``, ``subsampling="simple"`` (Control forces these).
+  Final fits on stackloss agree with R's
+  ``lmrob(..., subsampling="simple")`` after ``set.seed(seed)`` to
+  ``rtol=1e-4`` across seeds {1, 42, 12345}; the residual drift comes
+  from refinement-step LAPACK ordering, not the draws.
 
 ### Docs
 
