@@ -92,6 +92,20 @@ def test_bootstrap_no_design_raises() -> None:
         bootstrap(fake, n_boot=5)
 
 
+def test_fit_bootstrap_method_matches_function(stackloss: pd.DataFrame) -> None:
+    """``fit.bootstrap(...)`` and ``bootstrap(fit, ...)`` produce the same result."""
+    fit = lmrob(
+        "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
+        stackloss,
+        control=Control(nResample=200),
+        seed=1,
+    )
+    method_result = fit.bootstrap(n_boot=50, seed=99)
+    fn_result = bootstrap(fit, n_boot=50, seed=99)
+    np.testing.assert_array_equal(method_result.coefs, fn_result.coefs)
+    np.testing.assert_array_equal(method_result.percentile_ci, fn_result.percentile_ci)
+
+
 def test_bootstrap_se_consistent_with_quantiles(stackloss: pd.DataFrame) -> None:
     """The reported ``se`` matches numpy.std of the coef draws (ddof=1)."""
     fit = lmrob(

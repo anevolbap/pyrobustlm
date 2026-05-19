@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
+    from pylmrob.control import Control
     from pylmrob.results import LmRobResults
 
 
@@ -74,7 +75,7 @@ def _one_replicate(
     y: np.ndarray,
     idx: np.ndarray,
     psi_family: str,
-    control: object,
+    control: Control,
     inner_seed: int,
 ) -> tuple[np.ndarray | None, float | None]:
     """Run one bootstrap replicate. Returns ``(coef, scale)`` or
@@ -86,18 +87,16 @@ def _one_replicate(
     yb = y[idx]
     cfg = FastSConfig(
         psi_chi=psi_family,
-        k_chi=tuple(
-            np.atleast_1d(np.asarray(control.tuning_chi, dtype=float)).ravel()  # type: ignore[attr-defined]
-        ),
-        b0=control.bb,  # type: ignore[attr-defined]
-        nResample=int(control.nResample),  # type: ignore[attr-defined]
-        k_fast_s=int(control.k_fast_s),  # type: ignore[attr-defined]
-        best_r=int(control.best_r_s),  # type: ignore[attr-defined]
-        max_it=int(control.max_it),  # type: ignore[attr-defined]
-        refine_tol=float(control.refine_tol),  # type: ignore[attr-defined]
-        scale_tol=float(control.scale_tol),  # type: ignore[attr-defined]
-        max_iter_scale=int(control.k_max),  # type: ignore[attr-defined]
-        mts=int(control.mts),  # type: ignore[attr-defined]
+        k_chi=tuple(np.atleast_1d(np.asarray(control.tuning_chi, dtype=float)).ravel()),
+        b0=control.bb,
+        nResample=int(control.nResample),
+        k_fast_s=int(control.k_fast_s),
+        best_r=int(control.best_r_s),
+        max_it=int(control.max_it),
+        refine_tol=float(control.refine_tol),
+        scale_tol=float(control.scale_tol),
+        max_iter_scale=int(control.k_max),
+        mts=int(control.mts),
         engine_c=False,  # safer on the bootstrap resamples; basin
         # drift can flip a subset draw to a near-singular X' W X.
     )
@@ -107,9 +106,7 @@ def _one_replicate(
         return None, None
     if s.scale == 0.0 or not np.isfinite(s.scale):
         return None, None
-    psi_k = tuple(
-        np.atleast_1d(np.asarray(control.tuning_psi, dtype=float)).ravel()  # type: ignore[attr-defined]
-    )
+    psi_k = tuple(np.atleast_1d(np.asarray(control.tuning_psi, dtype=float)).ravel())
     mm = mm_iterate(
         X=Xb,
         y=yb,
@@ -117,8 +114,8 @@ def _one_replicate(
         sigma=s.scale,
         psi_family=psi_family,
         psi_k=psi_k,
-        max_it=int(control.max_it),  # type: ignore[attr-defined]
-        rel_tol=float(control.rel_tol),  # type: ignore[attr-defined]
+        max_it=int(control.max_it),
+        rel_tol=float(control.rel_tol),
     )
     if not mm.converged:
         return None, None

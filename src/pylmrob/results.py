@@ -207,6 +207,25 @@ class LmRobResults:
             outliers=outliers,
         )
 
+    def bootstrap(
+        self,
+        n_boot: int = 1000,
+        level: float = 0.95,
+        seed: int | np.random.Generator | None = None,
+        n_workers: int = 1,
+    ) -> object:
+        """Method-style spelling of :func:`pylmrob.bootstrap`.
+
+        Equivalent to ``pylmrob.bootstrap(self, n_boot=..., ...)``;
+        matches the ``fit.anova()`` / ``fit.diagnostics()`` style.
+
+        Returns a :class:`pylmrob.bootstrap.BootstrapResult` with
+        bootstrap CIs, standard errors, and bias estimate.
+        """
+        from pylmrob.bootstrap import bootstrap as _bootstrap
+
+        return _bootstrap(self, n_boot=n_boot, level=level, seed=seed, n_workers=n_workers)
+
     def anova(self, *others: LmRobResults, test: str = "Wald") -> object:
         """Method-style spelling of :func:`pylmrob.anova`.
 
