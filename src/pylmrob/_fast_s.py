@@ -145,6 +145,15 @@ class FastSConfig:
     # uses under the hood. The kind is propagated to all spawned
     # per-worker generators.
     rng: str = "PCG64"
+    # Subset-draw algorithm. Only consulted in the rng="R" path:
+    # - "simple": draw a full permutation, take the first p rows,
+    #   redraw on singular submatrix.
+    # - "nonsingular": draw a permutation and walk through it via
+    #   incremental LU with column pivot, skipping rows that produce a
+    #   small pivot. Matches robustbase's ``ss=1`` (default in R).
+    # The non-R paths ignore this field and use the existing
+    # Floyd-combination / SVD redraw approach.
+    subsampling: str = "nonsingular"
 
 
 @dataclass
@@ -397,8 +406,15 @@ def _resample_chunk_r(
         for i, v in enumerate(cfg.k_chi[:3]):
             tuning[i] = float(v)
 
+    from pylmrob.rng import r_subsample_nonsingular
+
+    use_nonsingular = cfg.subsampling == "nonsingular"
+
     for _ in range(n_iter):
-        idx = _draw_nonsingular_subset_r(X, rstate, p, cfg.mts, tol_inv=tol_inv)
+        if use_nonsingular:
+            idx = r_subsample_nonsingular(rstate, X, p, mts=cfg.mts, tol_inv=tol_inv)
+        else:
+            idx = _draw_nonsingular_subset_r(X, rstate, p, cfg.mts, tol_inv=tol_inv)
         if idx is None:
             continue
 

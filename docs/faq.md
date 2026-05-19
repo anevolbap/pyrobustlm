@@ -92,11 +92,14 @@ fit = lmrob(formula, df, control=Control(rng="R"), seed=42)
 ```
 
 `rng="R"` makes the fast-S resample loop consume the same `unif_rand`
-stream R does, so it picks the same subsets as
-`lmrob(..., subsampling="simple")` after `set.seed(seed)`. R-mode is
-sequential (forces `n_workers=1`), disables `engine_c`, and forces
-`subsampling="simple"` (the LU-pivot path used by R's default
-`subsampling="nonsingular"` isn't yet ported).
+stream R does, so it picks the same subsets as R's `lmrob` after
+`set.seed(seed)`. R-mode is sequential (forces `n_workers=1`) and
+disables `engine_c`. Both subsampling modes are supported:
+
+- `subsampling="simple"` matches `lmrob.control(subsampling="simple")`.
+- `subsampling="nonsingular"` (default) matches R's default
+  `lmrob.control()`, via a port of robustbase's LU-pivot row-skip
+  algorithm.
 
 Stackloss-class agreement with R is `rtol=1e-4` across seeds {1, 42,
 12345}. The residual gap is from refinement-step LAPACK ordering, not
