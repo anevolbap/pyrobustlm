@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import numpy as np
 
-__all__ = ["RState", "r_sample_noreplace", "r_set_seed"]
+__all__ = ["RState", "r_sample_noreplace", "r_set_seed", "r_subsample_nonsingular"]
 
 
 _N = 624
@@ -182,3 +182,124 @@ def r_sample_noreplace(rng: RState, n: int, k: int) -> np.ndarray:
         nn -= 1
         ind_space[j] = ind_space[nn]
     return out
+
+
+def r_subsample_nonsingular(
+    rng: RState,
+    X: np.ndarray,
+    p: int,
+    mts: int = 1000,
+    tol_inv: float = 1e-7,
+) -> np.ndarray | None:
+    """Pick a non-singular ``p``-row subset of ``X`` matching robustbase's
+    ``subsample()`` with ``ss=1`` (nonsingular).
+
+    Ports the LU-pivot-with-row-skip block from robustbase's ``lmrob.c``.
+    On each attempt, draws one full permutation of the rows via
+    :func:`r_sample_noreplace` and then walks through it column by column,
+    extending an incremental LU factorization with partial column pivot.
+    When the pivot at column ``j`` falls below ``tol_inv``, the candidate
+    row is dropped and the next row from the permutation is tried; after
+    ``mts`` failures the whole resample fails.
+
+    Parameters
+    ----------
+    rng
+        Source :class:`RState`. Advanced by ``n`` draws per attempt.
+    X
+        Design matrix of shape ``(n, m)``. Must be C-contiguous float64
+        for the inner loops; an as-needed copy is made if not.
+    p
+        Number of rows to select. Must satisfy ``1 <= p <= n``.
+    mts
+        Maximum number of redraws before giving up.
+    tol_inv
+        Robustbase's ``tolInverse``; minimum |pivot| to accept a column.
+
+    Returns
+    -------
+    numpy.ndarray | None
+        ``int64`` array of length ``p`` with the chosen row indices, in
+        the same order robustbase's ``idc`` records them. Returns
+        ``None`` if no non-singular subset is found within ``mts``
+        attempts.
+
+    Notes
+    -----
+    The column permutation ``idr`` that robustbase tracks is purely
+    internal to the LU factorization; the row selection ``idc`` is
+    independent of it, and the linear system ``X[idc] @ beta = y[idc]``
+    has the same solution regardless of column order.
+    """
+    if not isinstance(rng, RState):
+        raise TypeError("rng must be an RState")
+    Xa = np.ascontiguousarray(X, dtype=np.float64)
+    n_i, m_i = Xa.shape
+    p_i = int(p)
+    if p_i < 1 or p_i > m_i:
+        raise ValueError(f"need 1 <= p <= ncol(X)={m_i}, got p={p_i}")
+    if p_i > n_i:
+        raise ValueError(f"need p <= nrow(X)={n_i}, got p={p_i}")
+
+    attempt = 0
+    while True:
+        ind_space = r_sample_noreplace(rng, n_i, n_i)
+        idc = np.empty(p_i, dtype=np.int64)
+        idr = np.arange(p_i, dtype=np.int64)
+        lu = np.zeros((p_i, p_i), dtype=np.float64)
+        v = np.empty(p_i, dtype=np.float64)
+        i = 0
+        failed = False
+        for j in range(p_i):
+            while True:
+                if i + j >= n_i:
+                    failed = True
+                    break
+                idc[j] = ind_space[i + j]
+                if j == 0:
+                    for k in range(p_i):
+                        v[k] = Xa[idc[j], idr[k]]
+                else:
+                    for k in range(j):
+                        lu[k, j] = Xa[idc[j], idr[k]]
+                    # Forward solve L[0:j, 0:j] @ z = lu[0:j, j], result in lu[0:j, j].
+                    # L is unit lower triangular (implicit diagonal of 1s).
+                    for kk in range(j):
+                        s = lu[kk, j]
+                        for ll in range(kk):
+                            s -= lu[kk, ll] * lu[ll, j]
+                        lu[kk, j] = s
+                    for k in range(j, p_i):
+                        s = Xa[idc[j], idr[k]]
+                        for ll in range(j):
+                            s -= lu[k, ll] * lu[ll, j]
+                        v[k] = s
+                if j < p_i - 1:
+                    tmpd = abs(v[j])
+                    mu = j
+                    for k in range(j + 1, p_i):
+                        if abs(v[k]) > tmpd:
+                            mu = k
+                            tmpd = abs(v[k])
+                    if tmpd >= tol_inv:
+                        v[j], v[mu] = v[mu], v[j]
+                        idr[j], idr[mu] = idr[mu], idr[j]
+                        pivot = v[j]
+                        for k in range(j + 1, p_i):
+                            lu[k, j] = v[k] / pivot
+                        if j > 0 and mu != j:
+                            for k in range(j):
+                                lu[j, k], lu[mu, k] = lu[mu, k], lu[j, k]
+                if abs(v[j]) < tol_inv:
+                    # ss = 1 path: drop this candidate row, try the next.
+                    i += 1
+                    continue
+                lu[j, j] = v[j]
+                break
+            if failed:
+                break
+        if not failed:
+            return idc
+        attempt += 1
+        if attempt >= int(mts):
+            return None

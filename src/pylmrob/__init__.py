@@ -13,7 +13,7 @@ from pylmrob.anova import anova
 from pylmrob.bootstrap import bootstrap
 from pylmrob.control import Control
 from pylmrob.lmrob import LmRob, lmrob
-from pylmrob.rng import RState, r_sample_noreplace, r_set_seed
+from pylmrob.rng import RState, r_sample_noreplace, r_set_seed, r_subsample_nonsingular
 
 __all__ = [
     "Control",
@@ -26,4 +26,5 @@ __all__ = [
     "make_generator",
     "r_sample_noreplace",
     "r_set_seed",
+    "r_subsample_nonsingular",
 ]
