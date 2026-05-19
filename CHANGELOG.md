@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   across the 624-word regenerate boundary. Verified against R 4.2 in
   ``tests/validation/test_r_rng_vs_R.py``. First step toward
   bit-identical lmrob fits; the resample kernel is not wired to it yet.
+- **``pylmrob.r_sample_noreplace(rng, n, k)``**: port of
+  ``sample_noreplace`` from robustbase's ``lmrob.c``. Knuth-style
+  swap-and-replace; draws ``k`` distinct indices from ``0..n-1`` using
+  one ``unif_rand`` per output. Verified bit-identical to robustbase's
+  C implementation via ``.C(R_subsample, ..., sample = TRUE)`` for
+  ``n`` in {10, 25, 100} and seeds {1, 42, 12345}.
 
 ### Docs
 

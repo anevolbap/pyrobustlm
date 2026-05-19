@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import numpy as np
 
-__all__ = ["RState", "r_set_seed"]
+__all__ = ["RState", "r_sample_noreplace", "r_set_seed"]
 
 
 _N = 624
@@ -40,7 +40,7 @@ class RState:
     ``y * 2**-32``, matching R's ``RNG.c``.
     """
 
-    __slots__ = ("_state", "_pos")
+    __slots__ = ("_pos", "_state")
 
     def __init__(self, state: np.ndarray, pos: int = _N) -> None:
         if state.shape != (_N,) or state.dtype != np.uint32:
@@ -134,3 +134,51 @@ def r_set_seed(seed: int) -> RState:
         s = (69069 * s + 1) & _UINT32_MASK
         state[j] = s
     return RState(state, pos=_N)
+
+
+def r_sample_noreplace(rng: RState, n: int, k: int) -> np.ndarray:
+    """Draw ``k`` distinct indices from ``0..n-1`` in robustbase's order.
+
+    Ports ``sample_noreplace`` from robustbase's ``src/lmrob.c``: a
+    Knuth-style swap-and-replace that pulls one :meth:`RState.unif_rand`
+    draw per output index. Fast-S calls this with ``k = n`` to get a
+    full permutation; smaller ``k`` is supported for completeness.
+
+    Parameters
+    ----------
+    rng
+        Source :class:`RState`. Advanced by ``k`` draws.
+    n
+        Population size; indices range over ``0..n-1``.
+    k
+        Number of indices to draw. Must satisfy ``0 <= k <= n``.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``int64`` array of length ``k``.
+
+    Notes
+    -----
+    The reference C is::
+
+        for (i = 0; i < n; i++) ind_space[i] = i;
+        for (i = 0; i < k; i++) {
+            j = nn * unif_rand();
+            x[i] = ind_space[j];
+            ind_space[j] = ind_space[--nn];
+        }
+    """
+    n_i = int(n)
+    k_i = int(k)
+    if k_i < 0 or k_i > n_i:
+        raise ValueError(f"need 0 <= k <= n, got n={n_i}, k={k_i}")
+    ind_space = np.arange(n_i, dtype=np.int64)
+    out = np.empty(k_i, dtype=np.int64)
+    nn = n_i
+    for i in range(k_i):
+        j = int(nn * rng.unif_rand())
+        out[i] = ind_space[j]
+        nn -= 1
+        ind_space[j] = ind_space[nn]
+    return out
