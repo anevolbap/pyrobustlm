@@ -45,12 +45,29 @@ Wald CI is 30-50% the width of the bootstrap CI.
 
 ## How do I get bit-identical fits to R?
 
-You can't, because `pylmrob` uses NumPy's PCG64 BitGenerator while R
-uses the Mersenne Twister. The set of resampled p-subsets in fast-S
-differs between the two RNGs, so they can land on different basins.
+`pylmrob` defaults to NumPy's PCG64 BitGenerator while R uses the
+Mersenne Twister. The set of resampled p-subsets in fast-S differs
+between the two RNGs, so they can land on different basins.
 Coefficient agreement on the validation corpus is within `rtol=1e-3`
-for the well-conditioned cases. See
-{doc}`numerical-notes` for the per-case tolerances.
+for the well-conditioned cases. See {doc}`numerical-notes` for the
+per-case tolerances.
+
+You can switch to the same RNG *family* R uses:
+
+```python
+fit = lmrob(formula, df, control=Control(rng="MT19937"), seed=42)
+```
+
+This still does **not** guarantee byte-identical fits with R's
+`lmrob` on the same seed. The reasons:
+
+- R's `set.seed(seed)` scrambles the integer seed through Marsaglia's
+  PRNG to fill 624 MT state words; NumPy's `MT19937(seed)` uses a
+  different seed-to-state path.
+- `unif_rand()` in R returns 32-bit-derived doubles; NumPy combines
+  two MT draws into a 53-bit double. The float sequences differ.
+- R's `lmrob.c` subset-draw calls `unif_rand` in a specific order that
+  `pylmrob`'s fast-S kernel does not replicate one-for-one.
 
 If you really need bit-identical R output, drive R via `rpy2` and skip
 `pylmrob` entirely.

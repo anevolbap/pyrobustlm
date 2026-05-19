@@ -101,6 +101,17 @@ class Control:
     # small-n datasets. Opt in when you want raw speed and can tolerate
     # the drift; not recommended for reproducibility-sensitive workloads.
     fast_rng: bool = False
+    # BitGenerator backing the resample RNG. ``"PCG64"`` (default) is
+    # the modern NumPy default: fast, statistically better than
+    # Mersenne Twister, but produces a different subset-draw sequence
+    # than R's ``lmrob`` (R uses MT). ``"MT19937"`` lets you opt in to
+    # numpy's Mersenne Twister implementation; combined with
+    # ``pylmrob.r_set_seed(<r_seed>)`` it gets fits closer to R on
+    # the same seed. Strict byte-identical agreement with R's fits is
+    # not promised even with MT19937: R's ``set.seed`` scrambles the
+    # integer seed through Marsaglia's PRNG to fill 624 MT state words,
+    # and pylmrob's seed-to-state path differs.
+    rng: Literal["PCG64", "MT19937"] = "PCG64"
     # Use the monolithic Cython engine (pylmrob._core._lmrob). When True,
     # fast-S + MM + vcov_avar1 run in one nogil C block with one workspace
     # allocation. On small n this is 5-10x the default Python path; on

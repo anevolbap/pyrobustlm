@@ -7,6 +7,7 @@ provisional; most symbols are stubs until their phase lands.
 
 from __future__ import annotations
 
+from pylmrob._fast_s import make_generator
 from pylmrob._version import __version__
 from pylmrob.anova import anova
 from pylmrob.bootstrap import bootstrap
@@ -20,4 +21,5 @@ __all__ = [
     "anova",
     "bootstrap",
     "lmrob",
+    "make_generator",
 ]
