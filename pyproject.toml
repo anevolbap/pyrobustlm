@@ -71,11 +71,10 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/anevolbap/pylmrob"
-Documentation = "https://pylmrob.readthedocs.io/"
-Source = "https://github.com/anevolbap/pylmrob"
-Issues = "https://github.com/anevolbap/pylmrob/issues"
-Changelog = "https://github.com/anevolbap/pylmrob/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/anevolbap/pyrobustlm"
+Source = "https://github.com/anevolbap/pyrobustlm"
+Issues = "https://github.com/anevolbap/pyrobustlm/issues"
+Changelog = "https://github.com/anevolbap/pyrobustlm/blob/main/CHANGELOG.md"
 
 [tool.meson-python.args]
 setup = ["--default-library=static"]
