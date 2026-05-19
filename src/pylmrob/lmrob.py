@@ -259,7 +259,9 @@ def _lmrob_impl(
         residuals_out = _big[p : p + n]
         rweights_out = _big[p + n : p + 2 * n]
         beta_init_out = _big[p + 2 * n : 2 * p + 2 * n]
-        rng_e = np.random.default_rng(s_seed)
+        from pylmrob._fast_s import make_generator as _make_gen
+
+        rng_e = _make_gen(s_seed, kind=control.rng)
         # X and y are already float64 C-contiguous coming from the design
         # builder; skip np.ascontiguousarray if so to avoid a Python call.
         X_c = (
@@ -290,7 +292,7 @@ def _lmrob_impl(
         _ec_workers = _resolve_nw(_eff_n_workers, control.nResample)
         if _ec_workers > 1:
             _ec_caps = [
-                np.random.default_rng(_s).bit_generator.capsule
+                _make_gen(_s, kind=control.rng).bit_generator.capsule
                 for _s in _to_seed_sequence(s_seed).spawn(_ec_workers)
             ]
         else:
@@ -368,6 +370,7 @@ def _lmrob_impl(
             # take its own engine_c branch either; that branch is a
             # single Cython call and disables threading.
             engine_c=control.engine_c and not _engine_c_too_big,
+            rng=control.rng,
         )
         s_result = fast_s(X, y, cfg=cfg, seed=s_seed)
         beta_init = s_result.coef
@@ -393,6 +396,7 @@ def _lmrob_impl(
                 scale_tol=control.scale_tol,
                 max_iter_scale=control.k_max,
                 mts=control.mts,
+                rng=control.rng,
             )
             s_result = fast_s(X, y, cfg=cfg, seed=s_seed)
             beta_init = s_result.coef

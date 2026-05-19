@@ -139,6 +139,11 @@ class FastSConfig:
     # Off by default while stages 2-6 of the monolithic port are in
     # progress.
     engine_c: bool = False
+    # BitGenerator family used for the resample RNG. ``"PCG64"`` is
+    # numpy's modern default; ``"MT19937"`` matches the algorithm R
+    # uses under the hood. The kind is propagated to all spawned
+    # per-worker generators.
+    rng: str = "PCG64"
 
 
 @dataclass
@@ -362,6 +367,31 @@ def _auto_use_threads(n: int, p: int, n_iter: int) -> bool:
     return (n * p * p >= 10_000) and (n_iter >= 250)
 
 
+def make_generator(
+    seed: int | np.random.Generator | np.random.SeedSequence | None,
+    kind: str = "PCG64",
+) -> np.random.Generator:
+    """Build a ``Generator`` using the requested BitGenerator family.
+
+    ``kind`` is ``"PCG64"`` (numpy's modern default) or ``"MT19937"``
+    (R's Mersenne Twister). Other strings raise ``ValueError``. The
+    seed handling follows :func:`numpy.random.default_rng`.
+    """
+    if isinstance(seed, np.random.Generator):
+        # Reuse the user's generator. We can't switch its BitGenerator,
+        # so we honour the existing kind and only check it's consistent.
+        if kind == "MT19937" and not isinstance(seed.bit_generator, np.random.MT19937):
+            # Cross-spawn through SeedSequence so the requested kind wins.
+            ss = SeedSequence(int(seed.integers(0, 2**31 - 1)))
+            return np.random.Generator(np.random.MT19937(ss))
+        return seed
+    if kind == "PCG64":
+        return np.random.default_rng(seed)
+    if kind == "MT19937":
+        return np.random.Generator(np.random.MT19937(seed))
+    raise ValueError(f"Unknown rng kind: {kind!r}; expected 'PCG64' or 'MT19937'")
+
+
 def _to_seed_sequence(seed: int | np.random.Generator | None) -> SeedSequence:
     """Turn the user-facing ``seed`` argument into a ``SeedSequence``.
 
@@ -391,10 +421,10 @@ def _resample_chunk(
 ) -> _ChunkResult:
     """Run ``n_iter`` resampling iterations and return the local best-of-best_r heap.
 
-    Each call has its own PCG64; the return value is reduced together with
-    other chunk outputs in :func:`fast_s`.
+    Each call has its own BitGenerator (``cfg.rng`` family); the return
+    value is reduced together with other chunk outputs in :func:`fast_s`.
     """
-    rng = np.random.default_rng(seed_seq)
+    rng = make_generator(seed_seq, kind=cfg.rng)
     p = X.shape[1]
     best_betas: list[NDArray[np.float64]] = []
     best_scales: list[float] = []
@@ -573,7 +603,7 @@ def fast_s(
     # Monolithic Cython engine (opt-in, all lmrob psi families)
     # ------------------------------------------------------------------
     if cfg.engine_c and _CY_LMROB_FAST_S is not None and cfg.psi_chi in _FAMILY_IDS:
-        rng_e = np.random.default_rng(seed)
+        rng_e = make_generator(seed, kind=cfg.rng)
         beta_out = np.empty(p, dtype=np.float64)
         tuning = np.zeros(3, dtype=np.float64)
         for i, v in enumerate(cfg.k_chi[:3]):
@@ -584,7 +614,7 @@ def fast_s(
         if ec_workers > 1:
             seedseq = _to_seed_sequence(seed)
             child_seeds = seedseq.spawn(ec_workers)
-            capsules = [np.random.default_rng(s).bit_generator.capsule for s in child_seeds]
+            capsules = [make_generator(s, kind=cfg.rng).bit_generator.capsule for s in child_seeds]
         else:
             capsules = None
         scale, status, n_iter, converged = _CY_LMROB_FAST_S(
