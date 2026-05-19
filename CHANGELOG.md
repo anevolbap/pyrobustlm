@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.16] - 2026-05-19
+
 ### Added
 
 - **``pylmrob.r_set_seed(seed)`` and ``pylmrob.RState``**: a pure-Python
