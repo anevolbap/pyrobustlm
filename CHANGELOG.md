@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **``pylmrob.r_set_seed(seed)`` and ``pylmrob.RState``**: a pure-Python
+  MT19937 RNG that replicates R's ``set.seed`` / ``unif_rand`` path
+  from ``src/main/RNG.c``. The uniform stream is byte-identical to R's
+  ``runif()`` after ``set.seed()`` for the same integer seed, including
+  across the 624-word regenerate boundary. Verified against R 4.2 in
+  ``tests/validation/test_r_rng_vs_R.py``. First step toward
+  bit-identical lmrob fits; the resample kernel is not wired to it yet.
+
+### Docs
+
+- README decluttered: feature list and Performance section moved to
+  ``docs/numerical-notes.md`` and ``docs/bench-report.md``; CI badge
+  fixed; Read the Docs badge dropped (not live); inline links to the
+  core papers added.
+- ``CONTRIBUTING.md`` added.
+- FAQ entry on bit-identical R fits expanded to point at
+  ``r_set_seed``.
+
 ## [0.5.15] - 2026-05-18
 
 ### Added

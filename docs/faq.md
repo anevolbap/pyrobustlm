@@ -58,19 +58,34 @@ You can switch to the same RNG *family* R uses:
 fit = lmrob(formula, df, control=Control(rng="MT19937"), seed=42)
 ```
 
-This still does **not** guarantee byte-identical fits with R's
-`lmrob` on the same seed. The reasons:
+`Control(rng="MT19937")` only swaps the BitGenerator family. The seed
+path and the draw conversion are still NumPy's.
 
-- R's `set.seed(seed)` scrambles the integer seed through Marsaglia's
-  PRNG to fill 624 MT state words; NumPy's `MT19937(seed)` uses a
-  different seed-to-state path.
-- `unif_rand()` in R returns 32-bit-derived doubles; NumPy combines
-  two MT draws into a 53-bit double. The float sequences differ.
-- R's `lmrob.c` subset-draw calls `unif_rand` in a specific order that
-  `pylmrob`'s fast-S kernel does not replicate one-for-one.
+For a bit-identical uniform stream, use the lower-level helper:
 
-If you really need bit-identical R output, drive R via `rpy2` and skip
-`pylmrob` entirely.
+```python
+from pylmrob import r_set_seed
+rng = r_set_seed(42)
+rng.unif_rand_n(10)  # byte-identical to R's runif(10) after set.seed(42)
+```
+
+`r_set_seed` replicates R's seed scramble and one-32-bit-draw-per-call
+convention from `RNG.c`. Verified against R 4.2 in
+`tests/validation/test_r_rng_vs_R.py`.
+
+This still does **not** guarantee byte-identical *lmrob fits* with R's
+`lmrob` on the same seed. What's still missing:
+
+- The fast-S resample kernel calls NumPy's `Generator.integers`, not
+  `unif_rand`. To match R, the kernel would need to call `r_set_seed`
+  and then call `unif_rand` in the exact order `lmrob.c` does
+  (subset draw, restart, refinement). Not yet wired in.
+- Some R paths use `norm_rand` (Box-Muller) for extra rejection steps;
+  not covered by `r_set_seed` either.
+
+If you need bit-identical *fits* today, drive R via `rpy2`. If you need
+a bit-identical uniform *stream* (e.g., for reference data generation),
+`r_set_seed` works now.
 
 ## How do I pick `nResample`?
 
