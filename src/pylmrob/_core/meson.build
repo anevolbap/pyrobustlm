@@ -53,3 +53,13 @@ py.extension_module(
   install: true,
   subdir: 'pylmrob/_core',
 )
+
+py.extension_module(
+  '_r_rng',
+  '_r_rng.pyx',
+  c_args: c_args_common,
+  cython_args: cython_args,
+  dependencies: cython_deps,
+  install: true,
+  subdir: 'pylmrob/_core',
+)

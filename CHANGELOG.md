@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Cython kernel for the R RNG** (``pylmrob._core._r_rng``). The
+  inner loops of ``unif_rand_n``, ``r_sample_noreplace``, and
+  ``r_subsample_nonsingular`` now run nogil in C. Pure-Python paths
+  remain as fallback when the Cython module isn't built. Microbench
+  on ``r_sample_noreplace(n=200, n=200)`` × 500: 133 ms → 1.0 ms
+  (~130x); ``r_subsample_nonsingular(n=200, p=5)`` × 500: 162 ms →
+  1.5 ms (~108x); end-to-end stackloss fit with ``rng="R"``: 33 ms
+  → 9 ms (~3.6x). Result is byte-identical to the pure-Python path.
+
 ### Added
 
 - **``pylmrob.r_qnorm(p)``**: standard normal quantile, byte-identical to

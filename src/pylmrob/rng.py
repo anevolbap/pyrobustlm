@@ -19,7 +19,14 @@ See ``docs/faq.md`` for the longer caveat list.
 
 from __future__ import annotations
 
+import importlib
+
 import numpy as np
+
+try:
+    _cy_rng = importlib.import_module("pylmrob._core._r_rng")
+except ImportError:
+    _cy_rng = None
 
 __all__ = [
     "RState",
@@ -106,6 +113,10 @@ class RState:
 
     def unif_rand_n(self, n: int) -> np.ndarray:
         """Vectorised wrapper around :meth:`unif_rand`."""
+        if _cy_rng is not None:
+            out, new_pos = _cy_rng.cy_r_unif_rand_n(self._state, self._pos, int(n))
+            self._pos = int(new_pos)
+            return out
         out = np.empty(int(n), dtype=np.float64)
         for i in range(int(n)):
             out[i] = self.unif_rand()
@@ -180,6 +191,10 @@ def r_sample_noreplace(rng: RState, n: int, k: int) -> np.ndarray:
     k_i = int(k)
     if k_i < 0 or k_i > n_i:
         raise ValueError(f"need 0 <= k <= n, got n={n_i}, k={k_i}")
+    if _cy_rng is not None:
+        out, new_pos = _cy_rng.cy_r_sample_noreplace(rng._state, rng._pos, n_i, k_i)
+        rng._pos = int(new_pos)
+        return out
     ind_space = np.arange(n_i, dtype=np.int64)
     out = np.empty(k_i, dtype=np.int64)
     nn = n_i
@@ -247,6 +262,13 @@ def r_subsample_nonsingular(
         raise ValueError(f"need 1 <= p <= ncol(X)={m_i}, got p={p_i}")
     if p_i > n_i:
         raise ValueError(f"need p <= nrow(X)={n_i}, got p={p_i}")
+
+    if _cy_rng is not None:
+        result, new_pos = _cy_rng.cy_r_subsample_nonsingular(
+            rng._state, rng._pos, Xa, p_i, int(mts), float(tol_inv)
+        )
+        rng._pos = int(new_pos)
+        return result
 
     attempt = 0
     while True:
