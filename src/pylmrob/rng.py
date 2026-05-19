@@ -40,7 +40,7 @@ class RState:
     ``y * 2**-32``, matching R's ``RNG.c``.
     """
 
-    __slots__ = ("_state", "_pos")
+    __slots__ = ("_pos", "_state")
 
     def __init__(self, state: np.ndarray, pos: int = _N) -> None:
         if state.shape != (_N,) or state.dtype != np.uint32:
