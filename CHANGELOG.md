@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **``pylmrob.r_qnorm(p)``**: standard normal quantile, byte-identical to
+  R's ``qnorm()``. Direct port of Wichura's AS 241 from R's
+  ``src/nmath/qnorm.c``.
+- **``pylmrob.r_norm_rand(rng)``**: one standard normal draw, byte-identical
+  to R's ``rnorm()``. Ports the ``Inversion`` branch of R's ``norm_rand``
+  in ``src/nmath/snorm.c`` (two ``unif_rand`` draws combined into a
+  >27-bit uniform, then ``r_qnorm``). Verified against R's actual output
+  for seeds {0, 1, 42, 12345, ``2**31 - 1``} and across the regenerate
+  boundary.
+
 ## [0.5.16] - 2026-05-19
 
 ### Added
