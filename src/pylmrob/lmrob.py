@@ -371,6 +371,7 @@ def _lmrob_impl(
             # single Cython call and disables threading.
             engine_c=control.engine_c and not _engine_c_too_big,
             rng=control.rng,
+            subsampling=control.subsampling,
         )
         s_result = fast_s(X, y, cfg=cfg, seed=s_seed)
         beta_init = s_result.coef
@@ -397,6 +398,7 @@ def _lmrob_impl(
                 max_iter_scale=control.k_max,
                 mts=control.mts,
                 rng=control.rng,
+                subsampling=control.subsampling,
             )
             s_result = fast_s(X, y, cfg=cfg, seed=s_seed)
             beta_init = s_result.coef

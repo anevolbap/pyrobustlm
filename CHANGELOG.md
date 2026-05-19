@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.16] - 2026-05-19
+
 ### Added
 
 - **``pylmrob.r_set_seed(seed)`` and ``pylmrob.RState``**: a pure-Python
@@ -23,13 +25,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   C implementation via ``.C(R_subsample, ..., sample = TRUE)`` for
   ``n`` in {10, 25, 100} and seeds {1, 42, 12345}.
 - **``Control(rng="R")``**: route the fast-S resample loop through
-  ``r_set_seed`` + ``r_sample_noreplace`` so subset draws are
-  byte-identical to robustbase. Implies ``n_workers=1``,
-  ``engine_c=False``, ``subsampling="simple"`` (Control forces these).
-  Final fits on stackloss agree with R's
-  ``lmrob(..., subsampling="simple")`` after ``set.seed(seed)`` to
-  ``rtol=1e-4`` across seeds {1, 42, 12345}; the residual drift comes
-  from refinement-step LAPACK ordering, not the draws.
+  ``r_set_seed`` + (``r_sample_noreplace`` or
+  ``r_subsample_nonsingular``) so subset draws are byte-identical to
+  robustbase. Implies ``n_workers=1`` and ``engine_c=False`` (Control
+  forces these). Supports both ``subsampling="simple"`` and
+  ``subsampling="nonsingular"`` (R's default). Final fits on stackloss
+  agree with R's ``lmrob`` after ``set.seed(seed)`` to ``rtol=1e-4``
+  across seeds {1, 42, 12345}; the residual drift comes from
+  refinement-step LAPACK ordering, not the draws.
+- **``pylmrob.r_subsample_nonsingular(rng, X, p)``**: pure-Python port
+  of the ``ss=1`` LU-pivot block of robustbase's ``subsample()``.
+  Walks a permutation column by column with partial column pivot,
+  skipping rows whose pivot falls below ``tolInverse``. Verified
+  bit-identical to robustbase's C ``subsample()`` (via
+  ``.C(R_subsample, ..., sample=TRUE, ss=1)``) for varying ``p``,
+  collinear-row stress tests, and seeds {1, 7, 42, 12345}.
 
 ### Docs
 
