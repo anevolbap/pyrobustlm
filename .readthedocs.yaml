@@ -13,8 +13,10 @@ build:
   jobs:
     # meson-python needs the package built before Sphinx can autodoc it.
     # Install the build chain explicitly so --no-build-isolation works.
+    # scipy is required at build time because _fast_s.pyx and _lmrob.pyx
+    # ``cimport`` from ``scipy.linalg.cython_lapack`` (see meson.build:37).
     post_install:
-      - pip install "meson-python>=0.16" "meson>=1.4" ninja "Cython>=3" "numpy>=2"
+      - pip install "meson-python>=0.16" "meson>=1.4" ninja "Cython>=3" "numpy>=2" "scipy>=1.11"
       - pip install -e ".[docs]" --no-build-isolation
 
 sphinx:
