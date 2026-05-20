@@ -718,6 +718,252 @@ def cy_refine_to_convergence(
 
 
 # ---------------------------------------------------------------------------
+# R-faithful kernels for Control(rng="R"). Match robustbase's
+# find_scale and refine_fast_s in lmrob.c line-for-line so that the
+# rng="R" path can land bit-identical fits.
+# ---------------------------------------------------------------------------
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+def cy_find_scale_r(
+    cnp.ndarray[double, ndim=1, mode="c"] r,
+    double b0,
+    double initial_scale,
+    int p,
+    int family,
+    cnp.ndarray[double, ndim=1, mode="c"] tuning,
+    int max_iter,
+    double scale_tol,
+):
+    """Port of robustbase's ``find_scale`` in ``lmrob.c``.
+
+    Fixed-point M-scale iteration::
+
+        s_{k+1} = s_k * sqrt(sum_rho(r/s_k) / ((n-p) * b0))
+
+    Returns ``(scale, n_iter)``. ``scale`` is the converged M-scale;
+    ``n_iter`` is the number of iterations used (0 on immediate
+    convergence, ``max_iter`` if the loop ran out).
+    """
+    if family == FAM_GGW and not _ggw_tables_init:
+        _init_ggw_tables()
+    cdef Py_ssize_t n = r.shape[0]
+    if initial_scale <= 0.0:
+        return 0.0, 0
+    cdef double* r_ptr = <double*>cnp.PyArray_DATA(r)
+    cdef double* t_ptr = <double*>cnp.PyArray_DATA(tuning)
+    cdef double s = initial_scale
+    cdef double prev = initial_scale
+    cdef double inv_npmp = 1.0 / (<double>(n - p))
+    cdef double sum_chi, diff
+    cdef int it
+    cdef int iters_used = max_iter
+    with nogil:
+        for it in range(max_iter):
+            sum_chi = _chi_sum(r_ptr, n, prev, family, t_ptr)
+            s = prev * sqrt(sum_chi * inv_npmp / b0)
+            diff = s - prev
+            if diff < 0:
+                diff = -diff
+            if diff <= scale_tol * prev:
+                iters_used = it
+                break
+            prev = s
+    return s, iters_used
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+def cy_refine_fast_s_r(
+    cnp.ndarray[double, ndim=2, mode="c"] X,
+    cnp.ndarray[double, ndim=1, mode="c"] y,
+    cnp.ndarray[double, ndim=1, mode="c"] beta,
+    double initial_scale,
+    int kk,
+    int conv_flag,
+    int max_k,
+    double rel_tol,
+    int family,
+    cnp.ndarray[double, ndim=1, mode="c"] tuning,
+    double b0,
+):
+    """Port of robustbase's ``refine_fast_s`` in ``lmrob.c``.
+
+    Two modes (per the ``conv_flag`` argument):
+
+    - ``conv_flag == 0``: do exactly ``kk`` refining steps without a
+      convergence check. Used inside the resample loop with ``kk =
+      k_fast_s``.
+    - ``conv_flag == 1``: iterate up to ``max_k`` steps with R's
+      ``del <= rel_tol * fmax(rel_tol, ||beta_cand||_2)`` test (uses
+      the OLD beta's norm). Used for survivor refinement.
+
+    Each step:
+    - One Newton-step on the M-scale: ``s = s * sqrt(sum_rho(r/s) /
+      ((n-p) * b0))``.
+    - IRWLS via LAPACK ``dgels`` (QR-based, same as R).
+
+    ``initial_scale``: if ``<= 0``, recomputed via ``MAD(res, center=0)``
+    (matching robustbase's path).
+
+    ``beta`` is updated in place.
+
+    Returns ``(scale, n_iter, converged, status)``. Status: 0 ok, 2
+    exact fit (perfect zeros), 3 LAPACK error.
+    """
+    if family == FAM_GGW and not _ggw_tables_init:
+        _init_ggw_tables()
+
+    cdef Py_ssize_t n = X.shape[0]
+    cdef Py_ssize_t p = X.shape[1]
+    cdef int n_int = <int>n
+    cdef int p_int = <int>p
+    cdef int one = 1
+    cdef int info = 0
+
+    cdef double* X_w = <double*>malloc(n * p * sizeof(double))
+    cdef double* y_w = <double*>malloc(n * sizeof(double))
+    cdef double* r_buf = <double*>malloc(n * sizeof(double))
+    cdef double* w_buf = <double*>malloc(n * sizeof(double))
+    cdef double* beta_prev = <double*>malloc(p * sizeof(double))
+    cdef double* aux = <double*>malloc(n * sizeof(double))
+    cdef int lwork = max(1, n_int * p_int + 64 * (n_int + p_int))
+    cdef double* work = <double*>malloc(lwork * sizeof(double))
+    if (X_w == NULL or y_w == NULL or r_buf == NULL or w_buf == NULL
+            or beta_prev == NULL or aux == NULL or work == NULL):
+        free(X_w); free(y_w); free(r_buf); free(w_buf)
+        free(beta_prev); free(aux); free(work)
+        raise MemoryError("cy_refine_fast_s_r: out of memory")
+
+    cdef double* X_data = <double*>cnp.PyArray_DATA(X)
+    cdef double* y_data = <double*>cnp.PyArray_DATA(y)
+    cdef double* beta_data = <double*>cnp.PyArray_DATA(beta)
+    cdef double* t_data = <double*>cnp.PyArray_DATA(tuning)
+
+    cdef Py_ssize_t i, j, it
+    cdef double s = initial_scale
+    cdef double sw, dot, delta, nrmB, diff, sum_chi
+    cdef double inv_npmp = 1.0 / (<double>(n - p))
+    cdef int converged = 0
+    cdef int status = 0
+    cdef int iters = 0
+    cdef int kmax
+    cdef double half_med, q
+    cdef Py_ssize_t mid
+
+    if conv_flag != 0:
+        kmax = max_k
+    else:
+        kmax = kk
+
+    with nogil:
+        # Residuals at the input beta.
+        for i in range(n):
+            dot = 0.0
+            for j in range(p):
+                dot += X_data[i * p + j] * beta_data[j]
+            r_buf[i] = y_data[i] - dot
+
+        # If initial_scale <= 0, recompute via MAD around zero (R's
+        # ``MAD(res, center=0, ...)``).
+        if s <= 0.0:
+            for i in range(n):
+                aux[i] = r_buf[i] if r_buf[i] >= 0 else -r_buf[i]
+            # Inline median of aux[0..n-1] via a copy sort.
+            # Use std-style insertion of a sort routine here; for n
+            # small (n in 21..few-thousand) a partial sort would do.
+            # For simplicity, do a full sort in O(n log n). Allocates
+            # nothing new because we sort in-place over aux.
+            # Bubble-ish insertion sort is fine for our sizes; switch
+            # to qsort if hot.
+            for i in range(1, n):
+                # insertion sort
+                dot = aux[i]
+                j = i - 1
+                while j >= 0 and aux[j] > dot:
+                    aux[j + 1] = aux[j]
+                    j -= 1
+                aux[j + 1] = dot
+            mid = n // 2
+            if (n & 1) == 1:
+                half_med = aux[mid]
+            else:
+                half_med = 0.5 * (aux[mid - 1] + aux[mid])
+            s = 1.4826 * half_med
+
+        # Main loop.
+        for it in range(kmax):
+            iters = it + 1
+            if s == 0.0:
+                status = 2
+                converged = 1
+                break
+
+            # One Newton step on the M-scale.
+            sum_chi = _chi_sum(r_buf, n, s, family, t_data)
+            s = s * sqrt(sum_chi * inv_npmp / b0)
+            if s == 0.0:
+                status = 2
+                converged = 1
+                break
+
+            # IRWLS weights.
+            _wgt_zinv(r_buf, w_buf, n, s, family, t_data)
+
+            # Build weighted system: y_w = sqrt(w) * y, X_w = sqrt(w) * X
+            # in column-major layout for dgels.
+            for i in range(n):
+                sw = sqrt(w_buf[i]) if w_buf[i] > 0 else 0.0
+                y_w[i] = y_data[i] * sw
+                for j in range(p):
+                    X_w[i + j * n] = X_data[i * p + j] * sw
+
+            # Save old beta for the convergence test.
+            for j in range(p):
+                beta_prev[j] = beta_data[j]
+
+            dgels(b'N', &n_int, &p_int, &one,
+                  X_w, &n_int,
+                  y_w, &n_int,
+                  work, &lwork, &info)
+            if info != 0:
+                status = 3
+                break
+            for j in range(p):
+                beta_data[j] = y_w[j]
+
+            # Convergence test only when conv_flag != 0.
+            if conv_flag != 0:
+                delta = 0.0
+                nrmB = 0.0
+                for j in range(p):
+                    diff = beta_data[j] - beta_prev[j]
+                    delta += diff * diff
+                    nrmB += beta_prev[j] * beta_prev[j]
+                delta = sqrt(delta)
+                nrmB = sqrt(nrmB)
+                # R: del <= rel_tol * fmax2(rel_tol, ||beta_cand||_2)
+                q = rel_tol if rel_tol > nrmB else nrmB
+                if delta <= rel_tol * q:
+                    converged = 1
+                    break
+
+            # Update residuals for the next iter.
+            for i in range(n):
+                dot = 0.0
+                for j in range(p):
+                    dot += X_data[i * p + j] * beta_data[j]
+                r_buf[i] = y_data[i] - dot
+
+    free(X_w); free(y_w); free(r_buf); free(w_buf)
+    free(beta_prev); free(aux); free(work)
+    return s, iters, converged, status
+
+
+# ---------------------------------------------------------------------------
 # Bounded random integer in [0, bound), using numpy's bitgen. Lemire's debiased
 # method to avoid modulo bias for moderately-sized bounds.
 # ---------------------------------------------------------------------------
