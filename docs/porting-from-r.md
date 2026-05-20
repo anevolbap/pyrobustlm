@@ -53,6 +53,8 @@ The most-used R control fields and their Python equivalents:
 | `k.max` | `k_max` |
 | `refine.tol` | `refine_tol` |
 | `seed` | `seed` |
+| `subsampling` | `subsampling` (``"simple"`` / ``"nonsingular"``) |
+| (no equivalent) | `rng` (``"PCG64"`` / ``"MT19937"`` / ``"R"``) |
 | (no equivalent) | `n_workers` (parallel resampling) |
 
 ## Default behaviour
@@ -70,8 +72,11 @@ the older D-scale tuning.
 
 ## Things that don't match exactly
 
-The fast-S resampling RNG uses NumPy's PCG64; R uses Mersenne Twister.
-With the same seed, the two diverge at the first random draw, so
-basin-of-attraction sensitivity can give small coefficient differences
-on tiny-n datasets. See the [numerical notes](numerical-notes) for the
+The default fast-S resampling RNG uses NumPy's PCG64; R uses Mersenne
+Twister. With the same seed, the two diverge at the first random draw,
+so basin-of-attraction sensitivity can give small coefficient
+differences on tiny-n datasets. For tighter agreement, opt in to
+``Control(rng="R")`` (v0.5.16+): the resample loop runs against R's
+exact ``unif_rand`` stream and stackloss fits agree with ``lmrob`` to
+rtol~1.7e-5. See the [numerical notes](numerical-notes) for the
 full list.

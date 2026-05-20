@@ -17,7 +17,8 @@
 
 ### 0.2 Non-Goals (v1)
 
-- Bit-identical reproducibility with R's RNG. We document this clearly.
+- ~~Bit-identical reproducibility with R's RNG.~~ As of v0.5.16, opt-in
+  via `Control(rng="R")` — see section 11.
 - `lmrob..M..fit` standalone fitter, mixed-effects, GLM extensions, `nlrob`. (Stretch goals only.)
 - Bayesian / posterior interfaces.
 
@@ -546,8 +547,18 @@ Tolerances may be loosened **only with a comment in the test explaining why**.
 ### 5.2 RNG Strategy
 
 - Seed accepted as `int | np.random.Generator | None` in `lmrob(seed=...)`.
-- Internal: `SeedSequence(seed).spawn(num_threads)` → one PCG64 per thread.
-- Document explicitly: "Results are bit-reproducible across runs with the same seed and thread count, but **not** identical to R's `set.seed(...)` results because R uses Mersenne Twister."
+- Default (`Control(rng="PCG64")`): `SeedSequence(seed).spawn(num_threads)`
+  → one PCG64 per thread. Results bit-reproducible across runs with the
+  same seed and thread count.
+- Opt-in (`Control(rng="MT19937")`): same scheme over NumPy's MT19937
+  BitGenerator; closer to R's family but not byte-identical (seed-to-state
+  path differs, raw output is 64-bit).
+- Opt-in (`Control(rng="R")`): drives the resample loop through
+  `pylmrob.r_set_seed` + `r_sample_noreplace` / `r_subsample_nonsingular`,
+  byte-identical to robustbase's `unif_rand` stream. Forces
+  `n_workers=1`, `engine_c=False`. The final fit is currently within
+  rtol~1e-5 of R's `lmrob` on stackloss; full bit-identical fits await
+  the `refine_fast_s` + `find_scale` Cython port (section 11).
 
 ### 5.3 Error Handling
 
@@ -652,6 +663,70 @@ Process:
 | **Total** | **~10.5 weeks** |
 
 Add ~30% buffer for unknown unknowns → ~14 weeks to v1.0.
+
+---
+
+## 11. Post-v0.5.16 R-compat track
+
+### 11.1 Shipped in v0.5.16
+
+- `pylmrob.r_set_seed(seed)` and `RState`: pure-Python MT19937 matching
+  R's `set.seed`/`unif_rand` from `src/main/RNG.c` byte-for-byte.
+- `pylmrob.r_sample_noreplace(rng, n, k)`: port of robustbase's
+  `sample_noreplace` (Knuth swap-and-replace).
+- `pylmrob.r_subsample_nonsingular(rng, X, p)`: port of robustbase's
+  `subsample()` with `ss=1` (LU-pivot row-skip).
+- `pylmrob.r_qnorm(p)` (Wichura AS 241) and `pylmrob.r_norm_rand(rng)`
+  (R's `Inversion` branch): byte-identical to R's `qnorm` / `rnorm`.
+- Cython kernel for the above (`pylmrob._core._r_rng`): ~100× speedup
+  on the draw helpers, ~3.6× on the end-to-end stackloss fit.
+- `Control(rng="R")`: routes the fast-S resample loop through the
+  above. Supports both `subsampling="simple"` and
+  `subsampling="nonsingular"` (R's default).
+- Survivor refinement now matches `refine_fast_s` more closely (one
+  Newton scale step per iter, L2 norm of old beta) and the MM step
+  routes through Cython `cy_lmrob_mm` (LAPACK `dgels`).
+
+End-to-end stackloss fits with `Control(rng="R")` agree with R's
+`lmrob` after `set.seed(seed)` to **rtol ~1.7e-5** on coefficients
+and **~6.1e-6** on scale (across seeds {1, 42, 12345}).
+
+### 11.2 Remaining gap to bit-identical (v0.5.17+)
+
+The residual rtol~1e-5 lives in:
+
+1. The resample-loop "associated scale" computation. R uses
+   `find_scale` (full M-scale convergence) on the residuals to rank
+   candidates; pylmrob uses `_mscale_generic` in the Cython kernel.
+   The two converge to the same M-scale value but the iteration
+   stops at slightly different points.
+2. The k_fast_s refinement steps inside the resample loop. R does
+   one Newton scale step per iter; the Cython kernel does full
+   M-scale convergence.
+3. Survivor selection. Tiny scale-ranking differences can pick a
+   different best_r survivor and propagate.
+
+### 11.3 Phase 13: bit-identical R fits
+
+Port two more pieces verbatim from `lmrob.c`:
+
+- **`find_scale`** to Cython. Same algorithm as `_mscale_generic` but
+  uses R's exact convergence test (relative diff on scale, not on
+  rho-sum). Add a new entry point `cy_find_scale`.
+- **`refine_fast_s`** as a complete Cython kernel: takes a beta
+  candidate, runs `k_fast_s` Newton-step refinements, returns the
+  associated scale via `cy_find_scale`. New entry point
+  `cy_refine_fast_s_r`.
+- New `_resample_chunk_r_cython` that drives the resample loop in
+  C: subset draw via `r_subsample_nonsingular`, refine via
+  `cy_refine_fast_s_r`, rank by associated scale, retain best_r.
+- Survivor refinement uses the same Cython `cy_refine_fast_s_r`
+  with `conv=TRUE` semantics.
+
+Target: stackloss fit byte-identical (rtol < 1e-12) to R's `lmrob`
+on the same `set.seed(seed)`. The residual then is the LAPACK
+floating-point order, which we can't close without using the same
+BLAS as R.
 
 ---
 

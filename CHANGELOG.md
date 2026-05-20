@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Cython port of robustbase's ``refine_fast_s`` and ``find_scale``**
+  (``pylmrob._core._fast_s.cy_refine_fast_s_r`` and
+  ``cy_find_scale_r``). These are line-for-line ports of
+  ``refine_fast_s`` and ``find_scale`` in robustbase's ``lmrob.c``.
+  ``Control(rng="R")`` now drives both the resample-loop K refinement
+  steps and the survivor refinement through ``cy_refine_fast_s_r``
+  (with the appropriate ``conv_flag``), and computes each candidate's
+  "associated scale" via ``cy_find_scale_r``. The S-step coefficient
+  agreement with R's ``lmrob.S`` (post-survivor refinement) on
+  stackloss is now ``rtol~5e-11`` (up from ``~1e-7`` in v0.5.16).
+  Headline post-MM agreement is unchanged at ``rtol~1.7e-5`` because
+  the residual gap lives in a 1-iter difference in survivor
+  convergence due to MAD-init floating-point order.
+
 ### Changed
 
 - **``Control(rng="R")`` survivor refinement now matches robustbase's
