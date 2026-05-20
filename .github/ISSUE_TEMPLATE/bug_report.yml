@@ -1,0 +1,50 @@
+name: Bug report
+description: Report a bug in pylmrob.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug! A minimal reproducer is the
+        single most useful thing you can include.
+
+  - type: textarea
+    id: pylmrob-version
+    attributes:
+      label: pylmrob version + environment
+      description: |
+        Output of `python -c "import pylmrob, sys, platform; print(pylmrob.__version__, sys.version, platform.platform())"`.
+      placeholder: |
+        0.5.17 3.12.x ... Linux-...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Minimal reproducer
+      description: |
+        Smallest code + data that reproduces the issue. Inline data or a CSV
+        snippet works. Include the `Control(...)` and `seed=...` you used.
+      render: python
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: |
+        If you're comparing against R, paste the R call and R output too.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What actually happened
+      description: |
+        Full traceback or numerical output.
+    validations:
+      required: true

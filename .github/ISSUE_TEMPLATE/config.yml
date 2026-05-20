@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question about R compatibility
+    url: https://github.com/anevolbap/pyrobustlm/discussions
+    about: Numerical disagreement with R, or questions about Control(rng="R") and similar. Please use Discussions first.

@@ -1,0 +1,34 @@
+name: Feature request
+description: Suggest a new feature or improvement.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Use case
+      description: |
+        What are you trying to do, and what's missing or awkward in pylmrob today?
+        If R / robustbase supports this and pylmrob doesn't, please point at the
+        R function or argument.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-api
+    attributes:
+      label: Proposed API (optional)
+      description: |
+        Sketch the Python API you'd like to see. Don't worry about implementation.
+      render: python
+
+  - type: checkboxes
+    id: alternatives
+    attributes:
+      label: Alternatives I considered
+      description: Nothing here is required, but useful context for triage.
+      options:
+        - label: Doing this in pure NumPy/pandas after the fit
+        - label: Using `statsmodels.robust.RLM` instead (M-estimator only, no MM)
+        - label: Driving R via `rpy2`
+        - label: I don't see a workaround
