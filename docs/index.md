@@ -44,7 +44,8 @@ families, S/M-S init, MM, KS2014/KS2011 settings, per-case weights,
 both vcov flavours, anova). Median wall-clock 0.93x R across the bench
 corpus.
 
-R parity (vs `robustbase` 0.99-7) on the classical datasets:
+R parity (vs `robustbase` 0.99-7) on the classical datasets, default
+`Control(rng="PCG64")`:
 
 | Output | Tolerance |
 |---|---|
@@ -55,8 +56,10 @@ R parity (vs `robustbase` 0.99-7) on the classical datasets:
 | `summary()` t-values, p-values | rtol=2e-3 |
 | `anova()` chi-squared, p-value | rtol=2e-3 |
 
-See [Numerical notes](numerical-notes) for the full list of documented
-divergences from R.
+`Control(rng="R")` (v0.5.16+) drives the resample loop through R's exact
+`unif_rand` stream and tightens coefficient agreement to rtol~1.7e-5 on
+stackloss. See [Numerical notes](numerical-notes) and
+[`rng-r-perf`](rng-r-perf) for details.
 
 ## Contents
 
@@ -69,6 +72,7 @@ examples/stackloss_tour
 api
 porting-from-r
 engine_c
+rng-r-perf
 numerical-notes
 faq
 ```

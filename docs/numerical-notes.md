@@ -20,12 +20,14 @@ For each entry record:
 
 ### 1. Initial-S basin sensitivity to RNG (Phase 4)
 
-**What.** With ``seed`` held fixed, our fast-S converges to slightly different
-S coefficients than R because we use NumPy's PCG64 instead of R's Mersenne
-Twister. The set of resampled p-subsets differs, so the best-of-best_r
-candidate is sometimes a different starting point. After MM, the final
-beta agrees with R's MM beta to about ``rtol=5e-5`` on stackloss; on
-small-n datasets (pension, starsCYG) the divergence can be ``rtol=1e-1``.
+**What.** With ``seed`` held fixed, our default fast-S
+(``Control(rng="PCG64")``) converges to slightly different S
+coefficients than R because we use NumPy's PCG64 instead of R's
+Mersenne Twister. The set of resampled p-subsets differs, so the
+best-of-best_r candidate is sometimes a different starting point.
+After MM, the final beta agrees with R's MM beta to about
+``rtol=5e-5`` on stackloss; on small-n datasets (pension, starsCYG)
+the divergence can be ``rtol=1e-1``.
 
 For redescending psi (hampel, ggw) on n=21 stackloss the basin drift
 also leaks into the parametric cov: a few rweights differ from R's by
@@ -36,14 +38,25 @@ stay within ~1e-3 rerr of R; only the parametric vcov is sensitive on
 this regime. See ``psi_hampel`` and ``psi_ggw`` rows in
 ``docs/bench-report.md``.
 
-**Why acceptable.** Plan §5.2 explicitly waives bit-identical RNG
-reproducibility with R. The cov drift is a function of how close the
-n=21 stackloss observations sit to the psi-redescending region, not an
+**Opt-in fix.** ``Control(rng="R")`` (v0.5.16+) drives the resample
+loop through ``pylmrob.r_set_seed`` + ``r_sample_noreplace`` /
+``r_subsample_nonsingular``, byte-identical to robustbase's
+``unif_rand`` stream. End-to-end stackloss fits now agree with R's
+``lmrob`` after ``set.seed(seed)`` to ``rtol~1.7e-5`` on coefficients
+and ``~6.1e-6`` on scale. Forces ``n_workers=1`` and
+``engine_c=False``; see [`rng-r-perf`](rng-r-perf.md) for wall-clock
+costs.
+
+**Why acceptable for default.** Plan §5.2 documents the default RNG
+strategy. The PCG64 cov drift is a function of how close the n=21
+stackloss observations sit to the psi-redescending region, not an
 algorithmic mismatch; the median cov diag rerr across the 34-case
 corpus is 7.95e-07.
 
 **Where.** Tests at ``tests/validation/test_vs_r_classical.py`` apply
-per-dataset tolerances reflecting this sensitivity.
+per-dataset tolerances reflecting this sensitivity (PCG64 path).
+``tests/validation/test_lmrob_rng_r_vs_R.py`` exercises the tighter
+``rng="R"`` parity.
 
 ### 2. Performance vs R
 

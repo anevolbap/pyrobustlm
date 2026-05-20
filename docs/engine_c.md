@@ -65,6 +65,10 @@ fit always succeeds. The fit's coef/scale stay within ~1e-3 rerr of
 the numpy path on those edge cases. To get byte-identical fits with
 the pre-engine_c releases, pass `Control(engine_c=False)`.
 
+Note that `Control(rng="R")` forces `engine_c=False` automatically: the
+monolithic engine owns its own BitGenerator and can't share R-mode's
+``unif_rand`` state.
+
 ## Benchmark
 
 Single-threaded BLAS, 7-rep median, four classical datasets × three

@@ -5,10 +5,14 @@ A 5-minute tour. We will fit the classic `stackloss` dataset with
 
 ## Install
 
-From source (PyPI publication is pending):
+```bash
+pip install pylmrob
+```
+
+From source:
 
 ```bash
-pip install git+https://github.com/anevolbap/pylmrob
+pip install git+https://github.com/anevolbap/pyrobustlm
 ```
 
 ## Fit
