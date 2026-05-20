@@ -30,9 +30,7 @@ def has_header(path: Path) -> bool:
 def main(argv: list[str]) -> int:
     missing = [p for p in argv[1:] if not has_header(Path(p))]
     if missing:
-        sys.stderr.write(
-            f"\nMissing SPDX header ({NEEDLE!r}) in {len(missing)} file(s):\n"
-        )
+        sys.stderr.write(f"\nMissing SPDX header ({NEEDLE!r}) in {len(missing)} file(s):\n")
         for p in missing:
             sys.stderr.write(f"  {p}\n")
         sys.stderr.write(
