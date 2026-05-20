@@ -37,6 +37,20 @@ repos:
         stages: [commit-msg]
         args: []
 
+  # meson.build's ``version: ...`` and src/pylmrob/_version.py's
+  # ``__version__`` must agree, otherwise cibuildwheel produces wheels
+  # named after the stale version and PyPI rejects the upload as
+  # "File already exists" against the old wheel hash. v0.5.16 and v0.5.17
+  # both failed this way.
+  - repo: local
+    hooks:
+      - id: version-sync
+        name: version sync (meson.build vs _version.py)
+        entry: python scripts/check_version_sync.py
+        language: system
+        pass_filenames: false
+        files: ^(meson\.build|src/pylmrob/_version\.py)$
+
   # Require an SPDX license header on every source file. Project is
   # GPL-3.0-or-later, matching LICENSE. The check runs against any
   # python / cython / R / pxd source under src, tests, scripts.
