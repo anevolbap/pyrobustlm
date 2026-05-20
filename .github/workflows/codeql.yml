@@ -1,0 +1,50 @@
+name: CodeQL
+
+# GitHub-native SAST. Scans the Python source under src/ and tests/.
+# We don't scan the Cython-generated C since the .c files are
+# checkout-time artefacts; the source of truth is the .pyx and CodeQL
+# doesn't have a Cython analyser, so we rely on the unit/property
+# tests for the kernels.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly Monday 06:00 UTC, independent of PR activity.
+    - cron: "0 6 * * 1"
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          # The default query suite is "security-extended"; trade-off:
+          # more findings, more chance of false positives. Stick with the
+          # default 'security-and-quality' until we have a vendor in
+          # production that justifies tighter rules.
+          queries: security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:python"
