@@ -12,6 +12,8 @@ repos:
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Match the project's dev pin in pyproject.toml ("ruff>=0.15,<0.16").
+    # Older ruff doesn't know the RUF059 selector used in
+    # tool.ruff.lint.per-file-ignores.
     rev: v0.15.0
     hooks:
       - id: ruff

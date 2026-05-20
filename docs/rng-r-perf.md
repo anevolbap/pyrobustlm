@@ -4,8 +4,9 @@
 `r_sample_noreplace` / `r_subsample_nonsingular` so subset draws are byte-identical
 to robustbase. This page benchmarks the wall-clock cost vs the default PCG64 path.
 
-Companion of [`bench-report.md`](bench-report.md), which compares pylmrob (PCG64,
-default) against R itself.
+Companion of the auto-generated
+[`bench-report.md`](https://github.com/anevolbap/pyrobustlm/blob/main/docs/bench-report.md),
+which compares pylmrob (PCG64, default) against R itself.
 
 ## Setup
 
@@ -57,4 +58,5 @@ threading is faster and statistically just as valid.
 The residual rtol~1e-5 gap to R's `lmrob` lives in the resample loop's
 "associated scale" computation (R uses `find_scale`; pylmrob uses
 `_mscale_generic` in the Cython kernel). Porting `refine_fast_s` + `find_scale`
-to Cython end-to-end is tracked in [`../plan.md`](../plan.md#11-post-v0516-r-compat-track).
+to Cython end-to-end is tracked in
+[`plan.md` §11](https://github.com/anevolbap/pyrobustlm/blob/main/plan.md#11-post-v0516-r-compat-track).
