@@ -708,25 +708,45 @@ The residual rtol~1e-5 lives in:
 
 ### 11.3 Phase 13: bit-identical R fits
 
-Port two more pieces verbatim from `lmrob.c`:
+The `find_scale` and `refine_fast_s` Cython ports landed in v0.5.17
+(PR #48). Cross-corpus validation in PR #50 shows:
 
-- **`find_scale`** to Cython. Same algorithm as `_mscale_generic` but
-  uses R's exact convergence test (relative diff on scale, not on
-  rho-sum). Add a new entry point `cy_find_scale`.
-- **`refine_fast_s`** as a complete Cython kernel: takes a beta
-  candidate, runs `k_fast_s` Newton-step refinements, returns the
-  associated scale via `cy_find_scale`. New entry point
-  `cy_refine_fast_s_r`.
-- New `_resample_chunk_r_cython` that drives the resample loop in
-  C: subset draw via `r_subsample_nonsingular`, refine via
-  `cy_refine_fast_s_r`, rank by associated scale, retain best_r.
-- Survivor refinement uses the same Cython `cy_refine_fast_s_r`
-  with `conv=TRUE` semantics.
+- **Coefficient agreement** with R is now **rtol=1e-5** across all 10
+  classical robustbase datasets (max observed: 2.9e-6 on aircraft).
+  S-step beta is essentially bit-identical (rtol~5e-11).
+- **Scale agreement** sits at a **3.23e-6 floor** that's uniform
+  across the corpus and identical to the historic PCG64-path floor.
 
-Target: stackloss fit byte-identical (rtol < 1e-12) to R's `lmrob`
-on the same `set.seed(seed)`. The residual then is the LAPACK
-floating-point order, which we can't close without using the same
-BLAS as R.
+The 3.23e-6 scale floor is **not** from RNG, MAD, or algorithm choice.
+Empirical investigation:
+
+- MAD-around-0 on the same input is bit-identical to R's `median_abs`
+  (R uses `kthplace`, we use insertion sort, but both return the same
+  doubles for the same input).
+- The IRWLS loop in `cy_refine_fast_s_r` is line-for-line faithful to
+  R's `refine_fast_s`.
+- Iter-by-iter trace on stackloss shows R's survivor refinement
+  converges at iter 24 with scale 1.91235414, while pylmrob's
+  converges at iter 25 with scale 1.91234796. The 1-iter difference
+  is because the L2-norm `delta` at iter 24 is 1 ULP above R's value,
+  so pylmrob does one extra Newton step. That extra step adjusts the
+  scale by ~6e-6.
+
+The 1-ULP `delta` difference is from accumulated `dgels` QR precision
+differences across the 24 IRWLS solves. Both pylmrob and R call LAPACK
+`dgels`, but the result depends on the specific BLAS implementation;
+ours uses system OpenBLAS, R may be linked against a different BLAS.
+Closing this requires:
+
+- Using R's exact BLAS, OR
+- Replacing `dgels` with a manually controlled QR (Givens rotations
+  with explicit accumulation order). Adds significant Cython and is
+  non-trivial to maintain.
+
+**Verdict.** Phase 13 (bit-identical fits) is at its practical floor.
+Coefficient agreement of **rtol=1e-5** across the corpus is the
+shippable result. Further work on closing the scale gap is not
+worthwhile until / unless a real user needs sub-1e-6 agreement.
 
 ---
 

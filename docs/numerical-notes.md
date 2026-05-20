@@ -41,11 +41,17 @@ this regime. See ``psi_hampel`` and ``psi_ggw`` rows in
 **Opt-in fix.** ``Control(rng="R")`` (v0.5.16+) drives the resample
 loop through ``pylmrob.r_set_seed`` + ``r_sample_noreplace`` /
 ``r_subsample_nonsingular``, byte-identical to robustbase's
-``unif_rand`` stream. End-to-end stackloss fits now agree with R's
-``lmrob`` after ``set.seed(seed)`` to ``rtol~1.7e-5`` on coefficients
-and ``~6.1e-6`` on scale. Forces ``n_workers=1`` and
+``unif_rand`` stream. End-to-end fits now agree with R's ``lmrob``
+across the 10-dataset classical corpus to **rtol=1e-5** on
+coefficients and ``~3.2e-6`` on scale. Forces ``n_workers=1`` and
 ``engine_c=False``; see [`rng-r-perf`](rng-r-perf.md) for wall-clock
 costs.
+
+The residual ``~3.2e-6`` scale floor is from accumulated LAPACK
+``dgels`` ULP differences across the IRWLS solves; it's identical
+to pylmrob's historic PCG64-path scale floor and is **not** caused
+by RNG or MAD. Closing it would require matching R's exact BLAS
+implementation; see ``plan.md`` §11.3 for details.
 
 **Why acceptable for default.** Plan §5.2 documents the default RNG
 strategy. The PCG64 cov drift is a function of how close the n=21
