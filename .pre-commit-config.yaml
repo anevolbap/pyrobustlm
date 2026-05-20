@@ -11,7 +11,8 @@ repos:
         args: ["--maxkb=500"]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    # Match the project's dev pin in pyproject.toml ("ruff>=0.15,<0.16").
+    rev: v0.15.0
     hooks:
       - id: ruff
         args: ["--fix"]
@@ -35,3 +36,15 @@ repos:
       - id: conventional-pre-commit
         stages: [commit-msg]
         args: []
+
+  # Require an SPDX license header on every source file. Project is
+  # GPL-3.0-or-later, matching LICENSE. The check runs against any
+  # python / cython / R / pxd source under src, tests, scripts.
+  - repo: local
+    hooks:
+      - id: spdx-header
+        name: SPDX license header
+        entry: python scripts/check_spdx_headers.py
+        language: system
+        pass_filenames: true
+        files: ^(src/pylmrob/.*\.(py|pyx|pxd)|tests/.*\.py|scripts/.*\.(py|R))$

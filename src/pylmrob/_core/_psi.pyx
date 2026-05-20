@@ -871,4 +871,3 @@ def ggw_psi_prime(double[::1] x, double a, double b, double c, double[::1] out):
         e = exp(-arg)
         bracket = 1.0 - (b * inv_2a) * ax * cpow(diff, b - 1.0)
         out[i] = e * bracket
-
