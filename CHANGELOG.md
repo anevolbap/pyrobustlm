@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **``Control(rng="R")`` survivor refinement now matches robustbase's
+  ``refine_fast_s`` more closely.** Two algorithmic fixes:
+  - The per-iter scale update is now ONE Newton step
+    (``s = s * sqrt(sum_rho(r/s) / ((n-p) * b0))``) instead of full
+    M-scale convergence. This matches the fast-S algorithm in
+    Salibian-Barrera & Yohai (2006) and robustbase's C code.
+  - The L2-norm convergence test uses the OLD beta's norm, matching
+    R's ``refine_fast_s`` line-for-line.
+  - The MM step routes through the Cython ``cy_lmrob_mm`` kernel
+    (LAPACK ``dgels`` QR-based solver) instead of the NumPy
+    ``np.linalg.lstsq`` (gelsd, SVD-based) fallback, even when
+    ``engine_c=False``. Closer match to R's ``rwls()``.
+
+  Net effect on stackloss vs R's ``lmrob`` with ``set.seed(seed)``:
+  intercept gap improved from ~2.3e-5 to ~1.7e-5; scale gap from
+  ~8.4e-6 to ~6.1e-6. The residual gap is mostly in the resample
+  loop's "associated scale" computation and survivor selection, both
+  of which still differ from robustbase. A full closing to bit-
+  identical fits would require porting ``refine_fast_s`` and
+  ``find_scale`` end-to-end.
+
 - **Cython kernel for the R RNG** (``pylmrob._core._r_rng``). The
   inner loops of ``unif_rand_n``, ``r_sample_noreplace``, and
   ``r_subsample_nonsingular`` now run nogil in C. Pure-Python paths

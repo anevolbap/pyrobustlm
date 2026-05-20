@@ -459,8 +459,13 @@ def _lmrob_impl(
         # Cython MM fast path when engine_c was requested (the user has
         # signalled they want speed; engine_c block above ran or fell
         # back, but in either case we should use the Cython MM here too).
-        # Falls back to the NumPy implementation in plain default mode.
-        if control.engine_c and _CY_LMROB_MM is not None and psi_family in _CY_FAMILY_IDS:
+        # rng="R" also routes through this path because the Cython MM
+        # uses LAPACK dgels (same QR-based solver as robustbase's rwls),
+        # which matches R's IRWLS step bit-for-bit. The pure-Python
+        # mm_iterate uses np.linalg.lstsq (gelsd, SVD-based) and
+        # diverges in the last few ULPs.
+        _use_cy_mm = control.engine_c or control.rng == "R"
+        if _use_cy_mm and _CY_LMROB_MM is not None and psi_family in _CY_FAMILY_IDS:
             _tuning_psi_mm = np.zeros(3, dtype=np.float64)
             for _i in range(min(3, len(psi_k_eff))):
                 _tuning_psi_mm[_i] = float(psi_k_eff[_i])
