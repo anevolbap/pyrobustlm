@@ -60,7 +60,7 @@ dev = [
 # this only on the Linux test job. Pin rpy2<3.6 because rpy2 3.6 needs
 # R >= 4.4 (uses R_getVar).
 validation = [
-    "rpy2>=3.5,<3.6",
+    "rpy2>=3.5,<3.7",
 ]
 plot = [
     "matplotlib>=3.7",
