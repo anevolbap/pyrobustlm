@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Dev tooling
+
+- Coverage floor: ``pytest --cov-fail-under=65`` enforced by default
+  (current local coverage is 67%).
+- ``pytest-randomly`` for test-order randomisation;
+  ``pytest-rerunfailures`` available for flaky subprocess tests.
+- New ``.github/workflows/changelog-check.yml`` fails PRs that don't
+  touch ``CHANGELOG.md`` (escape hatches: ``skip-changelog`` label
+  or ``[skip changelog]`` in the title).
+
 ## [0.5.17] - 2026-05-19
 
 ### Added
