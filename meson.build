@@ -1,7 +1,11 @@
 project(
   'pylmrob',
   'c', 'cython',
-  version: '0.5.15',
+  # MUST stay in sync with src/pylmrob/_version.py __version__.
+  # Otherwise wheels get named with this stale version (v0.5.16 and
+  # v0.5.17 publishes both failed because of this). The
+  # scripts/check_version_sync.py pre-commit hook guards against drift.
+  version: '0.5.17',
   license: 'GPL-3.0-or-later',
   meson_version: '>=1.4.0',
   default_options: [

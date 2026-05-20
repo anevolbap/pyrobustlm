@@ -104,9 +104,15 @@ jobs:
       url: https://pypi.org/p/pylmrob
     permissions:
       id-token: write   # OIDC trusted publisher
+      attestations: write  # PEP 740 sigstore signing
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # PEP 740: sigstore-signed attestation included in the upload.
+          # PyPI surfaces a "built by this CI run" badge on the project
+          # page. Trusted Publisher (OIDC) is already wired above.
+          attestations: true
