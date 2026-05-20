@@ -1,3 +1,7 @@
+---
+orphan: true
+---
+
 # Parallelising the `engine_c` kernel
 
 Design notes for splitting `cy_lmrob_fit` / `cy_lmrob_fast_s` across

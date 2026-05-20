@@ -75,6 +75,49 @@ jobs:
           name: sdist
           path: dist/*.tar.gz
 
+  smoke_test:
+    # Sanity check that the just-built wheels actually install and run.
+    # Catches the v0.5.16-class hazard where the wheel name disagrees with
+    # the tag version, or the wheel is built from stale state. Runs on
+    # the same Ubuntu x86_64 wheel everyone hits first via ``pip install``.
+    name: Smoke-test built wheel
+    needs: [build_wheels]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheels-ubuntu-latest-x86_64
+          path: dist
+      - name: Install the built wheel
+        run: |
+          python -m pip install --upgrade pip
+          # Pick the cp312 wheel; cibuildwheel produces one per Python
+          # version, all platform-compatible on Linux x86_64.
+          python -m pip install dist/pylmrob-*-cp312-cp312-*.whl
+      - name: Smoke fit on stackloss
+        run: |
+          python -c "
+          import pylmrob, pandas as pd
+          print('pylmrob.__version__ =', pylmrob.__version__)
+          df = pd.DataFrame({
+              'stack_loss': [42,37,37,28,18,18,19,20,15,14,14,13,11,12,8,7,8,8,9,15,15],
+              'Air_Flow':   [80,80,75,62,62,62,62,62,58,58,58,58,58,58,50,50,50,50,50,56,70],
+              'Water_Temp': [27,27,25,24,22,23,24,24,23,18,18,17,18,19,18,18,19,19,20,20,20],
+              'Acid_Conc':  [89,88,90,87,87,87,93,93,87,80,89,88,82,93,89,86,72,79,80,82,91],
+          })
+          fit = pylmrob.lmrob('stack_loss ~ Air_Flow + Water_Temp + Acid_Conc', df,
+                              control=pylmrob.Control(), seed=42)
+          assert fit.converged_, 'MM did not converge'
+          assert 1.5 < fit.scale_ < 2.5, f'scale out of expected band: {fit.scale_}'
+          print('coef:', list(zip(fit.term_names_, fit.coef_)))
+          print('scale:', fit.scale_)
+          print('SMOKE OK')
+          "
+
   publish_testpypi:
     name: Publish to TestPyPI
     needs: [build_wheels, build_sdist]
@@ -96,7 +139,7 @@ jobs:
 
   publish:
     name: Publish to PyPI
-    needs: [build_wheels, build_sdist]
+    needs: [build_wheels, build_sdist, smoke_test]
     runs-on: ubuntu-latest
     if: inputs.target == 'pypi' || startsWith(github.ref, 'refs/tags/v')
     environment:
