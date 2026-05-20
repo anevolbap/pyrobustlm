@@ -48,6 +48,8 @@ dev = [
     "pytest>=8",
     "pytest-cov",
     "pytest-xdist",
+    "pytest-randomly",
+    "pytest-rerunfailures",
     "hypothesis>=6.100",
     "ruff>=0.15,<0.16",
     "pre-commit>=3.7",
@@ -128,6 +130,11 @@ addopts = [
     "-ra",
     "--strict-markers",
     "--strict-config",
+    # Coverage floor. 67% locally without rpy2; CI Linux clears more tests
+    # so this leaves room while still catching real regressions.
+    "--cov=pylmrob",
+    "--cov-report=term-missing:skip-covered",
+    "--cov-fail-under=65",
 ]
 markers = [
     "slow: marks tests as slow",
@@ -135,6 +142,9 @@ markers = [
     "rng_sensitive: result depends on RNG; tolerances are looser",
     "validation: cross-checks against R reference output",
 ]
+# Make pytest-randomly's seed visible in the output so a failure can be
+# reproduced with --randomly-seed=N.
+randomly_dont_reset_seed = true
 
 [tool.cibuildwheel]
 build = "cp310-* cp311-* cp312-* cp313-*"
