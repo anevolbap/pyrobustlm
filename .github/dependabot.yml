@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Dependabot keeps GitHub Actions and Python dependencies up to date.
+# Configuration reference:
+#   https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(ci)"
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    # Ignore the pinned numpy/scipy/Cython since meson-python's build-time
+    # contract is sensitive to versions; bump those by hand.
+    ignore:
+      - dependency-name: "numpy"
+      - dependency-name: "scipy"
+      - dependency-name: "Cython"
+      - dependency-name: "meson-python"
+      - dependency-name: "meson"
