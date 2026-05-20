@@ -682,6 +682,49 @@ def _resample_chunk(
     return _ChunkResult(best_betas, best_scales, None)
 
 
+def _refine_to_convergence_r(
+    X: NDArray[np.float64],
+    y: NDArray[np.float64],
+    beta: NDArray[np.float64],
+    sigma: float,
+    cfg: FastSConfig,
+) -> tuple[NDArray[np.float64], float, bool, int]:
+    """R-faithful survivor refinement matching robustbase's refine_fast_s.
+
+    Differs from :func:`_refine_to_convergence` in that the scale update
+    is ONE Newton step per refine iter (``s = s * sqrt(sum_rho(r/s) /
+    ((n-p) * b0))``), not full M-scale convergence. This matches R's
+    behaviour in ``lmrob.c::refine_fast_s`` line-for-line and is what's
+    needed to keep ``Control(rng="R")`` fits bit-identical with R.
+    """
+    from pylmrob._psifuns import _dispatch
+
+    n, p = X.shape
+    beta_cur = beta.copy().astype(np.float64)
+    rho_fn = _dispatch(cfg.psi_chi, "rho")
+    inv_npmp = 1.0 / (n - p)
+    k_chi = np.asarray(cfg.k_chi, dtype=np.float64)
+    s = float(sigma)
+    converged = False
+    it = 0
+    for it in range(cfg.max_it):
+        r = y - X @ beta_cur
+        rho_vals = rho_fn(r / s, k_chi)
+        s = s * float(np.sqrt(rho_vals.sum() * inv_npmp / cfg.b0))
+        if s == 0.0:
+            return beta_cur, 0.0, True, it + 1
+        beta_new = _irwls_step(X, y, beta_cur, s, cfg.psi_chi, cfg.k_chi)
+        delta = float(np.linalg.norm(beta_new - beta_cur))
+        # R's refine_fast_s uses ||beta_cand||_2 (the OLD beta) here.
+        nrm = float(np.linalg.norm(beta_cur))
+        if delta <= cfg.refine_tol * max(cfg.refine_tol, nrm):
+            beta_cur = beta_new
+            converged = True
+            break
+        beta_cur = beta_new
+    return beta_cur, s, converged, it + 1
+
+
 def _refine_to_convergence(
     X: NDArray[np.float64],
     y: NDArray[np.float64],
@@ -690,6 +733,8 @@ def _refine_to_convergence(
     cfg: FastSConfig,
 ) -> tuple[NDArray[np.float64], float, bool, int]:
     """Iterate (M-scale, IRWLS) until ||beta_{k+1} - beta_k|| / ||beta_k|| < tol."""
+    if cfg.rng == "R":
+        return _refine_to_convergence_r(X, y, beta, sigma, cfg)
     # Cython fast path for the supported families.
     if _CY_REFINE is not None and cfg.psi_chi in _FAMILY_IDS:
         family_id = _FAMILY_IDS[cfg.psi_chi]
