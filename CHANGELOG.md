@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.17] - 2026-05-19
+
 ### Added
 
 - **Cython port of robustbase's ``refine_fast_s`` and ``find_scale``**
