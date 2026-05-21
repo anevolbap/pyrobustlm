@@ -7,11 +7,12 @@ this repo so version bumps are reviewable; it is **not** the actual feedstock.
 
 1. Fork <https://github.com/conda-forge/staged-recipes>.
 2. Copy `conda/meta.yaml` from this repo to `recipes/pylmrob/meta.yaml`
-   in the staged-recipes fork.
-3. Compute the sdist hash and paste it into the `sha256:` line:
+   in the staged-recipes fork. The v0.5.18 sdist hash is already
+   pinned in the recipe (`sha256: 096251969c01...`).
+3. For future version bumps, recompute the hash via:
 
    ```bash
-   curl -sL https://pypi.io/packages/source/p/pylmrob/pylmrob-0.5.18.tar.gz \
+   curl -sL https://pypi.io/packages/source/p/pylmrob/pylmrob-X.Y.Z.tar.gz \
      | sha256sum
    ```
 

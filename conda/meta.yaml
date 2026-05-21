@@ -12,7 +12,7 @@ package:
 
 source:
   url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
-  # sha256: <fill from PyPI after release; conda-forge requires this>
+  sha256: 096251969c0110fb39652a9d912ab8e30b5ea591ee3030264bdeaec6510e8751
 
 build:
   number: 0
