@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Dev tooling
+
+- ``CHANGELOG check`` workflow now auto-skips PRs whose title starts
+  with ``chore(`` or ``docs(``, and PRs opened by ``dependabot[bot]``.
+  Manual escape hatches (``skip-changelog`` label, ``[skip changelog]``
+  in title) still work.
+
 ## [0.5.18] - 2026-05-21
 
 This is primarily a repo / CI hardening release. There are no
