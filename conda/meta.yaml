@@ -1,0 +1,69 @@
+{% set name = "pylmrob" %}
+{% set version = "0.5.18" %}
+
+# Draft conda-forge recipe for pylmrob. Submit by copying this file to
+# https://github.com/conda-forge/staged-recipes/ under recipes/pylmrob/.
+# Update ``version`` and ``sha256`` before submitting. Recipe is
+# auto-updated by conda-forge bots after the first acceptance.
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
+  # sha256: <fill from PyPI after release; conda-forge requires this>
+
+build:
+  number: 0
+  script: {{ PYTHON }} -m pip install . --no-deps --no-build-isolation -vv
+  skip: true  # [py<310]
+
+requirements:
+  build:
+    - {{ compiler('c') }}
+    - llvm-openmp  # [osx]
+    - libgomp      # [linux]
+  host:
+    - python
+    - pip
+    - meson-python >=0.16
+    - meson >=1.4
+    - ninja
+    - cython >=3.0
+    - numpy >=2.0
+    - scipy >=1.11
+  run:
+    - python
+    - {{ pin_compatible('numpy') }}
+    - scipy >=1.11
+    - pandas >=2.0
+    - formulaic >=1.0
+
+test:
+  requires:
+    - pip
+    - pytest
+  imports:
+    - pylmrob
+  commands:
+    - pip check
+    - python -c "import pylmrob; import pandas as pd; df = pd.DataFrame({'y':[1,2,3,4,5], 'x':[1,2,3,4,5]}); fit = pylmrob.lmrob('y ~ x', df, seed=0); assert fit.converged_"
+
+about:
+  home: https://github.com/anevolbap/pyrobustlm
+  license: GPL-3.0-or-later
+  license_family: GPL3
+  license_file: LICENSE
+  summary: Python port of R's robustbase::lmrob (MM regression for robust linear models)
+  description: |
+    pylmrob is a Python port of R's robustbase::lmrob, the MM-estimator for
+    robust linear regression. It matches R element-wise on the classical
+    validation datasets and ships Cython-accelerated kernels for all six psi
+    families.
+  doc_url: https://github.com/anevolbap/pyrobustlm
+  dev_url: https://github.com/anevolbap/pyrobustlm
+
+extra:
+  recipe-maintainers:
+    - anevolbap
