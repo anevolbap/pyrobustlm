@@ -5,6 +5,9 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+        # conda/meta.yaml uses Jinja2 templating ({% set name = ... %}),
+        # which the YAML parser can't handle without --unsafe.
+        exclude: ^conda/meta\.yaml$
       - id: check-toml
       - id: check-merge-conflict
       - id: check-added-large-files

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Dev tooling
+
+- ``release-please`` workflow: opens a long-running release PR keyed
+  off Conventional Commit messages. Merging the PR bumps
+  ``_version.py`` + ``meson.build`` together, finalises the
+  ``CHANGELOG`` section, creates a GitHub Release, and pushes the
+  ``v*`` tag. Replaces the manual release ritual.
+- Conda-forge feedstock recipe drafted under ``conda/meta.yaml``.
+  See ``conda/README.md`` for how to submit to
+  ``conda-forge/staged-recipes``.
+
 ### Added
 
 - ``fit.confint(method="bootstrap", n_boot=1000, kind="percentile",

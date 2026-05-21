@@ -1,0 +1,29 @@
+name: release-please
+
+# Drives version bumps + CHANGELOG entries + GitHub Releases from
+# Conventional Commits. The action opens (and updates) a long-running
+# "release PR" against main; when you merge it, the workflow tags the
+# release and creates a GitHub Release. Tag-push then triggers
+# wheels.yml as before.
+#
+# This replaces the manual "bump _version.py + meson.build + finalise
+# CHANGELOG + tag" dance.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          # Manifest mode so we can bump both _version.py and meson.build
+          # in the same PR via .release-please-manifest.json.
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
