@@ -7,15 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.18] - 2026-05-21
+
+This is primarily a repo / CI hardening release. There are no
+user-visible behaviour changes from v0.5.17, but the wheel build
+pipeline that was broken in v0.5.16 and v0.5.17 is now fixed so this
+is the first release since v0.5.15 to actually publish to PyPI.
+
+### Fixed
+
+- **``meson.build`` version was hardcoded to 0.5.15**, which is why
+  v0.5.16 and v0.5.17 wheels were named ``pylmrob-0.5.15-*.whl`` and
+  PyPI rejected them as "File already exists". Now bumped to 0.5.18
+  and guarded by a pre-commit hook
+  (``scripts/check_version_sync.py``) that fails the commit if
+  ``meson.build`` and ``src/pylmrob/_version.py`` disagree.
+
 ### Dev tooling
 
-- Coverage floor: ``pytest --cov-fail-under=65`` enforced by default
-  (current local coverage is 67%).
-- ``pytest-randomly`` for test-order randomisation;
-  ``pytest-rerunfailures`` available for flaky subprocess tests.
-- New ``.github/workflows/changelog-check.yml`` fails PRs that don't
-  touch ``CHANGELOG.md`` (escape hatches: ``skip-changelog`` label
-  or ``[skip changelog]`` in the title).
+- New CI jobs:
+  - **Docs build** (``ci.yml``) — runs ``sphinx-build -W`` with the
+    same deps as ``.readthedocs.yaml`` (incl. scipy). Catches doc
+    breakage before the next tag.
+  - **pre-commit** (``ci.yml``) — runs ``pre-commit run --all-files``
+    so contributors without locally installed hooks still get caught.
+  - **Wheel smoke test** (``wheels.yml``) — installs the just-built
+    Linux x86_64 cp312 wheel into a fresh runner and fits ``lmrob``
+    on stackloss. Now a dependency of the publish job, so a bad
+    wheel can't reach PyPI without manual override.
+  - **CodeQL** (new workflow) — weekly + on-PR Python SAST.
+- New repo metadata: ``.github/dependabot.yml`` (weekly bumps for
+  GitHub Actions + pip deps), ``CODEOWNERS``, ``SECURITY.md``,
+  issue templates, PR template.
+- Pre-commit additions:
+  - SPDX license header check (``scripts/check_spdx_headers.py``).
+  - Version-sync check (``scripts/check_version_sync.py``).
+  - ``ruff-pre-commit`` bumped from v0.6.9 to v0.15.0 to match the
+    project's ``ruff>=0.15`` dev pin (older ruff doesn't know the
+    ``RUF059`` selector).
+- Test hardening:
+  - Coverage floor enforced at 65% via
+    ``--cov-fail-under=65`` (current is 67%).
+  - ``pytest-randomly`` for test-order randomisation;
+    ``pytest-rerunfailures`` available for flaky subprocess tests.
+- Release tooling:
+  - ``Justfile`` with ``test``, ``test-cov``, ``lint``, ``fmt``,
+    ``build``, ``docs``, ``bench``, ``release <ver>`` recipes.
+  - PyPI uploads now ship a PEP 740 sigstore attestation
+    (``attestations: true`` on
+    ``pypa/gh-action-pypi-publish``).
+  - ``.github/workflows/changelog-check.yml`` fails PRs that don't
+    touch ``CHANGELOG.md`` (escape hatches: ``skip-changelog`` label
+    or ``[skip changelog]`` in the title).
+
+### Docs
+
+- ``.readthedocs.yaml`` post-install now installs ``scipy>=1.11``
+  (required by ``meson.build`` to locate ``cython_lapack`` headers).
+  RTD builds were failing on every tag since v0.5.15.
 
 ## [0.5.17] - 2026-05-19
 

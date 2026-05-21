@@ -5,7 +5,7 @@ project(
   # Otherwise wheels get named with this stale version (v0.5.16 and
   # v0.5.17 publishes both failed because of this). The
   # scripts/check_version_sync.py pre-commit hook guards against drift.
-  version: '0.5.17',
+  version: '0.5.18',
   license: 'GPL-3.0-or-later',
   meson_version: '>=1.4.0',
   default_options: [
