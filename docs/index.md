@@ -72,6 +72,7 @@ examples/stackloss_tour
 examples/robustness_vs_ols
 examples/m_s_factors
 examples/hbk_high_leverage
+examples/sklearn_pipeline
 api
 porting-from-r
 engine_c

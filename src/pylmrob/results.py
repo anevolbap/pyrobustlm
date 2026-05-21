@@ -218,6 +218,53 @@ class LmRobResults:
         se = np.sqrt(var)
         return np.column_stack([point, point - q * se, point + q * se])
 
+    def predict_std(self, new_data: object, *, kind: str = "confidence") -> np.ndarray:
+        """Standard deviation of the prediction at each new observation.
+
+        Returns ``sqrt(Var(X^T beta_hat))`` (``kind="confidence"``, default)
+        or ``sqrt(sigma^2 + Var(X^T beta_hat))`` (``kind="prediction"``).
+        Use this when you want the raw SE and intend to build your own
+        intervals (e.g. with a non-Gaussian distribution or for a Bayesian
+        update); :meth:`predict` with ``interval="confidence"`` already
+        returns t-quantile-scaled bands.
+        """
+        # Build the design matrix the same way predict() does, then return
+        # only the standard error column.
+        # Re-use predict() by extracting the (upr - point) / q value, but
+        # that's wasteful. Cheaper to inline the design build.
+        is_dataframe = type(new_data).__name__ == "DataFrame" and hasattr(new_data, "columns")
+        arr: np.ndarray
+        if is_dataframe:
+            if self.rhs_spec_ is None:
+                df: Any = new_data
+                cols = [c for c in self.term_names_ if c not in ("Intercept", "(Intercept)")]
+                missing = [c for c in cols if c not in df.columns]
+                if missing:
+                    raise ValueError(f"predict_std(DataFrame): missing columns: {missing!r}")
+                feat = np.asarray(df.loc[:, cols].to_numpy(), dtype=np.float64)
+                has_intercept = bool(
+                    self.term_names_ and self.term_names_[0] in ("Intercept", "(Intercept)")
+                )
+                arr = np.column_stack([np.ones(feat.shape[0]), feat]) if has_intercept else feat
+            else:
+                from pylmrob.formula import apply_spec
+
+                arr = apply_spec(self.rhs_spec_, new_data)
+        else:
+            arr = np.asarray(new_data, dtype=np.float64)
+        if arr.ndim != 2 or arr.shape[1] != self.coef_.size:
+            raise ValueError(
+                f"predict_std: design shape {arr.shape} incompatible with "
+                f"{self.coef_.size} coefficients"
+            )
+        var_fit = np.einsum("ij,jk,ik->i", arr, self.cov_, arr)
+        var_fit = np.maximum(var_fit, 0.0)
+        if kind == "confidence":
+            return np.sqrt(var_fit)
+        if kind == "prediction":
+            return np.sqrt(var_fit + self.scale_ * self.scale_)
+        raise ValueError(f"kind must be 'confidence' or 'prediction'; got {kind!r}")
+
     def diagnostics(self, outlier_threshold: float = 2.5) -> object:
         """Per-observation diagnostic statistics.
 
@@ -240,12 +287,41 @@ class LmRobResults:
         sigma = max(self.scale_, 1e-300)
         z = self.residuals_ / sigma
         outliers = np.abs(z) > outlier_threshold
+        # Masked outliers: rows that the robust fit rejected (rweights ~ 0)
+        # that ALSO look far from the clean data's design centre. The "clean
+        # data" is everything with rweights > 0.5. We compute leverage of
+        # every row against the clean-data X'X; the contamination ends up
+        # with high values because they sit outside the clean centroid in
+        # X-space. Pure OLS leverage doesn't work here because the
+        # contamination's own weight pulls the OLS centroid toward itself
+        # (this is the masking phenomenon).
+        X = self.design_x_
+        n = X.shape[0]
+        p = self.coef_.size
+        wt_eps = 1e-3
+        clean = self.rweights_ > 0.5
+        masked_outliers = np.zeros(n, dtype=bool)
+        if int(clean.sum()) > p:
+            X_clean = X[clean]
+            try:
+                xtx_inv_clean = np.linalg.inv(X_clean.T @ X_clean)
+                clean_lev = np.einsum("ij,jk,ik->i", X, xtx_inv_clean, X)
+                # Threshold: median of the clean-rows' own leverages plus
+                # 3 * MAD. Robust to the contamination block.
+                clean_lev_in = clean_lev[clean]
+                med = float(np.median(clean_lev_in))
+                mad = float(np.median(np.abs(clean_lev_in - med))) * 1.4826
+                lev_thresh = med + 3.0 * max(mad, 1e-12)
+                masked_outliers = (clean_lev > lev_thresh) & (self.rweights_ < wt_eps)
+            except np.linalg.LinAlgError:
+                pass
         return DiagnosticsTable(
             leverage=h,
             cooks_distance=cd,
             std_residuals=z,
             rweights=self.rweights_,
             outliers=outliers,
+            masked_outliers=masked_outliers,
         )
 
     def bootstrap(

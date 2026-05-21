@@ -697,8 +697,44 @@ def _lmrob_impl(
     )
 
 
-class LmRob:
-    """scikit-learn-style estimator wrapper around :func:`lmrob`."""
+# sklearn integration. LmRob inherits BaseEstimator + RegressorMixin when
+# sklearn is installed; sklearn 1.8+ relies on __sklearn_tags__ from
+# BaseEstimator, which means a bare class no longer interoperates with
+# Pipeline. The import is wrapped so non-sklearn users still get a working
+# LmRob class (it just defines its own get_params / set_params below).
+#
+# We do the conditional via __init_subclass__-style runtime mixing because
+# static type checkers (ty, pyright) refuse to follow a try/except class
+# definition. The fallback class is the static base; we patch sklearn's
+# BaseEstimator + RegressorMixin onto the MRO at module load when present.
+class _LmRobBase:
+    """Static base for ``LmRob``. Replaced at runtime with the sklearn-mixed
+    class when scikit-learn is installed."""
+
+
+try:
+    from sklearn.base import BaseEstimator as _SkBaseEstimator
+    from sklearn.base import RegressorMixin as _SkRegressorMixin
+
+    _HAS_SKLEARN = True
+
+    class _LmRobBaseSklearn(_SkRegressorMixin, _SkBaseEstimator):
+        # RegressorMixin must come first so its score() doesn't override ours.
+        pass
+
+    _LmRobBase = _LmRobBaseSklearn  # ty: ignore[invalid-assignment]  # type: ignore[misc,assignment]
+
+except ImportError:
+    _HAS_SKLEARN = False
+
+
+class LmRob(_LmRobBase):
+    """scikit-learn-style estimator wrapper around :func:`lmrob`.
+
+    Inherits ``BaseEstimator`` + ``RegressorMixin`` when scikit-learn is
+    installed. Drops to a bare class otherwise so non-sklearn callers
+    don't pay the import cost.
+    """
 
     def __init__(self, control: Control | None = None) -> None:
         self.control = control or Control()
@@ -756,17 +792,23 @@ class LmRob:
             return 0.0
         return 1.0 - ss_res / ss_tot
 
-    def get_params(self, deep: bool = True) -> dict:
-        """Return the ``__init__`` parameters, sklearn convention."""
-        return {"control": self.control}
+    # When sklearn is installed, BaseEstimator provides canonical
+    # get_params/set_params via __init__-signature inspection. The block
+    # below only fires for the no-sklearn fallback path.
+    if not _HAS_SKLEARN:
 
-    def set_params(self, **params: object) -> LmRob:
-        """Set ``__init__`` parameters in place, sklearn convention."""
-        for key, value in params.items():
-            if not hasattr(self, key):
-                raise ValueError(f"Invalid parameter {key!r} for LmRob")
-            setattr(self, key, value)
-        return self
+        def get_params(self, deep: bool = True) -> dict:
+            return {"control": self.control}
+
+        def set_params(self, **params: object) -> LmRob:
+            for key, value in params.items():
+                if not hasattr(self, key):
+                    raise ValueError(f"Invalid parameter {key!r} for LmRob")
+                setattr(self, key, value)
+            return self
+
+    def __sklearn_is_fitted__(self) -> bool:
+        return self._result is not None
 
     @property
     def result_(self) -> LmRobResults:

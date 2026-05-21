@@ -214,6 +214,53 @@ def test_predict_bad_interval_raises():
         fit.predict(df, interval="bogus")
 
 
+def test_predict_std_matches_predict_interval():
+    """``predict_std()`` and ``predict(interval=...)`` agree on the SE."""
+    from scipy.stats import t as t_dist
+
+    df = _load_dataset("stackloss")
+    fit = lmrob("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, seed=0)
+
+    se_conf = fit.predict_std(df, kind="confidence")
+    se_pred = fit.predict_std(df, kind="prediction")
+    assert se_conf.shape == (df.shape[0],)
+    # Prediction SE includes residual sigma; must be strictly larger.
+    assert np.all(se_pred > se_conf)
+
+    # Cross-check against predict(interval='confidence').
+    out = fit.predict(df, interval="confidence", level=0.95)
+    q = t_dist.ppf(0.975, df=fit.df_residual_)
+    se_from_bands = (out[:, 2] - out[:, 0]) / q
+    np.testing.assert_allclose(se_from_bands, se_conf, rtol=1e-10)
+
+
+def test_predict_std_invalid_kind_raises():
+    df = _load_dataset("stackloss")
+    fit = lmrob("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, seed=0)
+    with pytest.raises(ValueError, match="must be 'confidence' or 'prediction'"):
+        fit.predict_std(df, kind="bogus")
+
+
+def test_diagnostics_masked_outliers_flag_hbk():
+    """On hbk, masked_outliers flags the high-leverage Y-outliers (rows 0-9)
+    that hide from plain-OLS leverage diagnostics."""
+    df = _load_dataset("hbk")
+    rhs = " + ".join(c for c in df.columns if c != "Y")
+    fit = lmrob(f"Y ~ {rhs}", df, control=Control(nResample=1000), seed=42)
+    diag = fit.diagnostics()
+    # hbk rows 0-9 are the simultaneously high-leverage + Y-outlier
+    # contamination block. The robust fit rejects them; ``masked_outliers``
+    # surfaces them on top by combining low rweight with high
+    # leverage-against-clean-data.
+    flagged_first_10 = int(diag.masked_outliers[:10].sum())
+    flagged_total = int(diag.masked_outliers.sum())
+    assert flagged_first_10 >= 8, (
+        f"masked_outliers caught only {flagged_first_10}/10 hbk contamination rows"
+    )
+    # And shouldn't over-flag the rest of the clean data.
+    assert flagged_total - flagged_first_10 <= 3
+
+
 def test_statsmodels_style_aliases():
     """``params``, ``bse``, ``tvalues``, ``pvalues``, ``conf_int`` mirror coef_/etc."""
     df = _load_dataset("stackloss")

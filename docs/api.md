@@ -15,6 +15,7 @@ Public surface of `pylmrob`.
 ```{eval-rst}
 .. autoclass:: pylmrob.LmRob
    :members:
+   :exclude-members: set_fit_request, set_predict_request, set_score_request, get_metadata_routing
 ```
 
 ## Result objects

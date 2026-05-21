@@ -37,6 +37,13 @@ class DiagnosticsTable:
     outliers :
         Boolean mask, ``|std_residuals| > outlier_threshold``. Default
         threshold is ``2.5``.
+    masked_outliers :
+        Boolean mask flagging high-leverage observations that were
+        also nearly fully downweighted by the robust fit, i.e.
+        ``leverage > leverage_threshold`` AND ``rweights < weight_eps``.
+        These rows are simultaneously influential in the design and
+        rejected as outliers. They merit a closer look than rows
+        flagged by either criterion alone.
     """
 
     leverage: np.ndarray
@@ -44,6 +51,7 @@ class DiagnosticsTable:
     std_residuals: np.ndarray
     rweights: np.ndarray
     outliers: np.ndarray
+    masked_outliers: np.ndarray
 
 
 def plot(results: LmRobResults) -> object:
