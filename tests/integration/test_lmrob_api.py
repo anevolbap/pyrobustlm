@@ -112,6 +112,16 @@ def test_lmrob_returns_results_object():
     out = str(s)
     assert "Air.Flow" in out and "Robust residual standard error" in out
 
+    # statsmodels-style summary: same data, different rendering.
+    s_sm = fit.summary(style="statsmodels")
+    out_sm = str(s_sm)
+    assert "lmrob (MM-estimator)" in out_sm
+    assert "Air.Flow" in out_sm
+    # statsmodels style includes a 95% CI in the table.
+    assert "0.975]" in out_sm
+    # The render-by-call form takes precedence over the stored style.
+    assert "Robust residual standard error" in s_sm.render(style="r")
+
 
 def test_predict_round_trip_array():
     """predict() accepts a raw NumPy design matrix (intercept included)."""
