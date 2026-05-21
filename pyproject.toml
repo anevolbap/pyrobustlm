@@ -54,6 +54,11 @@ dev = [
     "ruff>=0.15,<0.16",
     "pre-commit>=3.7",
     "Cython>=3.0",
+    # LmRob inherits from sklearn.base.BaseEstimator when sklearn is
+    # installed (sklearn 1.8+ requires __sklearn_tags__ for Pipeline
+    # interop). Keep this in the dev set so CI's type-check + tests
+    # exercise the sklearn-inherited path; runtime install is optional.
+    "scikit-learn>=1.4",
 ]
 # Validation harness against R. Requires a local R install with the
 # robustbase package, so it lives in its own optional group; CI installs

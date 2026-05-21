@@ -697,33 +697,43 @@ def _lmrob_impl(
     )
 
 
-def _lmrob_base() -> type:
-    """Build the LmRob base classes from sklearn if available, else ``object``.
+# sklearn integration. LmRob inherits BaseEstimator + RegressorMixin when
+# sklearn is installed; sklearn 1.8+ relies on __sklearn_tags__ from
+# BaseEstimator, which means a bare class no longer interoperates with
+# Pipeline. The import is wrapped so non-sklearn users still get a working
+# LmRob class (it just defines its own get_params / set_params below).
+#
+# We do the conditional via __init_subclass__-style runtime mixing because
+# static type checkers (ty, pyright) refuse to follow a try/except class
+# definition. The fallback class is the static base; we patch sklearn's
+# BaseEstimator + RegressorMixin onto the MRO at module load when present.
+class _LmRobBase:
+    """Static base for ``LmRob``. Replaced at runtime with the sklearn-mixed
+    class when scikit-learn is installed."""
 
-    Using sklearn's ``BaseEstimator`` + ``RegressorMixin`` is the right call
-    for sklearn 1.8+ (gives us ``__sklearn_tags__``, ``__sklearn_is_fitted__``,
-    and the canonical ``get_params`` / ``set_params``). We only require
-    sklearn at import time when sklearn is already installed; otherwise the
-    LmRob class still works for non-sklearn callers.
-    """
-    try:
-        from sklearn.base import BaseEstimator, RegressorMixin
-    except ImportError:
-        return object  # type: ignore[return-value]
 
-    class _Base(RegressorMixin, BaseEstimator):
+try:
+    from sklearn.base import BaseEstimator as _SkBaseEstimator
+    from sklearn.base import RegressorMixin as _SkRegressorMixin
+
+    _HAS_SKLEARN = True
+
+    class _LmRobBaseSklearn(_SkRegressorMixin, _SkBaseEstimator):
         # RegressorMixin must come first so its score() doesn't override ours.
         pass
 
-    return _Base
+    _LmRobBase = _LmRobBaseSklearn  # ty: ignore[invalid-assignment]  # type: ignore[misc,assignment]
+
+except ImportError:
+    _HAS_SKLEARN = False
 
 
-class LmRob(_lmrob_base()):
+class LmRob(_LmRobBase):
     """scikit-learn-style estimator wrapper around :func:`lmrob`.
 
     Inherits ``BaseEstimator`` + ``RegressorMixin`` when scikit-learn is
-    installed (the import is lazy and optional). Drops to a bare class
-    otherwise so non-sklearn callers don't pay the import cost.
+    installed. Drops to a bare class otherwise so non-sklearn callers
+    don't pay the import cost.
     """
 
     def __init__(self, control: Control | None = None) -> None:
@@ -782,11 +792,11 @@ class LmRob(_lmrob_base()):
             return 0.0
         return 1.0 - ss_res / ss_tot
 
-    # get_params / set_params come from sklearn.base.BaseEstimator when
-    # available. We also provide a fallback below for the no-sklearn case.
-    if "BaseEstimator" not in str(type(_lmrob_base())):  # type: ignore[no-redef]
-        # sklearn unavailable: define minimal versions so non-sklearn
-        # callers still get ``estimator.get_params()`` ergonomics.
+    # When sklearn is installed, BaseEstimator provides canonical
+    # get_params/set_params via __init__-signature inspection. The block
+    # below only fires for the no-sklearn fallback path.
+    if not _HAS_SKLEARN:
+
         def get_params(self, deep: bool = True) -> dict:
             return {"control": self.control}
 
