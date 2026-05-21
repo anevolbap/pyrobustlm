@@ -7,12 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Dev tooling
+### Added
 
-- ``CHANGELOG check`` workflow now auto-skips PRs whose title starts
-  with ``chore(`` or ``docs(``, and PRs opened by ``dependabot[bot]``.
-  Manual escape hatches (``skip-changelog`` label, ``[skip changelog]``
-  in title) still work.
+- ``fit.confint(method="bootstrap", n_boot=1000, kind="percentile",
+  seed=...)``: bootstrap CIs as an alternative to the default Wald
+  CIs. Delegates to ``fit.bootstrap()`` internally; ``kind`` selects
+  ``"percentile"`` or ``"basic"`` intervals.
 
 ## [0.5.18] - 2026-05-21
 
