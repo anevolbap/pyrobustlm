@@ -42,6 +42,7 @@ cdef enum:
     FAM_OPTIMAL = 2
     FAM_LQQ = 3
     FAM_GGW = 4
+    FAM_WELSH = 5
 
 
 # ---------------------------------------------------------------------------
@@ -282,6 +283,13 @@ cdef inline double _chi_sum(
                 )
             else:
                 total += 1.0
+    elif family == FAM_WELSH:
+        # rho(x; c) = 1 - exp(-(x/(c*s))^2 / 2)
+        k = tuning[0]
+        inv_sk = 1.0 / (s * k)
+        for i in range(n):
+            t = r[i] * inv_sk
+            total += 1.0 - exp(-0.5 * t * t)
     else:  # FAM_GGW
         j = <int>(tuning[0]) - 1
         if j < 0:
@@ -384,6 +392,13 @@ cdef inline void _wgt_zinv(
                     out[i] = 0.0
             else:
                 out[i] = 0.0
+    elif family == FAM_WELSH:
+        # wgt(x; c) = exp(-(x/(c*s))^2/2)
+        k = tuning[0]
+        inv_sk = 1.0 / (s * k)
+        for i in range(n):
+            a = r[i] * inv_sk
+            out[i] = exp(-0.5 * a * a)
     else:  # FAM_GGW
         j = <int>(tuning[0])
         if j < 1:
@@ -1138,6 +1153,13 @@ cdef inline void _psi_prime_eval(
                     out[i] = -s5p * (dx / a_param - 1.0)
                 else:
                     out[i] = 0.0
+    elif family == FAM_WELSH:
+        # psi'(x; c) = (1 - (x/c)^2) * exp(-(x/c)^2 / 2)
+        k = tuning[0]
+        for i in range(n):
+            a = x[i] / k
+            a2 = a * a
+            out[i] = (1.0 - a2) * exp(-0.5 * a2)
     else:  # FAM_GGW
         j = <int>(tuning[0])
         if j < 1: j = 1
@@ -1649,6 +1671,12 @@ cdef inline void _chi_eval(
                 )
             else:
                 out[i] = 1.0
+    elif family == FAM_WELSH:
+        # rho(x; c) = 1 - exp(-(x/c)^2 / 2)
+        k = tuning[0]
+        for i in range(n):
+            a = x[i] / k
+            out[i] = 1.0 - exp(-0.5 * a * a)
     else:  # FAM_GGW
         j = <int>(tuning[0]) - 1
         if j < 0: j = 0

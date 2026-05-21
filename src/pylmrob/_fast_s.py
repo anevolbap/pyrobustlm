@@ -59,6 +59,7 @@ _FAMILY_IDS: dict[str, int] = {
     "optimal": 2,
     "lqq": 3,
     "ggw": 4,
+    "welsh": 5,
 }
 
 
