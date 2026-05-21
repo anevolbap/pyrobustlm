@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Welsh / Gauss-weight psi family** (``Control(psi="welsh")``). Sixth
+  redescending family from robustbase, matching R's ``Mpsi/Mchi/Mwgt``
+  for ``psi="welsh"`` element-wise. NumPy fallback in
+  ``pylmrob._psifuns`` and Cython kernel paths in
+  ``pylmrob._core._fast_s`` + ``_lmrob``. Default tunings: psi=2.11,
+  chi=1/sqrt(3) (consistency under N(0,1)). End-to-end stackloss fit
+  agrees with R to rtol=1e-6 on coefficients.
+
 ### Dev tooling
 
 - ``release-please`` workflow: opens a long-running release PR keyed

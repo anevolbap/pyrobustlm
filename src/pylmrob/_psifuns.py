@@ -129,6 +129,64 @@ def wgt_biwgt(x: ArrayLike, k: ArrayLike) -> NDArray[np.float64]:
 
 
 # ===========================================================================
+# Welsh / Gauss-weight (1 tuning constant c)
+# ===========================================================================
+# rho/chi(x; c) = 1 - exp(-(x/c)^2 / 2)         (normalized so chi(inf) = 1)
+# psi(x; c)     = x * exp(-(x/c)^2 / 2)
+# psi'(x; c)    = (1 - (x/c)^2) * exp(-(x/c)^2 / 2)
+# wgt(x; c)     = exp(-(x/c)^2 / 2)
+#
+# Matches robustbase's "welsh" / "gwgt" family in src/lmrob.c:906.
+# Largest |x/c| such that exp(-(x/c)^2/2) doesn't underflow at double
+# precision. Matches MAX_Ex2 in robustbase/src/lmrob.c. Beyond this, the
+# Welsh psi/wgt are effectively zero; we clamp to avoid NumPy overflow
+# warnings (which pylmrob converts to FloatingPointError in some
+# code paths).
+_WELSH_MAX_AC = 37.7
+
+
+def rho_welsh(x: ArrayLike, k: ArrayLike) -> NDArray[np.float64]:
+    kk = _to_k(k, 1)[0]
+    xa, _ = _xa(x)
+    a = xa / kk
+    out = np.ones_like(a)
+    inside = np.abs(a) <= _WELSH_MAX_AC
+    out[inside] = -np.expm1(-(a[inside] * a[inside]) / 2.0)
+    return out
+
+
+def psi_welsh(x: ArrayLike, k: ArrayLike) -> NDArray[np.float64]:
+    kk = _to_k(k, 1)[0]
+    xa, _ = _xa(x)
+    a = xa / kk
+    out = np.zeros_like(xa)
+    inside = np.abs(a) <= _WELSH_MAX_AC
+    out[inside] = xa[inside] * np.exp(-(a[inside] * a[inside]) / 2.0)
+    return out
+
+
+def psi_prime_welsh(x: ArrayLike, k: ArrayLike) -> NDArray[np.float64]:
+    kk = _to_k(k, 1)[0]
+    xa, _ = _xa(x)
+    a = xa / kk
+    out = np.zeros_like(a)
+    inside = np.abs(a) <= _WELSH_MAX_AC
+    a2 = a[inside] * a[inside]
+    out[inside] = (1.0 - a2) * np.exp(-a2 / 2.0)
+    return out
+
+
+def wgt_welsh(x: ArrayLike, k: ArrayLike) -> NDArray[np.float64]:
+    kk = _to_k(k, 1)[0]
+    xa, _ = _xa(x)
+    a = xa / kk
+    out = np.zeros_like(a)
+    inside = np.abs(a) <= _WELSH_MAX_AC
+    out[inside] = np.exp(-(a[inside] * a[inside]) / 2.0)
+    return out
+
+
+# ===========================================================================
 # Hampel (3 tuning constants a, b, r)
 # ===========================================================================
 def rho_hmpl(x: ArrayLike, k: ArrayLike) -> NDArray[np.float64]:
@@ -712,6 +770,11 @@ def _chi_prime_factor(family: str, k_arr: NDArray[np.float64]) -> float:
         # rho_unnorm(inf) = c^2/6  =>  chi'(x) = (6/c^2) * psi(x)
         c = float(k_arr[0])
         return 6.0 / (c * c)
+    if fam == "welsh":
+        # chi(x; c) = 1 - exp(-(x/c)^2/2). psi(x; c) = x * exp(-(x/c)^2/2).
+        # chi'(x) = (x/c^2) * exp(-(x/c)^2/2) = (1/c^2) * psi(x; c).
+        c = float(k_arr[0])
+        return 1.0 / (c * c)
     if fam == "huber":
         # rho_unnorm(inf) = +inf for huber; Mchi normalises differently
         # but we don't use vcov_avar1 with huber today. Leave as 1.
@@ -762,6 +825,12 @@ _FAMILY_FNS: dict[str, dict[str, PsiFn]] = {
         "psi": psi_huber,
         "psi_prime": psi_prime_huber,
         "wgt": wgt_huber,
+    },
+    "welsh": {
+        "rho": rho_welsh,
+        "psi": psi_welsh,
+        "psi_prime": psi_prime_welsh,
+        "wgt": wgt_welsh,
     },
     "bisquare": {
         "rho": rho_biwgt,

@@ -135,6 +135,13 @@ corpus <- list(
     seed    = 1
   ),
   list(
+    name    = "stackloss_psi_welsh",
+    dataset = "stackloss",
+    formula = stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.,
+    control = list(psi = "welsh"),
+    seed    = 1
+  ),
+  list(
     name    = "delivery_default",
     dataset = "delivery",
     formula = delTime ~ n.prod + distance,

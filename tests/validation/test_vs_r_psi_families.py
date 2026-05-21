@@ -44,6 +44,7 @@ _PSI_CASES = [
     ("bisquare", "stackloss_psi_bisquare", 1e-3, 1e-3),
     ("optimal", "stackloss_psi_optimal", 1e-3, 1e-3),
     ("hampel", "stackloss_psi_hampel", 1e-3, 1e-3),
+    ("welsh", "stackloss_psi_welsh", 1e-3, 1e-3),
     ("lqq", "stackloss_psi_lqq", 1e-3, 1e-3),
     # ggw rho is a 20-coefficient polynomial approximation (lmrob.c::rho_ggw);
     # the small discretisation error there propagates to ~1.3e-3 in beta.

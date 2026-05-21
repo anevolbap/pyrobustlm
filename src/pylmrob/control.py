@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-PsiFamily = Literal["bisquare", "huber", "hampel", "optimal", "ggw", "lqq"]
+PsiFamily = Literal["bisquare", "huber", "hampel", "optimal", "ggw", "lqq", "welsh"]
 InitMethod = Literal["auto", "S", "M-S", "L1"]
 Setting = Literal["KS2011", "KS2014", "MM"]
 
@@ -26,6 +26,7 @@ _DEFAULT_TUNING_PSI: dict[str, tuple[float, ...]] = {
     "bisquare": (4.685061,),
     "hampel": (1.5 * 0.9016085, 3.5 * 0.9016085, 8.0 * 0.9016085),
     "optimal": (1.060158,),
+    "welsh": (2.11,),
     # ggw: case index 4 = (b=1.5, 95% efficiency).
     "ggw": (4,),
     # lqq: (b, c, s) - converted from user-facing (-0.5, 1.5, 0.95, NA).
@@ -37,6 +38,7 @@ _DEFAULT_TUNING_CHI: dict[str, tuple[float, ...]] = {
     "bisquare": (1.547645,),
     "hampel": (1.5 * 0.2119163, 3.5 * 0.2119163, 8.0 * 0.2119163),
     "optimal": (0.4047,),
+    "welsh": (0.5773502691896258,),  # = 1/sqrt(3); gives E[chi(Z)]=0.5 under Z~N(0,1).
     # ggw: case index 6 = (b=1.5, breakdown=0.5).
     "ggw": (6,),
     # lqq: (b, c, s) - converted from user-facing (-0.5, 1.5, NA, 0.5).

@@ -29,6 +29,7 @@ cdef enum:
     FAM_OPTIMAL = 2
     FAM_LQQ = 3
     FAM_GGW = 4
+    FAM_WELSH = 5
 
 
 # Largest x such that exp(-x^2/2) does not underflow (matches lmrob.c:945).
@@ -196,7 +197,7 @@ cdef inline double _chi_sum(
     cdef double total = 0.0
     cdef double a, ax, t, xi, u
     cdef double k, a_t, b_t, r_t, c, b_l, s_l, k01, denom, s5, s6, k01_2, end3, s0, dx
-    cdef double R1h, R2h, R3h, R4h, ac, a2, nc, inv_nc, bma_inv_half
+    cdef double R1h, R2h, R3h, R4h, ac, a2, nc, inv_nc, bma_inv_half, inv_sk
     cdef int j  # ggw polynomial case index
 
     if family == FAM_BISQUARE:
@@ -270,6 +271,13 @@ cdef inline double _chi_sum(
                 )
             else:
                 total += 1.0
+    elif family == FAM_WELSH:
+        # rho(x; c) = 1 - exp(-(x/(c*s))^2 / 2); normalized so rho(inf) = 1.
+        k = tuning[0]
+        inv_sk = 1.0 / (s * k)
+        for i in range(n):
+            a = r[i] * inv_sk
+            total += 1.0 - exp(-0.5 * a * a)
     else:  # FAM_GGW
         # tuning[0] holds the case index (1..6). Tables initialised at the
         # top-level entry point before we drop the GIL.
@@ -372,6 +380,13 @@ cdef inline void _wgt_zinv(
                     out[i] = 0.0
             else:
                 out[i] = 0.0
+    elif family == FAM_WELSH:
+        # wgt(x; c) = exp(-(x/(c*s))^2/2)
+        k = tuning[0]
+        inv_sk = 1.0 / (s * k)
+        for i in range(n):
+            a = r[i] * inv_sk
+            out[i] = exp(-0.5 * a * a)
     else:  # FAM_GGW
         # tuning[0] = case index (1..6); we look up (a, b, c) and apply
         # the analytical wgt = exp(-((|x|-c)^b)/(2a)).
