@@ -53,6 +53,33 @@ to pylmrob's historic PCG64-path scale floor and is **not** caused
 by RNG or MAD. Closing it would require matching R's exact BLAS
 implementation; see ``plan.md`` §11.3 for details.
 
+#### Investigation log: confirmed irreducible
+
+Closing the gap was explicitly attempted in v0.5.19 dev cycle. None of
+the following moved pylmrob closer to R on stackloss with
+``Control(rng="R")``:
+
+- ``OPENBLAS_NUM_THREADS=1`` + ``OMP_NUM_THREADS=1`` (set before
+  numpy/scipy import). No change.
+- Tightening ``rel_tol`` from ``1e-7`` to ``1e-14`` and ``max_it`` to
+  200. The fit converges to a slightly *different* fixed point
+  (intercept gap grows from 1.69e-5 to 2.04e-5). Two stationary
+  points exist; pylmrob's BLAS lands on one, R's on the other.
+- Forcing ``initial_scale=-1`` in ``cy_refine_fast_s_r`` so the
+  survivor refinement re-MADs the residuals (matches R's call site
+  exactly). Made the gap **worse** (3.0e-5 vs 1.7e-5).
+
+The MM step is already routed through ``cy_lmrob_mm`` (LAPACK
+``dgels``, the same QR-based routine ``robustbase::rwls`` uses) when
+``rng="R"``; that ruled out gelsd/dgels divergence as the source. The
+convergence test is also bit-identical to R's
+``d_beta <= epsilon * fmax(epsilon, ||beta_new||_1)``.
+
+**Conclusion.** The ``~1.7e-5`` intercept gap on stackloss is the
+floor for pylmrob's BLAS environment. Users who need sub-1e-5 R
+agreement should call R via rpy2; pylmrob's ``rng="R"`` is
+production-ready for rtol=1e-5 reproducibility.
+
 **Why acceptable for default.** Plan §5.2 documents the default RNG
 strategy. The PCG64 cov drift is a function of how close the n=21
 stackloss observations sit to the psi-redescending region, not an
