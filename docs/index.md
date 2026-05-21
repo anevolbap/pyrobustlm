@@ -69,6 +69,9 @@ stackloss. See [Numerical notes](numerical-notes) and
 quickstart
 theory
 examples/stackloss_tour
+examples/robustness_vs_ols
+examples/m_s_factors
+examples/hbk_high_leverage
 api
 porting-from-r
 engine_c
