@@ -115,7 +115,29 @@ class SummaryLmRob:
     control: Control
     has_intercept: bool
 
+    style: str = "r"  # "r" (default) or "statsmodels"
+
     def __str__(self) -> str:
+        return self.render(style=self.style)
+
+    def render(self, *, style: str = "r") -> str:
+        """Render the summary table.
+
+        Parameters
+        ----------
+        style
+            ``"r"`` (default): R-style ``summary.lmrob`` output.
+            ``"statsmodels"``: a fixed-width table matching the
+            ``statsmodels.iolib.summary.Summary`` layout for users who
+            pipe pylmrob fits into statsmodels-shaped reporting code.
+        """
+        if style == "statsmodels":
+            return self._render_statsmodels()
+        if style == "r":
+            return self._render_r()
+        raise ValueError(f"style must be 'r' or 'statsmodels', got {style!r}")
+
+    def _render_r(self) -> str:
         rows: list[str] = []
         rows.append(
             f"lmrob(method={self.control.method!r}, psi={self.control.psi!r}, "
@@ -151,6 +173,46 @@ class SummaryLmRob:
             else "Algorithm did not converge"
         )
         rows.append(f"n = {self.nobs}, df residual = {self.df_residual}")
+        return "\n".join(rows)
+
+    def _render_statsmodels(self) -> str:
+        """statsmodels-style fixed-width table."""
+        from scipy.stats import norm
+
+        z = norm.ppf(0.975)
+        bar = "=" * 78
+        sep = "-" * 78
+        rows: list[str] = []
+        rows.append(bar)
+        rows.append(f"{'lmrob (MM-estimator)':^78}")
+        rows.append(bar)
+        rows.append(
+            f"{'Method:':<20}{self.control.method or '?':<19}"
+            f"{'Psi:':<20}{self.control.psi or '?':<19}"
+        )
+        rows.append(
+            f"{'No. Observations:':<20}{self.nobs:<19}{'Df Residuals:':<20}{self.df_residual:<19}"
+        )
+        rows.append(
+            f"{'R-squared (robust):':<20}{self.r_squared:<19.4f}"
+            f"{'Adj. R-squared:':<20}{self.adj_r_squared:<19.4f}"
+        )
+        rows.append(
+            f"{'Robust scale:':<20}{self.scale:<19.6g}{'Converged:':<20}{self.converged!s:<19}"
+        )
+        rows.append(sep)
+        rows.append(
+            f"{'':<20}{'coef':>10}{'std err':>10}{'t':>8}{'P>|t|':>9}{'[0.025':>10}{'0.975]':>10}"
+        )
+        rows.append(sep)
+        for name, row in zip(self.term_names, self.coefficients, strict=True):
+            est, se, tv, pv = row
+            lo = est - z * se
+            hi = est + z * se
+            rows.append(
+                f"{name:<20}{est:>10.4f}{se:>10.4f}{tv:>8.3f}{pv:>9.4f}{lo:>10.4f}{hi:>10.4f}"
+            )
+        rows.append(bar)
         return "\n".join(rows)
 
     def __repr__(self) -> str:

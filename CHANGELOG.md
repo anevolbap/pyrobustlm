@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   seed=...)``: bootstrap CIs as an alternative to the default Wald
   CIs. Delegates to ``fit.bootstrap()`` internally; ``kind`` selects
   ``"percentile"`` or ``"basic"`` intervals.
+- ``fit.summary(style="statsmodels")``: opt-in alternative rendering
+  matching statsmodels' ``Summary`` layout (fixed-width table with
+  95% CI columns). The default ``style="r"`` is unchanged.
+
+### Docs
+
+- Three new worked examples in ``docs/examples/``:
+  ``robustness_vs_ols.md`` (contaminated linear regression),
+  ``m_s_factors.md`` (M-S init for categorical predictors),
+  ``hbk_high_leverage.md`` (Hawkins-Bradu-Kass dataset).
 
 ## [0.5.18] - 2026-05-21
 
