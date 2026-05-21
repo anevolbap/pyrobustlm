@@ -1,7 +1,11 @@
 name: CHANGELOG check
 
 # Fails a PR if CHANGELOG.md isn't touched (under the [Unreleased]
-# section, usually). Escape hatches:
+# section, usually). Auto-skipped for:
+#   - PRs whose title starts with ``chore(`` or ``docs(``
+#     (chores, dependabot version bumps, doc-only PRs).
+#   - PRs opened by ``dependabot[bot]``.
+# Manual escape hatches:
 #   - Apply the ``skip-changelog`` label to the PR.
 #   - Open the PR with ``[skip changelog]`` in the title.
 
@@ -14,7 +18,12 @@ jobs:
   changelog:
     name: CHANGELOG touched?
     runs-on: ubuntu-latest
-    if: "!contains(github.event.pull_request.labels.*.name, 'skip-changelog') && !contains(github.event.pull_request.title, '[skip changelog]')"
+    if: |
+      !contains(github.event.pull_request.labels.*.name, 'skip-changelog')
+      && !contains(github.event.pull_request.title, '[skip changelog]')
+      && !startsWith(github.event.pull_request.title, 'chore(')
+      && !startsWith(github.event.pull_request.title, 'docs(')
+      && github.event.pull_request.user.login != 'dependabot[bot]'
     steps:
       - uses: actions/checkout@v4
         with:
