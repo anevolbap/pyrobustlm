@@ -4,12 +4,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 if TYPE_CHECKING:
-    from pylmrob.bootstrap import BootstrapResult
+    # NOTE: do *not* import pylmrob.bootstrap here. bootstrap.py imports
+    # LmRobResults from this module (also under TYPE_CHECKING), and
+    # CodeQL's py/unsafe-cyclic-import flags the bidirectional pair
+    # even though both are TYPE_CHECKING-only. The bootstrap() method
+    # below uses a forward-reference string annotation instead.
     from pylmrob.control import Control
     from pylmrob.summary import SummaryLmRob
 
@@ -171,8 +175,6 @@ class LmRobResults:
                 # by selecting term columns from new_data directly. Cast to
                 # ``Any`` because we duck-typed ``new_data`` as a DataFrame
                 # without importing pandas.
-                from typing import Any
-
                 df: Any = new_data
                 cols = [c for c in self.term_names_ if c not in ("Intercept", "(Intercept)")]
                 missing = [c for c in cols if c not in df.columns]
@@ -252,7 +254,7 @@ class LmRobResults:
         level: float = 0.95,
         seed: int | np.random.Generator | None = None,
         n_workers: int = 1,
-    ) -> BootstrapResult:
+    ) -> Any:  # BootstrapResult; see note at top of file re cyclic import
         """Method-style spelling of :func:`pylmrob.bootstrap`.
 
         Equivalent to ``pylmrob.bootstrap(self, n_boot=..., ...)``;
