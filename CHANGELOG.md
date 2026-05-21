@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Docs
+
+- ``numerical-notes.md`` gains an "Investigation log: confirmed
+  irreducible" subsection documenting the v0.5.19 attempt to close
+  the ``Control(rng="R")`` ~1.7e-5 intercept gap on stackloss.
+  Single-thread BLAS, tighter tolerances, MAD-init scale all tried;
+  the gap is confirmed BLAS-environment-dependent.
+
 ### Performance
 
 - **GGW psi family ~25% faster.** Hoisted per-case polynomial
