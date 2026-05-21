@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Performance
+
+- **GGW psi family ~25% faster.** Hoisted per-case polynomial
+  constants out of the M-scale inner loop in
+  ``_core/_lmrob.pyx::_chi_sum``, added a new ``_ggw_chi_sum`` helper
+  that consumes them inline. End-to-end synthetic
+  ``n=2000, p=10, nResample=200`` fit: 272 ms → 204 ms.
+- Hardcoded ``b=1.0`` and ``b=1.5`` branches in the GGW wgt path
+  (the only values in robustbase's default table); saves one libm
+  ``pow()`` call per element on the IRWLS reweighting step.
+
 ### Added
 
 - **Welsh / Gauss-weight psi family** (``Control(psi="welsh")``). Sixth
