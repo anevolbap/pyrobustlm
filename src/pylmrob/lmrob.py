@@ -697,8 +697,34 @@ def _lmrob_impl(
     )
 
 
-class LmRob:
-    """scikit-learn-style estimator wrapper around :func:`lmrob`."""
+def _lmrob_base() -> type:
+    """Build the LmRob base classes from sklearn if available, else ``object``.
+
+    Using sklearn's ``BaseEstimator`` + ``RegressorMixin`` is the right call
+    for sklearn 1.8+ (gives us ``__sklearn_tags__``, ``__sklearn_is_fitted__``,
+    and the canonical ``get_params`` / ``set_params``). We only require
+    sklearn at import time when sklearn is already installed; otherwise the
+    LmRob class still works for non-sklearn callers.
+    """
+    try:
+        from sklearn.base import BaseEstimator, RegressorMixin
+    except ImportError:
+        return object  # type: ignore[return-value]
+
+    class _Base(RegressorMixin, BaseEstimator):
+        # RegressorMixin must come first so its score() doesn't override ours.
+        pass
+
+    return _Base
+
+
+class LmRob(_lmrob_base()):
+    """scikit-learn-style estimator wrapper around :func:`lmrob`.
+
+    Inherits ``BaseEstimator`` + ``RegressorMixin`` when scikit-learn is
+    installed (the import is lazy and optional). Drops to a bare class
+    otherwise so non-sklearn callers don't pay the import cost.
+    """
 
     def __init__(self, control: Control | None = None) -> None:
         self.control = control or Control()
@@ -756,17 +782,23 @@ class LmRob:
             return 0.0
         return 1.0 - ss_res / ss_tot
 
-    def get_params(self, deep: bool = True) -> dict:
-        """Return the ``__init__`` parameters, sklearn convention."""
-        return {"control": self.control}
+    # get_params / set_params come from sklearn.base.BaseEstimator when
+    # available. We also provide a fallback below for the no-sklearn case.
+    if "BaseEstimator" not in str(type(_lmrob_base())):  # type: ignore[no-redef]
+        # sklearn unavailable: define minimal versions so non-sklearn
+        # callers still get ``estimator.get_params()`` ergonomics.
+        def get_params(self, deep: bool = True) -> dict:
+            return {"control": self.control}
 
-    def set_params(self, **params: object) -> LmRob:
-        """Set ``__init__`` parameters in place, sklearn convention."""
-        for key, value in params.items():
-            if not hasattr(self, key):
-                raise ValueError(f"Invalid parameter {key!r} for LmRob")
-            setattr(self, key, value)
-        return self
+        def set_params(self, **params: object) -> LmRob:
+            for key, value in params.items():
+                if not hasattr(self, key):
+                    raise ValueError(f"Invalid parameter {key!r} for LmRob")
+                setattr(self, key, value)
+            return self
+
+    def __sklearn_is_fitted__(self) -> bool:
+        return self._result is not None
 
     @property
     def result_(self) -> LmRobResults:

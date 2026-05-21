@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/anevolbap/pyrobustlm/actions/workflows/ci.yml/badge.svg)](https://github.com/anevolbap/pyrobustlm/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/pylmrob.svg)](https://pypi.org/project/pylmrob/)
+[![Python versions](https://img.shields.io/pypi/pyversions/pylmrob.svg)](https://pypi.org/project/pylmrob/)
+[![Documentation Status](https://readthedocs.org/projects/pyrobustlm/badge/?version=latest)](https://pyrobustlm.readthedocs.io/en/latest/)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
 
 Python port of the `lmrob` MM-estimator from R's
