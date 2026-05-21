@@ -275,16 +275,27 @@ class LmRobResults:
 
         return _anova(self, *others, test=test)
 
-    def summary(self) -> SummaryLmRob:
+    def summary(self, style: str = "r") -> SummaryLmRob:
         """Return a ``SummaryLmRob`` matching R's ``summary.lmrob``.
 
-        The returned object stringifies to an R-style printout (use
-        ``str(fit.summary())`` or just ``print(fit.summary())``) and exposes
-        the underlying coefficient table and R-squared as attributes.
+        Parameters
+        ----------
+        style
+            ``"r"`` (default): R-style ``summary.lmrob`` output, matching
+            ``robustbase`` line-for-line where practical.
+            ``"statsmodels"``: a fixed-width table matching the
+            ``statsmodels.iolib.summary.Summary`` layout. Use this when
+            piping pylmrob fits into statsmodels-shaped reporting code.
+
+        The returned object stringifies to the chosen style via
+        ``str()`` / ``print()``; ``.render(style=...)`` overrides the
+        choice without rebuilding the object.
         """
         from pylmrob.summary import make_summary
 
-        return make_summary(self)
+        out = make_summary(self)
+        out.style = style
+        return out
 
     def __repr__(self) -> str:
         """Compact R-style ``print.lmrob`` output.
