@@ -4,6 +4,32 @@ orphan: true
 
 # Parallelising the `engine_c` kernel
 
+**Status: SHIPPED.** `cy_lmrob_fast_s` and `cy_lmrob_fit` already accept
+`n_workers` + a list of `bitgen_capsules`; the resample loop uses
+`cython.parallel.prange` with per-thread scratch and per-thread heaps
+that get merged at the end. `_fast_s.py:fast_s` and `lmrob.py` forward
+`control.n_workers` through to the kernels.
+
+Measured scaling on a synthetic `n=5000, p=20` fit (Linux, OpenBLAS):
+
+| `n_workers` | wall-clock | ratio  |
+|------------:|-----------:|-------:|
+|           1 |    1128 ms | 1.00×  |
+|           2 |     874 ms | 1.29×  |
+|           4 |     578 ms | 1.95×  |
+
+Sublinear scaling above 2 workers is from OpenBLAS oversubscription
+(BLAS dgemm threads inside the per-thread IRWLS solve fight for cores
+with the OpenMP threads outside). Setting `OPENBLAS_NUM_THREADS=1` in
+the parallel region closes most of that gap; the kernel doesn't do this
+automatically because users running large single-fit jobs (n > 100k)
+prefer the inner BLAS threads. A future PR could expose this as a
+control knob.
+
+What follows is the original design doc, preserved for reference.
+
+## Original design notes
+
 Design notes for splitting `cy_lmrob_fit` / `cy_lmrob_fast_s` across
 multiple threads. Today the monolithic engine is one `nogil` block
 that does not parallelise internally; `lmrob()` auto-falls-back to the
