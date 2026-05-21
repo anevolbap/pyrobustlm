@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
+    from pylmrob.bootstrap import BootstrapResult
     from pylmrob.control import Control
     from pylmrob.summary import SummaryLmRob
 
@@ -51,14 +52,52 @@ class LmRobResults:
     def standard_errors_(self) -> np.ndarray:
         return np.sqrt(np.diag(self.cov_))
 
-    def confint(self, level: float = 0.95) -> np.ndarray:
-        from scipy.stats import norm
+    def confint(
+        self,
+        level: float = 0.95,
+        method: str = "wald",
+        *,
+        n_boot: int = 1000,
+        seed: int | None = None,
+        n_workers: int = 1,
+        kind: str = "percentile",
+    ) -> np.ndarray:
+        """Confidence intervals for the regression coefficients.
 
-        z = norm.ppf((1 + level) / 2)
-        se = self.standard_errors_
-        lo = self.coef_ - z * se
-        hi = self.coef_ + z * se
-        return np.column_stack([lo, hi])
+        Two methods:
+
+        - ``"wald"`` (default): asymptotic normal CIs from the sandwich
+          covariance. ``z * se`` where ``z`` is the standard-normal
+          quantile at ``(1 + level) / 2``.
+        - ``"bootstrap"``: case-resampling bootstrap; runs
+          :meth:`bootstrap` internally and returns the requested ``kind``
+          (``"percentile"`` or ``"basic"``) CIs.
+
+        Parameters
+        ----------
+        level
+            Coverage level, e.g. ``0.95``.
+        method
+            ``"wald"`` (default) or ``"bootstrap"``.
+        n_boot, seed, n_workers
+            Forwarded to :meth:`bootstrap` when ``method="bootstrap"``.
+        kind
+            Bootstrap CI kind: ``"percentile"`` or ``"basic"``. Ignored
+            for ``method="wald"``.
+        """
+        if method == "wald":
+            from scipy.stats import norm
+
+            z = norm.ppf((1 + level) / 2)
+            se = self.standard_errors_
+            lo = self.coef_ - z * se
+            hi = self.coef_ + z * se
+            return np.column_stack([lo, hi])
+        if method == "bootstrap":
+            boot = self.bootstrap(n_boot=n_boot, level=level, seed=seed, n_workers=n_workers)
+            ci = boot.percentile_ci if kind == "percentile" else boot.basic_ci
+            return np.asarray(ci, dtype=np.float64)
+        raise ValueError(f"method must be 'wald' or 'bootstrap', got {method!r}")
 
     # ------------------------------------------------------------------
     # statsmodels-style attribute aliases. Let pylmrob fits drop into
@@ -213,14 +252,11 @@ class LmRobResults:
         level: float = 0.95,
         seed: int | np.random.Generator | None = None,
         n_workers: int = 1,
-    ) -> object:
+    ) -> BootstrapResult:
         """Method-style spelling of :func:`pylmrob.bootstrap`.
 
         Equivalent to ``pylmrob.bootstrap(self, n_boot=..., ...)``;
         matches the ``fit.anova()`` / ``fit.diagnostics()`` style.
-
-        Returns a :class:`pylmrob.bootstrap.BootstrapResult` with
-        bootstrap CIs, standard errors, and bias estimate.
         """
         from pylmrob.bootstrap import bootstrap as _bootstrap
 

@@ -19,6 +19,49 @@ def stackloss() -> pd.DataFrame:
     return pd.read_csv(os.path.join(DATA_DIR, "stackloss.csv"))
 
 
+def test_confint_method_bootstrap(stackloss: pd.DataFrame) -> None:
+    """``fit.confint(method='bootstrap')`` returns the percentile CIs
+    from the underlying bootstrap object."""
+    fit = lmrob(
+        "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
+        stackloss,
+        control=Control(),
+        seed=42,
+    )
+    ci = fit.confint(method="bootstrap", n_boot=200, seed=42)
+    assert ci.shape == (len(fit.coef_), 2)
+    # Each interval brackets the point estimate.
+    assert (ci[:, 0] <= fit.coef_).all()
+    assert (fit.coef_ <= ci[:, 1]).all()
+
+
+def test_confint_method_bootstrap_basic_differs_from_percentile(
+    stackloss: pd.DataFrame,
+) -> None:
+    fit = lmrob(
+        "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
+        stackloss,
+        control=Control(),
+        seed=42,
+    )
+    pct = fit.confint(method="bootstrap", n_boot=200, seed=42, kind="percentile")
+    basic = fit.confint(method="bootstrap", n_boot=200, seed=42, kind="basic")
+    # Basic CI is the reflection of percentile around 2 * theta_hat;
+    # they shouldn't be equal in general.
+    assert not np.allclose(pct, basic)
+
+
+def test_confint_invalid_method_raises(stackloss: pd.DataFrame) -> None:
+    fit = lmrob(
+        "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
+        stackloss,
+        control=Control(),
+        seed=42,
+    )
+    with pytest.raises(ValueError, match="must be 'wald' or 'bootstrap'"):
+        fit.confint(method="bca")
+
+
 def test_bootstrap_returns_result(stackloss: pd.DataFrame) -> None:
     fit = lmrob(
         "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
