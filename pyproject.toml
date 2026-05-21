@@ -150,8 +150,22 @@ randomly_dont_reset_seed = true
 build = "cp310-* cp311-* cp312-* cp313-*"
 skip = ["*-musllinux_*", "*-win32", "*-manylinux_i686"]
 build-verbosity = 1
-test-requires = ["pytest", "numpy", "scipy", "pandas", "formulaic"]
-test-command = "pytest {project}/tests/unit -x"
+test-requires = [
+    "pytest",
+    "pytest-cov",
+    "pytest-randomly",
+    "pytest-rerunfailures",
+    "numpy",
+    "scipy",
+    "pandas",
+    "formulaic",
+]
+# cibuildwheel only runs tests/unit (a subset of the suite), so coverage
+# isn't meaningful here. pytest-cov is installed because addopts in
+# [tool.pytest.ini_options] reference --cov-* flags; --no-cov defangs
+# the --cov-fail-under gate for the wheel-install smoke. Real coverage
+# enforcement happens in the test job in ci.yml.
+test-command = "pytest --no-cov {project}/tests/unit -x"
 
 [tool.cibuildwheel.linux]
 archs = ["x86_64", "aarch64"]
