@@ -43,6 +43,38 @@ Use `bootstrap(fit, n_boot=2000)`; the percentile CIs are usually
 wider and more honest. Typical pattern on `n < 50` with outliers:
 Wald CI is 30-50% the width of the bootstrap CI.
 
+## Confidence vs prediction vs tolerance interval (what should I use?)
+
+Three different questions about your fitted model:
+
+- **Confidence interval (`predict(interval="confidence")`)**: where
+  is the *mean response* at this new observation? Variance scales
+  with `X^T cov(beta) X`. Width shrinks as `n` grows.
+- **Prediction interval (`predict(interval="prediction")`)**: where
+  is a *single new observation* likely to land? Variance is
+  `sigma^2 + X^T cov(beta) X`. Strictly wider than the confidence
+  interval. Does NOT shrink toward zero as `n` grows because
+  individual-observation noise stays.
+- **Tolerance interval**: contains at least `gamma` fraction of the
+  *true population* with confidence `1 - alpha`. Wider still. `pylmrob`
+  doesn't ship this out of the box; pair `predict_std(kind="prediction")`
+  with a tolerance factor from `scipy.stats.distributions` for an
+  ad-hoc construction.
+
+For just the standard deviations (without t-quantile-scaled bands),
+use `fit.predict_std(new_data, kind="confidence" | "prediction")`.
+This is convenient when you want to build bands at a different
+distributional assumption than the t-distribution that `predict()`
+uses.
+
+```python
+# Standard deviation of the mean response at new rows.
+se = fit.predict_std(new_df, kind="confidence")
+
+# Standard deviation of a single new observation.
+se_pred = fit.predict_std(new_df, kind="prediction")
+```
+
 ## How do I get bit-identical fits to R?
 
 `pylmrob` defaults to NumPy's PCG64 BitGenerator while R uses the

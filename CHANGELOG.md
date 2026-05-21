@@ -15,6 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   Single-thread BLAS, tighter tolerances, MAD-init scale all tried;
   the gap is confirmed BLAS-environment-dependent.
 
+### Added
+
+- ``fit.predict_std(new_data, kind="confidence" | "prediction")``:
+  returns just the standard deviation of the prediction at each new
+  row. Use when you want to build your own bands at a different
+  distributional assumption than ``predict()``'s t-distribution.
+- ``fit.diagnostics()`` gains a ``masked_outliers`` field flagging
+  rows that are simultaneously fully downweighted by the robust fit
+  AND high-leverage against the clean-data design centroid. These
+  are the Hawkins-Bradu-Kass-style contamination rows that hide
+  from plain-OLS leverage diagnostics. Threshold: leverage exceeds
+  ``median + 3 * MAD`` of the clean-rows' leverages.
+
 ### Performance
 
 - **GGW psi family ~25% faster.** Hoisted per-case polynomial
