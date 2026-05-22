@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.19] - 2026-05-22
+
 ### Docs
 
+- Friendlier ``index.md`` and ``quickstart.md`` (shorter intro, linear
+  reading order, fewer side trips). ``faq.md`` rewritten for shorter
+  answers.
 - ``numerical-notes.md`` gains an "Investigation log: confirmed
   irreducible" subsection documenting the v0.5.19 attempt to close
   the ``Control(rng="R")`` ~1.7e-5 intercept gap on stackloss.

@@ -13,6 +13,10 @@
         {
           "type": "generic",
           "path": "meson.build"
+        },
+        {
+          "type": "python",
+          "path": "src/pylmrob/_version.py"
         }
       ]
     }
