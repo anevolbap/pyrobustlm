@@ -1,18 +1,12 @@
 # Quickstart
 
-A 5-minute tour. We will fit the classic `stackloss` dataset with
-`lmrob`, look at the summary, run a Wald test, and predict on new data.
+Fit a robust regression on `stackloss`, look at the summary, run a Wald
+test, predict on new data. Five minutes.
 
 ## Install
 
 ```bash
 pip install pylmrob
-```
-
-From source:
-
-```bash
-pip install git+https://github.com/anevolbap/pyrobustlm
 ```
 
 ## Fit
@@ -25,36 +19,17 @@ df = pd.read_csv("stackloss.csv")
 fit = lmrob(
     "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
     df,
-    control=Control(nResample=500),
     seed=42,
 )
 
-print(f"converged: {fit.converged_}")
-print(f"scale:     {fit.scale_:.4f}")
-print(f"coef:      {dict(zip(fit.term_names_, fit.coef_))}")
-```
-
-## Inspect
-
-`summary()` returns a `SummaryLmRob` whose `__str__` prints the R-style
-table:
-
-```python
 print(fit.summary())
 ```
 
-You can also pull the table out programmatically:
-
-```python
-summ = fit.summary()
-summ.coefficients      # ndarray of shape (p, 4): est, se, t, p
-summ.r_squared
-summ.adj_r_squared
-```
+`fit` is a [`LmRobResults`](api) object. The interesting fields are
+`fit.coef_`, `fit.scale_`, `fit.rweights_` (the per-row robust weights),
+and `fit.cov_`. Everything else is computed from those.
 
 ## Compare nested models
-
-`anova` runs a robust Wald or Deviance test on nested fits:
 
 ```python
 from pylmrob import anova
@@ -74,144 +49,93 @@ new = pd.DataFrame({
     "Water.Temp": [20.0, 25.0],
     "Acid.Conc.": [85.0, 88.0],
 })
+
 y_hat = fit.predict(new)
-```
 
-The fit stores the formula's design transformation, so factor encoding
-and `I(x**2)` style transforms are re-applied to `new`.
-
-### Confidence and prediction intervals
-
-Pass `interval="confidence"` to get the interval for the mean
-response, or `interval="prediction"` to also include residual noise
-for a single new observation:
-
-```python
+# With a confidence band (mean response) or prediction band (single obs):
 band = fit.predict(new, interval="confidence", level=0.95)
-# band has columns (fit, lwr, upr)
-fit_hat, lwr, upr = band[:, 0], band[:, 1], band[:, 2]
+# band[:, 0] = fitted, band[:, 1] = lower, band[:, 2] = upper
 ```
 
-Both bands use the t-distribution with `fit.df_residual_` degrees of
-freedom, matching R's `predict.lmrob`.
+Both bands use the t-distribution at `fit.df_residual_`, matching R's
+`predict.lmrob`. Skip the band scaling with `fit.predict_std(new,
+kind="confidence")` if you want the raw standard errors.
 
-## Bootstrap inference
-
-When the asymptotic Wald CI looks suspicious (small n, heavy
-contamination, near-singular X) reach for the bootstrap. Each replicate
-resamples ``n`` rows with replacement and refits ``lmrob``:
+## Inference
 
 ```python
-boot = fit.bootstrap(n_boot=1000, level=0.95, seed=42)
-print(boot.percentile_ci)   # (p, 2): bootstrap-percentile lower/upper
-print(boot.se)              # bootstrap standard error per coef
-print(boot.n_converged)     # most replicates should converge; a few may not
+fit.confint(level=0.95)                       # Wald (asymptotic normal)
+fit.confint(method="bootstrap", n_boot=1000)  # bootstrap percentile
+
+# statsmodels-style aliases also work:
+fit.params, fit.bse, fit.tvalues, fit.pvalues, fit.conf_int(0.05)
 ```
 
-The bootstrap is significantly more expensive than ``confint()`` (each
-replicate is a full ``lmrob`` fit), so pass ``n_workers > 1`` to
-parallelise across replicates:
+When `n` is small or contamination is heavy, prefer the bootstrap CI:
+the asymptotic Wald can be 30–50% too narrow. The bootstrap costs more
+(each replicate is a full fit), so use `n_workers > 1` to parallelise:
 
 ```python
 boot = fit.bootstrap(n_boot=2000, n_workers=4, seed=42)
+boot.percentile_ci      # (p, 2) lower/upper
+boot.se                 # bootstrap standard error per coef
+boot.n_converged
 ```
 
-## Coefficient statistics
-
-`confint()` returns Wald confidence intervals on the coefficients.
-Property aliases match R / statsmodels conventions so existing code
-slots in:
-
-```python
-fit.confint(level=0.95)       # (p, 2) lower/upper
-fit.conf_int(alpha=0.05)      # same thing, statsmodels spelling
-fit.params                    # coef_, statsmodels alias
-fit.bse                       # standard_errors_
-fit.tvalues                   # coef / se
-fit.pvalues                   # 2 * (1 - cdf(|t|))
-```
-
-## sklearn-style API
-
-For pipeline-style code there's a class wrapper:
+## sklearn integration
 
 ```python
 from pylmrob import LmRob
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
-est = LmRob().fit(X, y)
-est.predict(X_new)
-est.score(X_test, y_test)     # OLS R^2, sklearn convention
+est = Pipeline([("scale", StandardScaler()), ("lmrob", LmRob())])
+est.fit(X, y, lmrob__seed=42)
+est.score(X_test, y_test)
 ```
 
-`LmRob` supports `get_params` / `set_params`, so it plugs into
-`sklearn.model_selection.cross_val_score`, `GridSearchCV`, etc. The
-underlying `LmRobResults` is at `est.result_`.
+`LmRob` is a `BaseEstimator + RegressorMixin`, so `GridSearchCV`,
+`cross_val_score`, and friends work without adapters. The underlying
+`LmRobResults` is at `est.named_steps["lmrob"].result_`. Full example
+at [`examples/sklearn_pipeline`](examples/sklearn_pipeline).
 
-## Use a different psi family
+## Pick a different psi family
 
 ```python
-fit = lmrob(
-    "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
-    df,
-    control=Control(psi="lqq"),
-    seed=42,
-)
+fit = lmrob("stack.loss ~ ...", df, control=Control(psi="lqq"), seed=42)
 ```
 
-Supported families: `bisquare` (default), `huber`, `hampel`, `optimal`,
-`lqq`, `ggw`. Note that `lmrob` requires a redescending psi for the
-S-step; `huber` is rejected.
+Available: `bisquare` (default), `hampel`, `optimal`, `lqq`, `ggw`,
+`welsh`. `huber` is also available for separate M-scale work but isn't
+permitted for the S-step (it's not redescending).
 
 ## R compatibility presets
 
-`Control(setting="KS2014")` and `Control(setting="KS2011")` configure the
-SMDM pipeline (S init, MM, design-adaptive D-scale, MM with new scale)
-matching R's `lmrob.control(setting="KS2014" / "KS2011")`:
-
 ```python
-fit = lmrob(
-    "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
-    df,
-    control=Control(setting="KS2014"),
-    seed=42,
-)
+fit = lmrob("stack.loss ~ ...", df, control=Control(setting="KS2014"), seed=42)
 ```
 
-## Threading
+`"KS2014"` and `"KS2011"` configure the SMDM pipeline (S init → MM →
+D-scale → MM-on-new-scale), matching R's
+`lmrob.control(setting="KS20XX")`.
 
-The fast-S resampling loop can run in parallel via a thread pool:
+## Speed levers
 
-```python
-fit = lmrob(
-    "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
-    df,
-    control=Control(n_workers=0),  # 0 = auto
-    seed=42,
-)
-```
+The default `Control()` already runs through the monolithic Cython
+kernel; you don't need to opt in. Knobs worth knowing:
 
-`n_workers=1` (default) is serial and bit-identical with single-threaded
-runs. `n_workers=0` is auto and only enables threading when the problem
-is large enough that BLAS dominates Python overhead.
+- `n_workers=N`: parallel fast-S resampling. `0` = auto, `1` = serial
+  (deterministic), `>1` = explicit thread count.
+- `nResample=N`: more resamples = more robust fit, linear runtime cost.
+  Default 500 is enough for most problems.
+- `engine_c=False`: forces the legacy NumPy path. Slower but useful
+  for debugging.
 
-## The fast Cython engine
+See [Performance](engine_c) for the long version.
 
-The default `Control()` runs the fit through a monolithic Cython
-kernel that does fast-S, MM, D-scale, and vcov in one nogil C block.
-Median wall-clock is 0.93x R across the bench corpus; small-n
-classical cases drop from 5-10x R to about 1x R. To force the legacy
-numpy-based path, pass `Control(engine_c=False)`:
+## Where to next
 
-```python
-fit = lmrob(
-    "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
-    df,
-    control=Control(engine_c=False),
-    seed=42,
-)
-```
-
-On rare small datasets the Cython subset-draw lands in a basin
-where the vcov is singular; `lmrob()` catches that and falls back
-automatically. See [the engine_c page](engine_c) for the full
-trade-off, which mainly concerns RNG byte-level reproducibility.
+- Worked example: [stackloss tour](examples/stackloss_tour)
+- Why robust at all: [robustness vs OLS](examples/robustness_vs_ols)
+- Coming from R: [porting from R](porting-from-r)
+- Got an error: [FAQ](faq)
