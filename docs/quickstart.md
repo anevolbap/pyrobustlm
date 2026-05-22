@@ -136,6 +136,6 @@ See [Performance](engine_c) for the long version.
 ## Where to next
 
 - Worked example: [stackloss tour](examples/stackloss_tour)
-- Why robust at all: [robustness vs OLS](examples/robustness_vs_ols)
+- Why robust at all: [theory in pictures](notebooks/01_ols_vs_robust)
 - Coming from R: [porting from R](porting-from-r)
 - Got an error: [FAQ](faq)

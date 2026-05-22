@@ -8,6 +8,20 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Headless matplotlib. The notebooks under docs/notebooks/ are executed
+# at build time via myst-nb; we must pick the Agg backend BEFORE any
+# notebook imports pyplot, otherwise CI / RTD pick the X11 backend and
+# crash on no $DISPLAY.
+try:
+    import matplotlib as _mpl
+
+    _mpl.use("Agg")
+except ImportError:
+    # matplotlib is in the ``docs`` optional-deps group; if a contributor
+    # builds the docs from a minimal install we'd rather give a clear
+    # sphinx error than fail here.
+    pass
+
 # Make the source tree importable so autodoc can introspect the package.
 _repo_root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_repo_root / "src"))
@@ -34,12 +48,27 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.viewcode",
     "sphinx_autodoc_typehints",
-    "myst_parser",
+    # myst_nb replaces myst_parser at runtime — it's a superset that
+    # also handles ``{code-cell}`` blocks in markdown files. Listing
+    # myst_parser too would cause a double-registration error.
+    "myst_nb",
 ]
 
+# myst-nb: execute notebooks at build time. ``cache`` means unchanged
+# notebooks reuse last build's output; only first build (or after the
+# notebook changes) actually runs the cells.
+nb_execution_mode = "cache"
+nb_execution_timeout = 120
+nb_execution_raise_on_error = True
+# Notebooks under docs/notebooks/ should always be MyST markdown
+# (no .ipynb); the next line is a belt-and-braces declaration.
+nb_render_image_options = {"width": "100%"}
+
+# myst_nb registers .md and .ipynb itself; .rst is restructuredtext.
 source_suffix = {
     ".rst": "restructuredtext",
-    ".md": "markdown",
+    ".md": "myst-nb",
+    ".ipynb": "myst-nb",
 }
 
 master_doc = "index"

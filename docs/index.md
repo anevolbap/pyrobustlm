@@ -45,14 +45,35 @@ public API is stable enough to depend on but may change.
 
 ```{toctree}
 :maxdepth: 2
+:caption: Getting started
 
 quickstart
 theory
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Theory in pictures
+
+notebooks/01_ols_vs_robust
+notebooks/02_efficiency
+notebooks/03_breakdown
+notebooks/04_s_estimator
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: How-to examples
+
 examples/stackloss_tour
-examples/robustness_vs_ols
 examples/m_s_factors
-examples/hbk_high_leverage
 examples/sklearn_pipeline
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Reference
+
 api
 porting-from-r
 engine_c

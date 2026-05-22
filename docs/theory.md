@@ -8,7 +8,9 @@ squared loss with a function that grows slowly in `|r|` so outliers
 contribute less.
 
 This page sketches what `lmrob` actually does, so you can pick sensible
-defaults without reading three papers.
+defaults without reading three papers. The four
+[notebooks](notebooks/01_ols_vs_robust.md) make each idea concrete with
+plots and simulations; this page is the prose companion to them.
 
 ## The M-estimator
 
@@ -30,7 +32,10 @@ For a sensible robust fit you want `ρ` to be:
 The classical `bisquare` family does both:
 `ρ(u) = 1 - (1 - (u/k)^2)^3` for `|u| < k`, and `ρ(u) = 1` outside.
 The tuning constant `k` controls the trade-off between Gaussian
-efficiency and breakdown.
+efficiency and breakdown. Notebook
+[01](notebooks/01_ols_vs_robust.md) shows what an M-estimator does to
+vertical vs horizontal outliers, side by side with OLS and a
+Theil-Sen reference.
 
 ## S-estimator and M-scale
 
@@ -48,7 +53,11 @@ evaluated by the M-scale equation above.
 S-estimators have a **breakdown point** of 50%: you can replace up to
 half the data with arbitrary outliers and the estimator still tracks
 the bulk of the data. The down-side is low Gaussian efficiency
-(around 28% at the 50% breakdown tuning).
+(around 28% at the 50% breakdown tuning). Notebook
+[03](notebooks/03_breakdown.md) measures this empirically by sweeping
+the contamination fraction; notebook
+[04](notebooks/04_s_estimator.md) opens up the S step and shows why
+the resampling delivers a high-breakdown starting point.
 
 ## MM-estimator
 
@@ -62,10 +71,11 @@ The **MM-estimator** is the workhorse of `lmrob`. It runs two stages:
    efficiency. The final `β_MM` retains the S-step's 50% breakdown
    point and reaches 95% efficiency under Gaussian noise.
 
-That's the best of both worlds in one fit. The Cython kernel runs the
-S-step (with the chi tuning) and the MM IRWLS (with the psi tuning)
-in a single `nogil` C block. The default psi family is `bisquare`
-with the 95%-efficient tuning constant `k = 4.685`.
+That's the best of both worlds in one fit. The default psi family is
+`bisquare` with the 95%-efficient tuning constant `k = 4.685`.
+Notebook [02](notebooks/02_efficiency.md) measures the efficiency
+claim with a Monte Carlo simulation and contrasts it against an
+M-estimator and Theil-Sen.
 
 ## Why `setting="KS2014"` is the recommended default
 
@@ -83,41 +93,28 @@ the original authors recommend; `pylmrob` follows R in keeping plain
 MM as the default for backwards compatibility, but exposes
 `Control(setting="KS2014")` as a one-keyword switch.
 
+## Where MM fails
+
+A 50% breakdown is the worst-case guarantee, not free insurance.
+If the contamination is unusually structured — for example, more
+than half the data shifted along a specific direction in design
+space, mimicking a real linear trend — MM can lock onto the wrong
+trend. Notebook [03](notebooks/03_breakdown.md) shows the cliff:
+the estimator stays accurate until ε ≈ 0.5, then collapses
+abruptly. Past that point, no single fit can recover the truth;
+the right move is to identify and split the populations.
+
 ## Which psi family to pick
 
-All five families are exposed: `bisquare` (the default), `optimal`,
-`hampel`, `lqq`, `ggw`. Practical guidance:
+Six families are exposed: `bisquare` (the default), `welsh`,
+`optimal`, `hampel`, `lqq`, `ggw`. **Stick with `bisquare`** unless
+you have a specific reason to change. `lqq` is the default with
+`setting="KS2014"`. The others are mostly of theoretical interest;
+the [FAQ](faq.md) has a quick description if you need to pick.
 
-- **Stick with `bisquare`** unless you have a specific reason to
-  change. It's the original Tukey psi, smooth, easy to reason about,
-  and what most papers benchmark with.
-- **`lqq`** (linear-quadratic-quadratic) is the default with
-  `setting="KS2014"`. Slightly heavier downweighting at the bend than
-  bisquare; the Koller & Stahel paper argues this is preferable for
-  the D-scale refinement.
-- **`hampel`** is piecewise-linear with three breakpoints; very
-  classical, occasionally numerically nicer on heavy-tail
-  contamination.
-- **`optimal`** is V. Yohai's optimal redescending psi for MM. Mostly
-  of theoretical interest; performance is close to bisquare.
-- **`ggw`** is the Generalised Gauss-Welsh family; a smooth psi with
-  six tabulated cases (`tuning=(case_idx,)`). Heaviest downweighting
-  of the redescending families.
-
-If you don't know which to pick: use the default. If your data has
-heavy contamination, try `setting="KS2014"`.
-
-## Computational cost
-
-`lmrob` is dominated by the S-step: 500 candidate p-subsets, each
-refined for a few IRWLS steps, then survivor refinement on the best
-few. With `engine_c=True` (the default since v0.5.11) the whole
-pipeline runs in one nogil C block. With `n_workers > 1` the
-candidate loop runs in parallel via OpenMP.
-
-The wall-clock floor is the underlying BLAS work, which `pylmrob`
-shares with R's `lmrob` (both call OpenBLAS under the hood). Median
-wall-clock across the bench corpus is **0.93x R**.
+For implementation details — the Cython kernel, parallel
+resampling, BLAS interactions, and bench numbers — see
+[`engine_c`](engine_c.md).
 
 ## Further reading
 
