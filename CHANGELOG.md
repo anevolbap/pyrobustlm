@@ -5,6 +5,41 @@ All notable changes to `pylmrob` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.19](https://github.com/anevolbap/pyrobustlm/compare/v0.5.18...v0.5.19) (2026-05-22)
+
+
+### Features
+
+* **control:** Sklearn-compatible get_params/set_params ([fbff8d3](https://github.com/anevolbap/pyrobustlm/commit/fbff8d3dd4a8c9355adfb66dd63f975c6236990e))
+* **control:** Sklearn-compatible get_params/set_params ([db0627f](https://github.com/anevolbap/pyrobustlm/commit/db0627fff5a7d5fef6bc344d48549c8aadb19b26))
+* L1 init + dfbetas + summary(detail='full') ([0dcd52a](https://github.com/anevolbap/pyrobustlm/commit/0dcd52ac408a9c4420c5cf772abe266f9adb1ef7))
+* L1 init + dfbetas diagnostic + summary(detail='full') ([3871f8d](https://github.com/anevolbap/pyrobustlm/commit/3871f8dec5189df851032d6dbd2a50f2e38cd1c7))
+* **psi:** Welsh / Gauss-weight psi family ([e59ca4c](https://github.com/anevolbap/pyrobustlm/commit/e59ca4c28e3ef28e357819de4a75b5ef6f023a54))
+* **psi:** Welsh / Gauss-weight psi family ([e3e4672](https://github.com/anevolbap/pyrobustlm/commit/e3e4672864520cf37e89d33ce7bbdb684e42bf1d))
+* **results:** Predict_std() + masked_outliers diagnostic flag ([5260fcf](https://github.com/anevolbap/pyrobustlm/commit/5260fcfbe7f6e821c2086cb76e36811afb45c794))
+* **results:** Predict_std() + masked_outliers diagnostic flag ([15a32c1](https://github.com/anevolbap/pyrobustlm/commit/15a32c14ff95fe8213864f69630150684d6e0728))
+
+
+### Bug Fixes
+
+* **lmrob:** Make sklearn base classes ty-clean across the optional path ([f8aa183](https://github.com/anevolbap/pyrobustlm/commit/f8aa183733db8837c112ffba887a453b96f88fa6))
+
+
+### Performance Improvements
+
+* **ggw:** Hoist per-case polynomial constants in chi-sum ([5cda1b8](https://github.com/anevolbap/pyrobustlm/commit/5cda1b8a63785450ea0b2f8dc02d84b36b547486))
+* **ggw:** Hoist per-case polynomial constants out of the inner loop ([f9212f7](https://github.com/anevolbap/pyrobustlm/commit/f9212f787cbdca0dff978c016bf5d31dc9b363f7))
+
+
+### Documentation
+
+* Add sklearn pipeline example + RTD badge + sklearn base classes ([79f0099](https://github.com/anevolbap/pyrobustlm/commit/79f00996d3949911efcf3ed85fbe5a56f9392ff0))
+* **numerical-notes:** Document the v0.5.19 rtol-gap investigation ([2d73743](https://github.com/anevolbap/pyrobustlm/commit/2d7374391705fc0fe5241ee53cd807739e032879))
+* **numerical-notes:** Rtol-gap investigation outcome ([6176918](https://github.com/anevolbap/pyrobustlm/commit/6176918b6b963688e88f46ebe97bc889b6ff321f))
+* **results:** Fix sphinx warning in summary docstring ([9950425](https://github.com/anevolbap/pyrobustlm/commit/9950425333485f0b3169ad1d770e357b372ad701))
+* Trim and friendly-up the landing pages ([e83f036](https://github.com/anevolbap/pyrobustlm/commit/e83f036cbc00bbc81a7caaefe5f9c4fb94f8d4aa))
+* Trim and friendly-up the landing pages ([d1286ec](https://github.com/anevolbap/pyrobustlm/commit/d1286ecac7d80ab315308f96207c44d25664238e))
+
 ## [Unreleased]
 
 ### Docs
