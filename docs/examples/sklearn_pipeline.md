@@ -156,5 +156,6 @@ grid = GridSearchCV(LmRob(), param_grid={"control": candidates}, cv=5)
 - [`stackloss_tour`](stackloss_tour.md): the canonical worked
   example for `fit.predict(interval=...)`, `fit.diagnostics()`,
   `fit.anova()`.
-- [`robustness_vs_ols`](robustness_vs_ols.md): the same kind of
-  contamination this page uses, but without the sklearn wrapper.
+- [`01_ols_vs_robust`](../notebooks/01_ols_vs_robust.md): the same
+  kind of contamination this page uses, with plots and the M /
+  Theil-Sen comparison.

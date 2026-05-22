@@ -75,6 +75,13 @@ docs = [
     "sphinx-rtd-theme",
     "sphinx-autodoc-typehints",
     "myst-parser",
+    # Executable notebooks (docs/notebooks/*.md with {code-cell} blocks).
+    "myst-nb>=1.0",
+    # Used by the theory notebooks for plots and the side-by-side
+    # comparisons with M-estimators (statsmodels) and Theil-Sen (sklearn).
+    "matplotlib>=3.7",
+    "statsmodels>=0.14",
+    "scikit-learn>=1.4",
 ]
 
 [project.urls]
