@@ -241,6 +241,22 @@ def test_predict_std_invalid_kind_raises():
         fit.predict_std(df, kind="bogus")
 
 
+def test_control_sklearn_get_set_params():
+    """``Control`` exposes ``get_params`` / ``set_params`` for sklearn
+    nested-parameter syntax (``LmRob(control__nResample=...)``)."""
+    c = Control(nResample=200, psi="bisquare")
+    params = c.get_params()
+    assert params["nResample"] == 200
+    assert params["psi"] == "bisquare"
+
+    c.set_params(nResample=500, psi="optimal")
+    assert c.nResample == 500
+    assert c.psi == "optimal"
+
+    with pytest.raises(ValueError, match="Invalid parameter"):
+        c.set_params(bogus=True)
+
+
 def test_diagnostics_masked_outliers_flag_hbk():
     """On hbk, masked_outliers flags the high-leverage Y-outliers (rows 0-9)
     that hide from plain-OLS leverage diagnostics."""

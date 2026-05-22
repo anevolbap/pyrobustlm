@@ -99,33 +99,41 @@ chases the outliers and predicts poorly on clean held-out rows.
 
 ## 3. `GridSearchCV` over `Control` settings
 
-The cleanest way to vary `lmrob` hyperparameters across folds is to
-pass concrete `Control` objects:
+`Control` exposes `get_params` / `set_params` so sklearn's nested
+parameter syntax (`estimator__nested__field`) works directly:
 
 ```python
 from sklearn.model_selection import GridSearchCV
 
-candidates = [
-    Control(psi="bisquare", nResample=200),
-    Control(psi="bisquare", nResample=500),
-    Control(psi="optimal",  nResample=500),
-    Control(psi="lqq",      nResample=500),
-]
-
 grid = GridSearchCV(
     LmRob(),
-    param_grid={"control": candidates},
+    param_grid={
+        "control__nResample": [200, 500, 1000],
+        "control__psi": ["bisquare", "optimal", "lqq"],
+    },
     cv=5,
     scoring="r2",
 )
 grid.fit(X_train, y_train, seed=42)
-print("best:", grid.best_params_["control"])
+print("best:", grid.best_params_)
 print("best score:", grid.best_score_)
 ```
 
 `GridSearchCV` does the cross-validation, leaderboard, and refit on
 the full training set for you. The fitted best estimator is at
 `grid.best_estimator_`.
+
+If you'd rather pass entire `Control` objects (e.g., to test KS2014
+vs MM presets), use the older form:
+
+```python
+candidates = [
+    Control(setting="KS2014"),
+    Control(setting="KS2011"),
+    Control(),  # default MM
+]
+grid = GridSearchCV(LmRob(), param_grid={"control": candidates}, cv=5)
+```
 
 ## When sklearn integration doesn't make sense
 

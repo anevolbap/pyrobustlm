@@ -178,6 +178,29 @@ class Control:
                 raise ValueError(f"unknown psi family {self.psi!r}")
             self.tuning_chi = _DEFAULT_TUNING_CHI[self.psi]
 
+    # sklearn-compatibility shim. Lets ``GridSearchCV`` reach Control fields
+    # via the standard ``estimator__nested__field`` parameter syntax, e.g.
+    # ``param_grid={"control__nResample": [200, 500, 1000]}``.
+    def get_params(self, deep: bool = True) -> dict[str, object]:
+        """Return ``Control``'s public fields as a sklearn-style dict."""
+        import dataclasses
+
+        return {f.name: getattr(self, f.name) for f in dataclasses.fields(self)}
+
+    def set_params(self, **params: object) -> Control:
+        """Set ``Control``'s public fields in place, sklearn convention."""
+        import dataclasses
+
+        valid = {f.name for f in dataclasses.fields(self)}
+        for key, value in params.items():
+            if key not in valid:
+                raise ValueError(f"Invalid parameter {key!r} for Control")
+            setattr(self, key, value)
+        # Re-run post-init so derived defaults stay consistent. We invoke
+        # __post_init__ directly because Control is a regular @dataclass.
+        self.__post_init__()
+        return self
+
     @classmethod
     def preset(cls, setting: Setting, **overrides: object) -> Control:
         """Build a Control for a named preset.
