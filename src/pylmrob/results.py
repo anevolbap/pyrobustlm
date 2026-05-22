@@ -374,12 +374,12 @@ class LmRobResults:
         detail
             ``"brief"`` (default) emits the standard summary.
             ``"full"`` appends a footer with init method, init scale,
-            MM iter count, and engine settings (engine_c, rng). Use
-            this when debugging convergence or unexpected results.
+            MM iter count, and engine settings (``engine_c``, ``rng``).
+            Use this when debugging convergence or unexpected results.
 
         The returned object stringifies to the chosen style via
-        ``str()`` / ``print()``; ``.render(style=..., detail=...)``
-        overrides the choice without rebuilding the object.
+        ``str()`` or ``print()``; calling its ``render`` method overrides
+        the stored choice without rebuilding the object.
         """
         from pylmrob.summary import make_summary
 
