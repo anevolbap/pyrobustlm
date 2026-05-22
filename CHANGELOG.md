@@ -17,6 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- ``Control(init="L1")``: least-absolute-deviation initial estimator.
+  Uses scipy's ``linprog`` (HiGHS). High-breakdown like S, but lower
+  Gaussian efficiency; useful when fast-S resampling is unstable.
+  Matches R's ``lmrob(init="L1")`` semantically.
+- ``fit.diagnostics().dfbetas``: ``(n, p)`` matrix of per-coefficient
+  per-observation influence (Belsley/Kuh/Welsch closed-form, adapted
+  with the robust weights). Large absolute values mark rows whose
+  deletion would visibly move a coefficient. Exact leave-one-out
+  refits would be more accurate but cost ``n`` extra fits; this is
+  an approximation.
+- ``fit.summary(detail="full")``: appends a footer with init method,
+  init scale, MM iter count, engine_c, rng, and tuning constants.
+  Useful for debugging convergence without ``trace_lev=3``.
 - ``Control.get_params`` / ``Control.set_params``: sklearn-style
   parameter accessors. ``GridSearchCV(param_grid={"control__nResample":
   [200, 500, 1000]})`` now works directly, replacing the older

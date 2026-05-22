@@ -437,6 +437,21 @@ def _lmrob_impl(
                 "n_iter": ms_result.n_iter,
                 "method": "M-S",
             }
+    elif init_method == "L1":
+        # L1 (least absolute deviation) initial estimate. High-breakdown
+        # but lower Gaussian efficiency than S; useful when fast-S
+        # resampling is unstable. R's ``lmrob(init="L1")``.
+        from pylmrob._l1 import l1_fit
+
+        l1_result = l1_fit(X, y)
+        beta_init = l1_result.coef
+        sigma_init = l1_result.scale
+        init_info = {
+            "coef": l1_result.coef.copy(),
+            "scale": l1_result.scale,
+            "n_iter": 0,
+            "method": "L1",
+        }
     else:
         raise NotImplementedError(f"init={init_method!r} not implemented")
 

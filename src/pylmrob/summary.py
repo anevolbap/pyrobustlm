@@ -116,11 +116,19 @@ class SummaryLmRob:
     has_intercept: bool
 
     style: str = "r"  # "r" (default) or "statsmodels"
+    # ``detail="brief"`` (default) matches the historic output. ``"full"``
+    # appends a small footer with init method, init scale, init iter count,
+    # MM iter count, and the engine/RNG that drove the fit; useful for
+    # debugging convergence issues without ``trace_lev=3``.
+    detail: str = "brief"
+    init_info: dict[str, object] | None = None
+    engine_c: bool | None = None
+    rng: str | None = None
 
     def __str__(self) -> str:
-        return self.render(style=self.style)
+        return self.render(style=self.style, detail=self.detail)
 
-    def render(self, *, style: str = "r") -> str:
+    def render(self, *, style: str = "r", detail: str = "brief") -> str:
         """Render the summary table.
 
         Parameters
@@ -130,12 +138,49 @@ class SummaryLmRob:
             ``"statsmodels"``: a fixed-width table matching the
             ``statsmodels.iolib.summary.Summary`` layout for users who
             pipe pylmrob fits into statsmodels-shaped reporting code.
+        detail
+            ``"brief"`` (default) emits the standard summary. ``"full"``
+            appends a footer with the init method, init scale, MM iter
+            count, and engine settings (engine_c, rng). Use this when
+            debugging convergence.
         """
+        if detail not in ("brief", "full"):
+            raise ValueError(f"detail must be 'brief' or 'full', got {detail!r}")
         if style == "statsmodels":
-            return self._render_statsmodels()
-        if style == "r":
-            return self._render_r()
-        raise ValueError(f"style must be 'r' or 'statsmodels', got {style!r}")
+            text = self._render_statsmodels()
+        elif style == "r":
+            text = self._render_r()
+        else:
+            raise ValueError(f"style must be 'r' or 'statsmodels', got {style!r}")
+        if detail == "full":
+            text = text + "\n\n" + self._render_full_footer()
+        return text
+
+    def _render_full_footer(self) -> str:
+        """Diagnostic footer appended when ``detail='full'``."""
+        rows: list[str] = ["--- Fit details ---"]
+        if self.init_info is not None:
+            method = self.init_info.get("method", "?")
+            iscale = self.init_info.get("scale", float("nan"))
+            iiter = self.init_info.get("n_iter", "?")
+            rows.append(f"  init method      : {method}")
+            try:
+                rows.append(f"  init scale       : {float(iscale):.6g}")  # ty: ignore[invalid-argument-type]
+            except (TypeError, ValueError):
+                rows.append(f"  init scale       : {iscale}")
+            rows.append(f"  init n_iter      : {iiter}")
+        rows.append(f"  MM n_iter        : {self.n_iter}")
+        rows.append(f"  scale (M-est)    : {self.scale:.6g}")
+        if self.engine_c is not None:
+            rows.append(f"  engine_c         : {self.engine_c}")
+        if self.rng is not None:
+            rows.append(f"  rng              : {self.rng}")
+        rows.append(f"  psi family       : {self.control.psi or '?'}")
+        if self.control.tuning_psi is not None:
+            rows.append(f"  tuning_psi       : {self.control.tuning_psi}")
+        if self.control.tuning_chi is not None:
+            rows.append(f"  tuning_chi       : {self.control.tuning_chi}")
+        return "\n".join(rows)
 
     def _render_r(self) -> str:
         rows: list[str] = []
@@ -280,6 +325,9 @@ def make_summary(result: LmRobResults) -> SummaryLmRob:
         n_iter=int(result.n_iter_),
         control=result.control,
         has_intercept=has_intercept,
+        init_info=dict(result.init_) if result.init_ else None,
+        engine_c=bool(result.control.engine_c),
+        rng=str(result.control.rng),
     )
 
 

@@ -2,6 +2,7 @@ python_sources = [
   '__init__.py',
   '_version.py',
   '_fast_s.py',
+  '_l1.py',
   '_mm.py',
   '_psifuns.py',
   'd_scale.py',
