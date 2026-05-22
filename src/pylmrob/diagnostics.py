@@ -44,6 +44,10 @@ class DiagnosticsTable:
         These rows are simultaneously influential in the design and
         rejected as outliers. They merit a closer look than rows
         flagged by either criterion alone.
+    dfbetas :
+        ``(n, p)`` matrix where ``dfbetas[i, j]`` approximates the
+        change in coefficient ``j`` (in SE units) when observation ``i``
+        is removed. See :func:`dfbetas` for the formula.
     """
 
     leverage: np.ndarray
@@ -52,6 +56,7 @@ class DiagnosticsTable:
     rweights: np.ndarray
     outliers: np.ndarray
     masked_outliers: np.ndarray
+    dfbetas: np.ndarray
 
 
 def plot(results: LmRobResults) -> object:
@@ -136,6 +141,50 @@ def hatvalues(results: LmRobResults, X: np.ndarray) -> np.ndarray:
     Q, _ = np.linalg.qr(Xw, mode="reduced")
     h = np.minimum(1.0, np.sum(Q * Q, axis=1))
     return h
+
+
+def dfbetas(results: LmRobResults, X: np.ndarray) -> np.ndarray:
+    """Per-observation influence on each regression coefficient.
+
+    Returns an ``(n, p)`` matrix where ``dfbetas[i, j]`` approximates
+    ``(beta_full[j] - beta_minus_i[j]) / SE(beta[j])``. Large absolute
+    values mark observations whose deletion would visibly move
+    coefficient ``j``.
+
+    Uses Belsley/Kuh/Welsch's closed-form OLS-style formula, adapted
+    with the M-estimator's robust weights so the influence reflects
+    only the rows that the fit actually uses:
+
+    .. math::
+        \\text{dfbetas}_{i,j} \\approx
+            \\frac{w_i \\cdot (X' W X)^{-1}_{j,\\cdot} \\, x_i \\, r_i}
+                  {(1 - h_i) \\, \\sigma \\, \\sqrt{(X' W X)^{-1}_{j,j}}}
+
+    where ``w_i`` are the robust weights, ``h_i`` the robust hat values,
+    ``r_i`` the residual, and ``sigma`` the M-scale.
+
+    This is an approximation; a leave-one-out refit is the exact
+    quantity but costs ``n`` extra fits.
+    """
+    w = results.rweights_
+    h = hatvalues(results, X)
+    r = results.residuals_
+    sigma = max(results.scale_, 1e-300)
+
+    Xw = X * np.sqrt(np.maximum(w, 0.0))[:, None]
+    # (X' W X)^-1
+    xtwx_inv = np.linalg.inv(Xw.T @ Xw)
+    # Standard errors are sqrt(sigma^2 * diag((X' W X)^-1)).
+    se = sigma * np.sqrt(np.maximum(np.diag(xtwx_inv), 0.0))
+
+    one_minus_h = np.maximum(1.0 - h, 1e-12)
+    # Influence vector per i: ``w_i * (X'WX)^-1 @ x_i * r_i / ((1 - h_i) * sigma)``
+    # Result shape: (n, p). Broadcasting form.
+    influence = (w * r / (one_minus_h * sigma))[:, None] * (X @ xtwx_inv)
+    # Scale each column by 1 / se[j] to get the dfbetas form.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        scaled = influence / np.where(se > 0, se, 1.0)
+    return scaled
 
 
 def cooks_distance(

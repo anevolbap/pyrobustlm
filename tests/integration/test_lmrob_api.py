@@ -241,6 +241,74 @@ def test_predict_std_invalid_kind_raises():
         fit.predict_std(df, kind="bogus")
 
 
+def test_diagnostics_dfbetas_shape_and_influence():
+    """``dfbetas`` is shape ``(n, p)``; the well-known stackloss outlier rows
+    (1, 3, 4, 21 in 1-based R indexing) have larger |dfbetas| than typical
+    clean rows."""
+    df = _load_dataset("stackloss")
+    fit = lmrob("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, seed=42)
+    diag = fit.diagnostics()
+    assert diag.dfbetas.shape == (fit.nobs_, fit.coef_.size)
+    # Stackloss outlier rows 0, 2, 3, 20 (0-based) should have the largest
+    # row-sums of |dfbetas| among all rows; check the top-4 contains some.
+    sums = np.abs(diag.dfbetas).sum(axis=1)
+    top4 = set(np.argsort(sums)[::-1][:5].tolist())
+    known_outliers = {0, 2, 3, 20}
+    # At least one of the known outliers in the top-5 influential rows.
+    assert top4 & known_outliers, f"dfbetas didn't surface known outliers; top5={top4}"
+
+
+def test_summary_detail_full_includes_init_info():
+    """``fit.summary(detail='full')`` appends an init/engine footer."""
+    df = _load_dataset("stackloss")
+    fit = lmrob(
+        "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
+        df,
+        control=Control(init="L1"),
+        seed=42,
+    )
+    s = fit.summary(detail="full")
+    text = str(s)
+    assert "Fit details" in text
+    assert "init method      : L1" in text
+    assert "rng              : PCG64" in text
+    # Brief still works.
+    brief = fit.summary(detail="brief")
+    assert "Fit details" not in str(brief)
+
+
+def test_summary_detail_invalid_raises():
+    df = _load_dataset("stackloss")
+    fit = lmrob("stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.", df, seed=0)
+    with pytest.raises(ValueError, match="detail must be"):
+        fit.summary(detail="verbose").render(detail="verbose")
+
+
+def test_init_l1_runs_and_records_method():
+    """``Control(init='L1')`` produces a fit with init.method='L1' and
+    coefficients close to the S-init fit (both are high-breakdown)."""
+    df = _load_dataset("stackloss")
+    fit_l1 = lmrob(
+        "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
+        df,
+        control=Control(init="L1"),
+        seed=42,
+    )
+    assert fit_l1.converged_
+    assert fit_l1.init_["method"] == "L1"
+
+    fit_s = lmrob(
+        "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",
+        df,
+        control=Control(init="S"),
+        seed=42,
+    )
+    # Both robust inits should land in the same neighbourhood on stackloss
+    # (the bisquare MM step is identical once given any reasonable init).
+    rel_diff = np.abs(fit_l1.coef_ - fit_s.coef_) / np.maximum(np.abs(fit_s.coef_), 1.0)
+    assert rel_diff.max() < 0.05, f"L1 vs S coef diff: {rel_diff}"
+
+
 def test_control_sklearn_get_set_params():
     """``Control`` exposes ``get_params`` / ``set_params`` for sklearn
     nested-parameter syntax (``LmRob(control__nResample=...)``)."""

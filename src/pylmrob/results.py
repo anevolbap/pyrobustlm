@@ -280,10 +280,18 @@ class LmRobResults:
             raise RuntimeError(
                 "diagnostics() needs the design matrix; fit was created without design_x_"
             )
-        from pylmrob.diagnostics import DiagnosticsTable, cooks_distance, hatvalues
+        from pylmrob.diagnostics import (
+            DiagnosticsTable,
+            cooks_distance,
+            hatvalues,
+        )
+        from pylmrob.diagnostics import (
+            dfbetas as _dfbetas,
+        )
 
         h = hatvalues(self, self.design_x_)
         cd = cooks_distance(self, self.design_x_)
+        dfb = _dfbetas(self, self.design_x_)
         sigma = max(self.scale_, 1e-300)
         z = self.residuals_ / sigma
         outliers = np.abs(z) > outlier_threshold
@@ -322,6 +330,7 @@ class LmRobResults:
             rweights=self.rweights_,
             outliers=outliers,
             masked_outliers=masked_outliers,
+            dfbetas=dfb,
         )
 
     def bootstrap(
@@ -351,7 +360,7 @@ class LmRobResults:
 
         return _anova(self, *others, test=test)
 
-    def summary(self, style: str = "r") -> SummaryLmRob:
+    def summary(self, style: str = "r", detail: str = "brief") -> SummaryLmRob:
         """Return a ``SummaryLmRob`` matching R's ``summary.lmrob``.
 
         Parameters
@@ -362,15 +371,21 @@ class LmRobResults:
             ``"statsmodels"``: a fixed-width table matching the
             ``statsmodels.iolib.summary.Summary`` layout. Use this when
             piping pylmrob fits into statsmodels-shaped reporting code.
+        detail
+            ``"brief"`` (default) emits the standard summary.
+            ``"full"`` appends a footer with init method, init scale,
+            MM iter count, and engine settings (engine_c, rng). Use
+            this when debugging convergence or unexpected results.
 
         The returned object stringifies to the chosen style via
-        ``str()`` / ``print()``; ``.render(style=...)`` overrides the
-        choice without rebuilding the object.
+        ``str()`` / ``print()``; ``.render(style=..., detail=...)``
+        overrides the choice without rebuilding the object.
         """
         from pylmrob.summary import make_summary
 
         out = make_summary(self)
         out.style = style
+        out.detail = detail
         return out
 
     def __repr__(self) -> str:
