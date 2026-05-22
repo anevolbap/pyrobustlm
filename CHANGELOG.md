@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- ``Control.get_params`` / ``Control.set_params``: sklearn-style
+  parameter accessors. ``GridSearchCV(param_grid={"control__nResample":
+  [200, 500, 1000]})`` now works directly, replacing the older
+  ``param_grid={"control": [Control(...), Control(...)]}`` workaround.
 - ``fit.predict_std(new_data, kind="confidence" | "prediction")``:
   returns just the standard deviation of the prediction at each new
   row. Use when you want to build your own bands at a different
