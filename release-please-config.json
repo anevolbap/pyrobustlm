@@ -15,7 +15,7 @@
           "path": "meson.build"
         },
         {
-          "type": "python",
+          "type": "generic",
           "path": "src/pylmrob/_version.py"
         }
       ]
