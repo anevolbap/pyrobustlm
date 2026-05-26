@@ -5,6 +5,14 @@ All notable changes to `pylmrob` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.20](https://github.com/anevolbap/pyrobustlm/compare/v0.5.19...v0.5.20) (2026-05-26)
+
+
+### Documentation
+
+* **notebooks:** Theory in pictures (four executable notebooks) ([0276628](https://github.com/anevolbap/pyrobustlm/commit/02766285433fea78b5a7d894349337ce9e721267))
+* Theory in pictures (four executable notebooks + theory polish) ([59aff5c](https://github.com/anevolbap/pyrobustlm/commit/59aff5c18a8d8f3ab303c9f0481b1525c1344e13))
+
 ## [Unreleased]
 
 ## [0.5.19] - 2026-05-22
