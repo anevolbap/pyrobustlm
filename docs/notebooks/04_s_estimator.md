@@ -233,9 +233,11 @@ The MM step then upgrades the 28%-efficient S solution into a
 
 That two-step structure is what the "MM" name refers to:
 M-estimator on top of an M-scale, where the M-scale is itself
-delivered by an S-estimator. Yohai (1987) is the original reference;
-Salibian-Barrera & Yohai (2006) gave the fast-S resampling
-algorithm `lmrob` is built on.
+delivered by an S-estimator.
+[Yohai (1987)](https://doi.org/10.1214/aos/1176350366) is the
+original reference;
+[Salibian-Barrera & Yohai (2006)](https://doi.org/10.1198/106186006X113629)
+gave the fast-S resampling algorithm `lmrob` is built on.
 
 ## Next
 

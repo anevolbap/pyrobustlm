@@ -16,6 +16,9 @@ and [`docs/bench-report.md`](docs/bench-report.md) for wall-clock numbers.
 
 Status: alpha. Public API is provisional.
 
+Note: parts of the documentation were drafted with help from Claude Opus 4.7.
+Verify against the source code or the cited papers before relying on them.
+
 ## Install
 
 ```bash
