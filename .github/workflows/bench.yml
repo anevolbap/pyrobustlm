@@ -1,0 +1,105 @@
+name: bench
+
+# Weekly comparison against robustbase::lmrob on the bench corpus.
+#
+# Steps: install R + robustbase, build pylmrob from main, run the corpus
+# under both Python and engine_c paths, regenerate docs/bench-report.md,
+# and open a PR if the file changed.
+#
+# Caveat: the PR is opened with the default GITHUB_TOKEN, so the CI
+# workflows on it will NOT auto-trigger (GitHub suppresses push/pull
+# events for refs created by GITHUB_TOKEN). Re-run them by hand on the
+# auto-PR if you want fresh checks before merging.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: bench-cron
+  cancel-in-progress: false
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::robustbase
+            any::jsonlite
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install build deps and pylmrob from source
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "meson-python>=0.16" "meson>=1.4" ninja "Cython>=3.0" "numpy>=2.0"
+          python -m pip install --no-build-isolation .
+
+      - name: Run R benchmark
+        run: Rscript scripts/benchmark.R
+
+      - name: Run pylmrob benchmark (Python path)
+        run: python scripts/benchmark.py
+
+      - name: Run pylmrob benchmark (engine_c)
+        run: python scripts/benchmark.py --engine_c
+
+      - name: Build report
+        run: python scripts/build_bench_report.py
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet docs/bench-report.md; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No changes in bench-report.md, exiting."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "bench-report.md changed:"
+            git diff --stat docs/bench-report.md
+          fi
+
+      - name: Open PR with updated report
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DATE=$(date -u +%Y-%m-%d)
+          BRANCH="bench/refresh-${DATE}"
+          RB_VERSION=$(Rscript -e 'cat(as.character(packageVersion("robustbase")))' 2>/dev/null || echo "unknown")
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # If a stale branch from a previous failed run exists, replace it.
+          git switch -c "${BRANCH}" || (git branch -D "${BRANCH}" && git switch -c "${BRANCH}")
+          git add docs/bench-report.md
+          git commit -m "chore(bench): refresh R comparison report (${DATE})"
+          git push -u origin "${BRANCH}"
+
+          gh pr create \
+            --base main \
+            --head "${BRANCH}" \
+            --title "chore(bench): refresh R comparison report (${DATE})" \
+            --label skip-changelog \
+            --body "Automated weekly refresh of \`docs/bench-report.md\`.
+
+          Compares \`pylmrob\` (main, source build) against \`robustbase\` ${RB_VERSION} on the fixed bench corpus.
+
+          The PR is opened by \`GITHUB_TOKEN\`, so CI workflows do not auto-trigger here. To run them, push an empty commit or use \`gh workflow run\` on this branch."
