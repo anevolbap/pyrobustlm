@@ -35,7 +35,9 @@ The tuning constant `k` controls the trade-off between Gaussian
 efficiency and breakdown. Notebook
 [01](notebooks/01_ols_vs_robust.md) shows what an M-estimator does to
 vertical vs horizontal outliers, side by side with OLS and a
-Theil-Sen reference.
+Theil-Sen reference. Notebook
+[05](notebooks/05_loss_functions.md) plots `ρ`, `ψ`, and the implied
+weight for each family at the tunings used by `lmrob`.
 
 ## S-estimator and M-scale
 
@@ -118,18 +120,21 @@ resampling, BLAS interactions, and bench numbers — see
 
 ## Further reading
 
-- Maronna, Martin, Yohai, Salibian-Barrera, *Robust Statistics: Theory
-  and Methods (with R)*, 2nd ed., Wiley 2019. The standard reference.
-- Koller & Stahel, "Sharpening Wald-type inference in robust regression
-  for small samples", *Computational Statistics & Data Analysis* 55
-  (2011): 2504-2515. The KS2011 setting.
-- Koller & Stahel, "Nonsingular subsampling for regression S
-  estimators with categorical covariates", *Computational Statistics*
-  32 (2017): 631-646. The M-S estimator for designs with factor
-  variables.
-- Yohai (1987), "High breakdown-point and high efficiency robust
-  estimates for regression", *Annals of Statistics* 15: 642-656. The
-  original MM-estimator paper.
-- Salibian-Barrera & Yohai (2006), "A fast algorithm for S-regression
-  estimates", *Journal of Computational and Graphical Statistics* 15:
-  414-427. The fast-S resampling algorithm `lmrob` is built on.
+- Maronna, Martin, Yohai, Salibian-Barrera,
+  [*Robust Statistics: Theory and Methods (with R)*, 2nd ed.](https://www.wiley.com/en-us/Robust+Statistics%3A+Theory+and+Methods+%28with+R%29%2C+2nd+Edition-p-9781119214687),
+  Wiley 2019. The standard reference.
+- Koller & Stahel,
+  ["Sharpening Wald-type inference in robust regression for small samples"](https://doi.org/10.1016/j.csda.2011.02.014),
+  *Computational Statistics & Data Analysis* 55 (2011): 2504-2515.
+  The KS2011 setting.
+- Koller & Stahel,
+  ["Nonsingular subsampling for regression S estimators with categorical covariates"](https://doi.org/10.1007/s00180-016-0679-x),
+  *Computational Statistics* 32 (2017): 631-646. The M-S estimator
+  for designs with factor variables.
+- Yohai,
+  ["High breakdown-point and high efficiency robust estimates for regression"](https://doi.org/10.1214/aos/1176350366),
+  *Annals of Statistics* 15 (1987): 642-656. The original MM-estimator paper.
+- Salibian-Barrera & Yohai,
+  ["A fast algorithm for S-regression estimates"](https://doi.org/10.1198/106186006X113629),
+  *Journal of Computational and Graphical Statistics* 15 (2006): 414-427.
+  The fast-S resampling algorithm `lmrob` is built on.

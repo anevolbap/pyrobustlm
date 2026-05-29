@@ -1,5 +1,12 @@
 # pylmrob
 
+:::{note}
+Parts of this documentation, including the theory write-up and the notebooks
+under "Theory in pictures", were drafted with help from Claude Opus 4.7.
+Verify claims against the source code or the cited papers before relying on
+them.
+:::
+
 Python port of R's
 [robustbase::lmrob](https://cran.r-project.org/package=robustbase) MM-estimator
 for robust linear regression. Same algorithm, same numbers (to `rtol=1e-3` on
@@ -59,6 +66,7 @@ notebooks/01_ols_vs_robust
 notebooks/02_efficiency
 notebooks/03_breakdown
 notebooks/04_s_estimator
+notebooks/05_loss_functions
 ```
 
 ```{toctree}

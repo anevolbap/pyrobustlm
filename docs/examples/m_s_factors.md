@@ -11,9 +11,11 @@ output or debugging convergence.
 A full S-estimator on a design with `k` factor levels needs subsamples that
 include at least one observation from each level. With small per-level counts
 this becomes unlikely; the resampling either fails or lands on degenerate
-subsets. Maronna and Yohai (2000) solve this with a two-step estimator: an L1
-estimate for the factor effects, then an M estimate over the continuous part
-conditional on the factor effects.
+subsets.
+[Maronna and Yohai (2000)](https://doi.org/10.1016/S0378-3758(99)00208-6)
+solve this with a two-step estimator: an L1 estimate for the factor effects,
+then an M estimate over the continuous part conditional on the factor
+effects.
 
 ## A small worked example
 
