@@ -58,7 +58,10 @@ extensions = [
 # notebooks reuse last build's output; only first build (or after the
 # notebook changes) actually runs the cells.
 nb_execution_mode = "cache"
-nb_execution_timeout = 120
+# Slow Azure runners can push notebook 03 (contamination sweep, 11 x 25
+# lmrob fits) past the 120s default; 300s leaves room without masking a
+# genuinely runaway cell.
+nb_execution_timeout = 300
 nb_execution_raise_on_error = True
 # Notebooks under docs/notebooks/ should always be MyST markdown
 # (no .ipynb); the next line is a belt-and-braces declaration.
@@ -110,9 +113,13 @@ intersphinx_mapping = {
 }
 
 # MyST: enable a few useful extensions.
+#
+# ``dollarmath`` is what hands ``$...$`` and ``$$...$$`` blocks to
+# mathjax; without it the math in theory.md renders as literal text.
 myst_enable_extensions = [
     "colon_fence",
     "deflist",
+    "dollarmath",
     "smartquotes",
 ]
 
