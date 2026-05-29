@@ -3,11 +3,13 @@ name: release-please
 # Drives version bumps + CHANGELOG entries + GitHub Releases from
 # Conventional Commits. The action opens (and updates) a long-running
 # "release PR" against main; when you merge it, the workflow tags the
-# release and creates a GitHub Release. Tag-push then triggers
-# wheels.yml as before.
+# release and creates a GitHub Release. When that happens, we then
+# dispatch wheels.yml on the new tag to publish to PyPI.
 #
-# This replaces the manual "bump _version.py + meson.build + finalise
-# CHANGELOG + tag" dance.
+# The dispatch is needed because the tag is created by GITHUB_TOKEN,
+# and GitHub suppresses push/release events for refs created by that
+# token. workflow_dispatch is the documented exception: it fires
+# downstream runs even when triggered by GITHUB_TOKEN.
 
 on:
   push:
@@ -16,14 +18,26 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v5
+        id: release
         with:
           # Manifest mode so we can bump both _version.py and meson.build
           # in the same PR via .release-please-manifest.json.
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      - name: Dispatch wheels.yml on the new tag
+        if: steps.release.outputs.release_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run wheels.yml \
+            --repo "${{ github.repository }}" \
+            --ref "${{ steps.release.outputs.tag_name }}" \
+            -f target=pypi
