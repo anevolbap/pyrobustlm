@@ -5,6 +5,23 @@ All notable changes to `pylmrob` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.21](https://github.com/anevolbap/pyrobustlm/compare/v0.5.20...v0.5.21) (2026-05-30)
+
+
+### Bug Fixes
+
+* **docs:** Enable dollarmath and bump nb timeout to 300s ([#95](https://github.com/anevolbap/pyrobustlm/issues/95)) ([c5fb20b](https://github.com/anevolbap/pyrobustlm/commit/c5fb20b2a8c9ca22ae054c5ebbb5679d65642065))
+
+
+### Performance Improvements
+
+* **fast_s:** Direct LAPACK dgesdd in subset rank check ([#99](https://github.com/anevolbap/pyrobustlm/issues/99)) ([00102ef](https://github.com/anevolbap/pyrobustlm/commit/00102efb4230d4ecc026b08fe5eb358c89db86b4))
+
+
+### Documentation
+
+* **notebooks:** Loss functions, linkified refs, AI disclosure ([#92](https://github.com/anevolbap/pyrobustlm/issues/92)) ([ae0639c](https://github.com/anevolbap/pyrobustlm/commit/ae0639cc85474bcfa94322df9e524fd9751a3264))
+
 ## [0.5.20](https://github.com/anevolbap/pyrobustlm/compare/v0.5.19...v0.5.20) (2026-05-26)
 
 
