@@ -143,4 +143,16 @@ jobs:
       - name: Run pytest
         env:
           PYROBUSTLM_SKIP_RPY2: ${{ runner.os != 'Linux' && '1' || '' }}
-        run: pytest -v --maxfail=10
+        run: pytest -v --maxfail=10 --cov-report=xml:coverage.xml
+
+      - name: Upload coverage to Codecov
+        # Linux-only: Codecov merges per-OS uploads, but uploading from
+        # 12 matrix jobs (3 OS x 4 py) just to land at the same number
+        # adds noise without coverage signal. Linux runs the full rpy2
+        # validation suite so its coverage is also the most complete.
+        if: runner.os == 'Linux'
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
+          flags: ${{ matrix.python-version }}

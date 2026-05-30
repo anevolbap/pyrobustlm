@@ -1,0 +1,30 @@
+# Codecov configuration. See https://docs.codecov.com/docs/codecov-yaml.
+#
+# Coverage signal is collected on Linux only (where the full rpy2
+# validation suite runs); other OSes would lower the reported number
+# without adding meaningful signal.
+
+coverage:
+  status:
+    project:
+      default:
+        # Track project coverage but don't block PRs on small drift.
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        # Be stricter on new code than on the existing surface.
+        target: 80%
+        threshold: 5%
+
+# Untested-by-design paths.
+ignore:
+  - "tests"
+  - "docs"
+  - "scripts"
+  - "src/pylmrob/_version.py"
+
+comment:
+  # Only comment when coverage actually changes; otherwise CI noise.
+  require_changes: true
+  layout: "reach, diff, flags, files"
