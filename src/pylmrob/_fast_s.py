@@ -26,7 +26,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.random import SeedSequence
 from numpy.typing import NDArray
-from scipy.linalg.lapack import dgesdd as _LAPACK_GESDD
+from scipy.linalg.lapack import dgesdd as _dgesdd
 
 from pylmrob import _psifuns as _pf
 from pylmrob.rng import RState, r_sample_noreplace, r_set_seed
@@ -207,7 +207,7 @@ def _draw_nonsingular_subset(
         # the small (p x p) matrices we get here (numpy's wrapper adds
         # noticeable per-call overhead). Same algorithm, byte-identical
         # singular values.
-        _, sv, _, info = _LAPACK_GESDD(sub, compute_uv=0, full_matrices=0, overwrite_a=0)
+        _, sv, _, info = _dgesdd(sub, compute_uv=0, full_matrices=0, overwrite_a=0)
         if info != 0:
             continue
         if sv[-1] > rcond * sv[0]:
