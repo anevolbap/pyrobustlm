@@ -23,17 +23,26 @@ from hypothesis import assume, given, settings
 
 from pylmrob import psi as P
 
-# Tuning constants taken directly from pylmrob.control (robustbase
-# defaults). M-step targets 95% Gaussian efficiency.
+# Tuning constants taken from pylmrob.control (robustbase defaults).
+# M-step targets 95% Gaussian efficiency.
+#
+# ggw uses the case-index form (one of six hardcoded polynomial
+# approximations). Case 4 is (b=1.5, 95% efficiency); the 4-tuple
+# form ``(0, a, b, c)`` for user-specified params would also work
+# but pylmrob's production path uses the index.
 TUNING_M = {
     "bisquare": (4.685061,),
-    "welsh":    (2.11,),
-    "optimal":  (1.060158,),
-    "hampel":   (1.5 * 0.9016085, 3.5 * 0.9016085, 8.0 * 0.9016085),
-    "lqq":      (1.4734061, 0.9826779, 1.5),
-    "ggw":      (1.0, 1.5, 0.5, 1.694),
-    "huber":    (1.345,),
+    "welsh": (2.11,),
+    "optimal": (1.060158,),
+    "hampel": (1.5 * 0.9016085, 3.5 * 0.9016085, 8.0 * 0.9016085),
+    "lqq": (1.4734061, 0.9826779, 1.5),
+    "ggw": (4,),
+    "huber": (1.345,),
 }
+
+# ggw's polynomial approximation has wobble below ~1e-7, well below
+# any size that matters in practice; relax tolerances for it.
+GGW_TOL = 1e-6
 REDESCENDING = [fam for fam in TUNING_M if fam != "huber"]
 ALL_FAMILIES = list(TUNING_M)
 
@@ -74,27 +83,21 @@ def test_wgt_at_zero_is_one(family):
 def test_rho_is_even(family):
     """rho(-u) = rho(u)."""
     k = TUNING_M[family]
-    np.testing.assert_allclose(
-        P.rho(GRID, family, k), P.rho(-GRID, family, k), atol=1e-12
-    )
+    np.testing.assert_allclose(P.rho(GRID, family, k), P.rho(-GRID, family, k), atol=1e-12)
 
 
 @pytest.mark.parametrize("family", ALL_FAMILIES)
 def test_psi_is_odd(family):
     """psi(-u) = -psi(u)."""
     k = TUNING_M[family]
-    np.testing.assert_allclose(
-        P.psi(GRID, family, k), -P.psi(-GRID, family, k), atol=1e-12
-    )
+    np.testing.assert_allclose(P.psi(GRID, family, k), -P.psi(-GRID, family, k), atol=1e-12)
 
 
 @pytest.mark.parametrize("family", ALL_FAMILIES)
 def test_wgt_is_even(family):
     """wgt(-u) = wgt(u)."""
     k = TUNING_M[family]
-    np.testing.assert_allclose(
-        P.wgt(GRID, family, k), P.wgt(-GRID, family, k), atol=1e-12
-    )
+    np.testing.assert_allclose(P.wgt(GRID, family, k), P.wgt(-GRID, family, k), atol=1e-12)
 
 
 @pytest.mark.parametrize("family", ALL_FAMILIES)
@@ -132,7 +135,8 @@ def test_psi_redescends(family):
     """psi(|u| -> large) -> 0 for redescending families."""
     k = TUNING_M[family]
     far = np.array([20.0, 50.0, 100.0])
-    np.testing.assert_allclose(P.psi(far, family, k), 0.0, atol=1e-9)
+    atol = GGW_TOL if family == "ggw" else 1e-9
+    np.testing.assert_allclose(P.psi(far, family, k), 0.0, atol=atol)
 
 
 def test_huber_psi_saturates():
@@ -150,5 +154,6 @@ def test_rho_monotone_nondecreasing_on_positive(family):
     u_pos = np.linspace(0.0, 20.0, 201)
     rho_vals = P.rho(u_pos, family, k)
     diffs = np.diff(rho_vals)
-    # Allow a tiny numerical wobble at the asymptote.
-    assert (diffs >= -1e-12).all(), f"rho not monotone on positive u for {family}"
+    # ggw uses a polynomial approximation with wobble below ~1e-7.
+    tol = GGW_TOL if family == "ggw" else 1e-12
+    assert (diffs >= -tol).all(), f"rho not monotone on positive u for {family}"
