@@ -14,7 +14,10 @@ Coefficient agreement with R on the classical validation datasets is within
 [`docs/numerical-notes.md`](docs/numerical-notes.md) for known divergences
 and [`docs/bench-report.md`](docs/bench-report.md) for wall-clock numbers.
 
-Status: alpha. Public API is provisional.
+Status: beta. The public API is stable and follows the
+[deprecation policy](docs/policy.md): one minor release of warning before
+any breaking change. Numerical agreement with R is documented in
+[docs/numerical-notes.md](docs/numerical-notes.md).
 
 Note: parts of the documentation were drafted with help from Claude Opus 4.7.
 Verify against the source code or the cited papers before relying on them.
