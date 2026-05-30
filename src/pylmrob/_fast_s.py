@@ -26,7 +26,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.random import SeedSequence
 from numpy.typing import NDArray
-from scipy.linalg.lapack import dgesdd as _dgesdd
+from scipy.linalg.lapack import dgesdd as _dgesdd  # ty: ignore[unresolved-import]
 
 from pylmrob import _psifuns as _pf
 from pylmrob.rng import RState, r_sample_noreplace, r_set_seed
