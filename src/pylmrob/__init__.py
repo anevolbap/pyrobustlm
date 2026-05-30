@@ -11,17 +11,13 @@ is internal and may change in any release.
 
 from __future__ import annotations
 
+from pylmrob._fast_s import make_generator as make_generator
 from pylmrob._version import __version__
 from pylmrob.anova import anova
 from pylmrob.bootstrap import bootstrap
 from pylmrob.control import Control
 from pylmrob.lmrob import LmRob, lmrob
 from pylmrob.results import LmRobResults
-
-# Advanced / R-bridge re-exports: kept importable from the top-level
-# for backwards compatibility but not part of __all__. The ``X as X``
-# form signals intentional re-export to type checkers.
-from pylmrob._fast_s import make_generator as make_generator
 from pylmrob.rng import RState as RState
 from pylmrob.rng import r_norm_rand as r_norm_rand
 from pylmrob.rng import r_qnorm as r_qnorm
