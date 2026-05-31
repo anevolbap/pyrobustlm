@@ -5,6 +5,18 @@ All notable changes to `pylmrob` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.22](https://github.com/anevolbap/pyrobustlm/compare/v0.5.21...v0.5.22) (2026-05-31)
+
+
+### Features
+
+* **api:** Freeze public surface, document deprecation policy ([#100](https://github.com/anevolbap/pyrobustlm/issues/100)) ([bdc88ce](https://github.com/anevolbap/pyrobustlm/commit/bdc88cecac6cacdccc548625e856ac0722aaf9c2))
+
+
+### Reverts
+
+* Stay in alpha for now ([#102](https://github.com/anevolbap/pyrobustlm/issues/102)) ([d20f84d](https://github.com/anevolbap/pyrobustlm/commit/d20f84da5412bd2e14694a05607b875e0ed55017))
+
 ## [0.5.21](https://github.com/anevolbap/pyrobustlm/compare/v0.5.20...v0.5.21) (2026-05-30)
 
 
