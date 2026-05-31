@@ -45,9 +45,8 @@ For sub-`1e-5` reproducibility against R's exact RNG stream, opt in with
 `Control(rng="R")`. See [`rng-r-perf`](rng-r-perf) and
 [Numerical notes](numerical-notes) for the details.
 
-Median wall-clock on the bench corpus: **0.93× R**. Status: beta. The
-public surface (see [policy](policy)) follows a one-minor-release
-deprecation cycle.
+Median wall-clock on the bench corpus: **0.93× R**. Status: alpha; the
+public API is stable enough to depend on but may change.
 
 ## Contents
 
@@ -84,7 +83,6 @@ examples/sklearn_pipeline
 :caption: Reference
 
 api
-policy
 porting-from-r
 engine_c
 rng-r-perf
