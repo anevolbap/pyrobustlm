@@ -5,7 +5,7 @@ All notable changes to `pylmrob` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.5.22](https://github.com/anevolbap/pyrobustlm/compare/v0.5.21...v0.5.22) (2026-05-31)
+## [0.5.22](https://github.com/anevolbap/pyrobustlm/compare/v0.5.21...v0.5.22) (2026-06-03)
 
 
 ### Features
