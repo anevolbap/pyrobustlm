@@ -151,7 +151,7 @@ jobs:
         # adds noise without coverage signal. Linux runs the full rpy2
         # validation suite so its coverage is also the most complete.
         if: runner.os == 'Linux'
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: coverage.xml
           fail_ci_if_error: false
