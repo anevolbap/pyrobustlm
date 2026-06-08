@@ -46,9 +46,14 @@ jobs:
           python-version: "3.12"
 
       - name: Install build deps and pylmrob from source
+        # scipy must be in the env at meson-setup time: _fast_s.pyx and
+        # _lmrob.pyx ``cimport`` from scipy.linalg.cython_lapack, so
+        # meson.build runs ``python -c "import scipy"`` to resolve its
+        # path. Same pattern as the docs job in ci.yml.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install "meson-python>=0.16" "meson>=1.4" ninja "Cython>=3.0" "numpy>=2.0"
+          python -m pip install "meson-python>=0.16" "meson>=1.4" ninja \
+            "Cython>=3.0" "numpy>=2.0" "scipy>=1.11"
           python -m pip install --no-build-isolation .
 
       - name: Run R benchmark
