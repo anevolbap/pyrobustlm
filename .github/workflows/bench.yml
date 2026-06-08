@@ -63,7 +63,7 @@ jobs:
         run: python scripts/benchmark.py
 
       - name: Run pylmrob benchmark (engine_c)
-        run: python scripts/benchmark.py --engine_c
+        run: python scripts/benchmark.py --engine-c
 
       - name: Build report
         run: python scripts/build_bench_report.py
