@@ -5,6 +5,14 @@ All notable changes to `pylmrob` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.23](https://github.com/anevolbap/pyrobustlm/compare/v0.5.22...v0.5.23) (2026-06-09)
+
+
+### Bug Fixes
+
+* **ci:** Bench cron needs scipy at meson-setup time ([#105](https://github.com/anevolbap/pyrobustlm/issues/105)) ([eb6b5d3](https://github.com/anevolbap/pyrobustlm/commit/eb6b5d36c72b2f7b7a7a00bf55550bfce3055528))
+* **ci:** Bench cron uses --engine-c not --engine_c ([#107](https://github.com/anevolbap/pyrobustlm/issues/107)) ([626a386](https://github.com/anevolbap/pyrobustlm/commit/626a3864da38ff827d288c29b3883485c9a631d5))
+
 ## [0.5.22](https://github.com/anevolbap/pyrobustlm/compare/v0.5.21...v0.5.22) (2026-05-31)
 
 
