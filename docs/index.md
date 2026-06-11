@@ -1,6 +1,7 @@
 ---
-html_meta:
-  google-site-verification: xaoh8onJ_aykVDA2i6MCf6G_mtqH8ohAFvfLAGnDoi4
+myst:
+  html_meta:
+    google-site-verification: xaoh8onJ_aykVDA2i6MCf6G_mtqH8ohAFvfLAGnDoi4
 ---
 
 # pylmrob
