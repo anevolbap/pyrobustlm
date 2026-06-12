@@ -5,6 +5,16 @@ All notable changes to `pylmrob` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.24](https://github.com/anevolbap/pyrobustlm/compare/v0.5.23...v0.5.24) (2026-06-11)
+
+
+### Documentation
+
+* Add Google Search Console verification meta tag ([f67933c](https://github.com/anevolbap/pyrobustlm/commit/f67933c6df197bfad955ba5930ecfc1d092a33f0))
+* Add Google Search Console verification meta tag ([535f33c](https://github.com/anevolbap/pyrobustlm/commit/535f33ccf0021710897bee84b05811aece343335))
+* Nest html_meta under myst key (fixes RTD build) ([1acab94](https://github.com/anevolbap/pyrobustlm/commit/1acab94d4a2953458b30717fc911e3352992fb1a))
+* Nest html_meta under myst key to fix RTD topmatter warning ([7f6548f](https://github.com/anevolbap/pyrobustlm/commit/7f6548fab9361de18dae983cca38762cc33a525e))
+
 ## [0.5.23](https://github.com/anevolbap/pyrobustlm/compare/v0.5.22...v0.5.23) (2026-06-09)
 
 
