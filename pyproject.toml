@@ -154,9 +154,6 @@ markers = [
     "rng_sensitive: result depends on RNG; tolerances are looser",
     "validation: cross-checks against R reference output",
 ]
-# Make pytest-randomly's seed visible in the output so a failure can be
-# reproduced with --randomly-seed=N.
-randomly_dont_reset_seed = true
 
 [tool.cibuildwheel]
 build = "cp310-* cp311-* cp312-* cp313-*"
