@@ -187,6 +187,35 @@ class Control:
                 raise ValueError(f"unknown psi family {self.psi!r}")
             self.tuning_chi = _DEFAULT_TUNING_CHI[self.psi]
 
+        self._warn_unimplemented()
+
+    def _warn_unimplemented(self) -> None:
+        """Tell the caller when a control they set is not wired up yet.
+
+        These fields exist so the surface matches ``lmrob.control()``, but
+        nothing reads them. Accepting a value and silently ignoring it is
+        worse than not offering it: a user who passes ``trace_lev=4`` and
+        sees no trace has no way to tell the difference between "no
+        output" and "not implemented".
+        """
+        import warnings
+
+        unimplemented = {
+            "trace_lev": (self.trace_lev, 0),
+            "eps_outlier": (self.eps_outlier, None),
+            "eps_x": (self.eps_x, None),
+            "solve_tol": (self.solve_tol, 1e-7),
+        }
+        set_anyway = [name for name, (got, default) in unimplemented.items() if got != default]
+        if set_anyway:
+            warnings.warn(
+                f"Control({', '.join(sorted(set_anyway))}) is accepted for "
+                "lmrob.control() compatibility but not implemented yet; the "
+                "value is ignored.",
+                UserWarning,
+                stacklevel=3,
+            )
+
     # sklearn-compatibility shim. Lets ``GridSearchCV`` reach Control fields
     # via the standard ``estimator__nested__field`` parameter syntax, e.g.
     # ``param_grid={"control__nResample": [200, 500, 1000]}``.

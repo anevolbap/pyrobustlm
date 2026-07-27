@@ -713,6 +713,19 @@ def _lmrob_impl(
         design_x_out = X
         design_y_out = y
 
+    # plan.md 5.3: a convergence failure returns a result with
+    # ``converged_=False`` and warns; it does not raise, matching R.
+    # Without the warning the flag is easy to miss, and summary() then
+    # reports NaN t-values with no explanation of why.
+    if not mm.converged:
+        warnings.warn(
+            f"lmrob: IRWLS did not converge in {control.max_it} iterations "
+            f"(rel_tol={control.rel_tol:g}). Coefficients are returned with "
+            "converged_=False; treat the standard errors with caution.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+
     return LmRobResults(
         coef_=np.asarray(coef, dtype=np.float64),
         scale_=float(sigma),
