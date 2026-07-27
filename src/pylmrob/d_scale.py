@@ -38,35 +38,37 @@ def _try_cpsi() -> Any | None:
 # kappa: solution of  E[psi(Z) Z - kappa wgt(Z)] = 0  under Z ~ N(0,1)
 # Equivalently:       kappa = E[psi(Z) Z] / E[wgt(Z)]
 # ---------------------------------------------------------------------------
-def kappa(family: str, c_psi: float | tuple[float, ...] | np.ndarray) -> float:
+def kappa(
+    family: str,
+    c_psi: float | tuple[float, ...] | np.ndarray,
+    numpoints: int = 10,
+) -> float:
     """Compute the consistency kappa under the standard normal.
 
-    Mirrors ``robustbase::lmrob.kappa``. The integrand for the numerator
-    vanishes at zero, which trips up ``scipy.integrate.quad`` defaults; we
-    explicitly hand it break points so the adaptive grid samples both lobes.
+    Mirrors ``robustbase:::lmrob.kappa``, which solves
+    ``E[psi(Z) Z - kappa wgt(Z)] = 0`` with ``uniroot``. The expression is
+    linear in ``kappa``, so the root is ``E[psi(Z) Z] / E[wgt(Z)]``.
+
+    The expectations must be taken exactly the way R takes them.
+    ``robustbase:::lmrob.E`` does *not* integrate: it applies an
+    ``numpoints``-node Gauss-Hermite rule (``robustbase:::ghq``, weights
+    modified by ``exp(x^2)``), and ``lmrob.control`` sets
+    ``numpoints = 10``. Ten nodes resolve the kinked psi families
+    (``hampel``, ``ggw``) only roughly, so R's kappa differs from the
+    exact integral by up to 8e-3. Reproducing the quadrature -- not the
+    integral -- is what makes the D-step agree with R; using
+    ``scipy.integrate.quad`` here cost ~8e-3 on hampel and ggw.
     """
-    from scipy import integrate
-
-    def _psi_at(t: float) -> float:
-        return float(_psi.psi(np.array([t]), family, c_psi)[0])
-
-    def _wgt_at(t: float) -> float:
-        return float(_psi.wgt(np.array([t]), family, c_psi)[0])
-
-    def num(t: float) -> float:
-        return _psi_at(t) * t * np.exp(-0.5 * t * t) / np.sqrt(2.0 * np.pi)
-
-    def den(t: float) -> float:
-        return _wgt_at(t) * np.exp(-0.5 * t * t) / np.sqrt(2.0 * np.pi)
-
-    # Break points at zero and around the typical psi-tuning bandwidths so
-    # quad's adaptive grid hits the bell curve's lobes.
-    breaks = [0.0, -1.0, 1.0, -3.0, 3.0]
-    a, _ = integrate.quad(num, -50.0, 50.0, points=breaks, epsabs=1e-12)
-    b, _ = integrate.quad(den, -50.0, 50.0, points=breaks, epsabs=1e-12)
-    if b == 0.0:
+    x, w = np.polynomial.hermite.hermgauss(numpoints)
+    # ghq(modify=TRUE): weights carry exp(x^2) so the rule integrates
+    # ``f(x) * dnorm(x)`` rather than ``f(x) * exp(-x^2)``.
+    w = w * np.exp(x * x)
+    phi = np.exp(-0.5 * x * x) / np.sqrt(2.0 * np.pi)
+    num = float(np.sum(w * _psi.psi(x, family, c_psi) * x * phi))
+    den = float(np.sum(w * _psi.wgt(x, family, c_psi) * phi))
+    if den == 0.0:
         raise FloatingPointError("kappa: denominator E[wgt(Z)] = 0")
-    return a / b
+    return num / den
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +191,7 @@ def d_scale(
     c_psi: float | tuple[float, ...] | np.ndarray,
     max_iter: int = 200,
     tol: float = 1e-7,
+    numpoints: int = 10,
 ) -> tuple[float, bool, np.ndarray, np.ndarray]:
     """Compute the design-adaptive D-scale.
 
@@ -203,7 +206,7 @@ def d_scale(
     Q, _ = np.linalg.qr(Xw, mode="reduced")
     h = np.minimum(1.0, np.sum(Q * Q, axis=1))
 
-    kp = kappa(family, c_psi)
+    kp = kappa(family, c_psi, numpoints=numpoints)
     tau_vec = tau(h, family, c_psi)
     # Starting value (R/lmrob.MM.R:848): sqrt(sum(w r^2) / kappa / sum(tau^2 w))
     num = float(np.sum(rweights * residuals * residuals))

@@ -14,7 +14,7 @@
 cimport cython
 from cpython.pycapsule cimport PyCapsule_GetPointer
 from cython.parallel cimport prange, parallel
-from libc.math cimport fabs, sqrt, exp, pow as cpow
+from libc.math cimport fabs, sqrt, exp, pow as cpow, isfinite
 from libc.stdint cimport uint64_t
 from libc.stdlib cimport malloc, free
 
@@ -728,12 +728,19 @@ cdef inline double _k_step_refine(
     cdef int kk, irwls_status
     cdef int status = 0
 
+    # A genuine exact fit is already detected by the caller (max|r| == 0)
+    # before we get here. So an M-scale that comes back non-positive or
+    # non-finite from a *positive* starting scale is a numerical
+    # degeneracy in this candidate, not a valid S solution: reject the
+    # candidate (status 3 -> caller does ``continue``) rather than
+    # letting a zero scale win the best-of-best_r comparison. Letting it
+    # through used to collapse the whole fit, because zero is smaller
+    # than every real scale.
     for kk in range(k_fast_s):
         s = _mscale_generic(scr.r, n, s, p, family, tuning, b0,
                             max_iter_scale, scale_tol)
-        if s == 0.0:
-            status = 2
-            status_out[0] = status
+        if not (s > 0.0) or not isfinite(s):
+            status_out[0] = 3
             return 0.0
         irwls_status = _irwls_step(X, y, scr.r, s, family, tuning,
                                    scr.beta, scr, n, p)
@@ -744,6 +751,9 @@ cdef inline double _k_step_refine(
         _residuals(X, y, scr.beta, scr.r, n, p)
     s = _mscale_generic(scr.r, n, s, p, family, tuning, b0,
                         max_iter_scale, scale_tol)
+    if not (s > 0.0) or not isfinite(s):
+        status_out[0] = 3
+        return 0.0
     status_out[0] = 0
     return s
 
@@ -776,10 +786,12 @@ cdef inline double _refine_to_convergence(
         _residuals(X, y, beta, scr.r, n, p)
         s = _mscale_generic(scr.r, n, s, p, family, tuning, b0,
                             max_iter_scale, scale_tol)
-        if s == 0.0:
-            converged_out[0] = 1
+        if not (s > 0.0) or not isfinite(s):
+            # Degenerate survivor: signal with a negative scale so the
+            # caller's ``candidate_scale < best`` test can never pick it.
+            converged_out[0] = 0
             n_iter_out[0] = it + 1
-            return 0.0
+            return -1.0
         # Save previous beta.
         for j in range(p):
             scr.beta_prev[j] = beta[j]
@@ -1156,11 +1168,16 @@ def cy_lmrob_fast_s(
                         scratches[0].beta, &scratches[0], n, p,
                         &converged, &total_iters,
                     )
-                    if candidate_scale < scale:
-                        scale = candidate_scale
-                        for j in range(p):
-                            beta_out_data[j] = scratches[0].beta[j]
-                        worst_i = i
+                    # See cy_lmrob_fit: a zero/non-finite scale is a
+                    # degenerate candidate, not the best one.
+                    if candidate_scale > 0.0 and isfinite(candidate_scale):
+                        if candidate_scale < scale:
+                            scale = candidate_scale
+                            for j in range(p):
+                                beta_out_data[j] = scratches[0].beta[j]
+                            worst_i = i
+                if scale == 1e300:
+                    status = 1
 
     free(best_scales); free(best_betas)
     free(kepts); free(exact_founds); free(exact_betas)
@@ -1785,22 +1802,16 @@ cdef inline void _chi_eval(
 # Design-adaptive D-scale (Koller & Stahel 2014). Mirrors
 # robustbase/src/lmrob.c::R_find_D_scale and pylmrob.d_scale.
 # ---------------------------------------------------------------------------
-# Kappa and (tfact, tcorr) for tau, per family at default tuning. Mirrors
-# the tables in pylmrob.d_scale (_TAU_FAST_TABLE) and lmrob.kappa
-# tabulation. For non-default tuning the caller falls back to the Python
-# path; this kernel only handles the common defaults.
-
-# Computed via scipy.integrate.quad on the default-tuning psi.r/wgt
-# integrand (see pylmrob.d_scale.kappa) at runtime in Python; the
-# values below were captured for the family defaults and re-used here.
-cdef double _DSCALE_KAPPA_BISQUARE = 0.8280771566048320
-cdef double _DSCALE_KAPPA_HAMPEL = 0.8569775805834327
-cdef double _DSCALE_KAPPA_OPTIMAL = 0.9355077953265407
-cdef double _DSCALE_KAPPA_LQQ = 0.8626400360440886
-# ggw default cases are case 1 (b=1, 95% eff) and case 4 (b=1.5, 95% eff).
-# kappa values measured the same way as the others.
-cdef double _DSCALE_KAPPA_GGW_C1 = 0.8914986545654882
-cdef double _DSCALE_KAPPA_GGW_C4 = 0.8914986545654882
+# (tfact, tcorr) for tau, per family at default tuning. Mirrors
+# _TAU_FAST_TABLE in pylmrob.d_scale. For non-default tuning the caller
+# falls back to the Python path; this kernel only handles the defaults.
+#
+# kappa is deliberately *not* tabulated here. It used to be, and the
+# table drifted: the ggw case-4 entry was a copy of the case-1 value,
+# which put the D-scale 3.8% off on every ggw fit. It is now computed
+# once per fit by pylmrob.d_scale.kappa (a 10-node Gauss-Hermite rule
+# matching robustbase:::lmrob.E) and passed in, so both engines use one
+# definition and any tuning is supported.
 
 
 cdef inline int _dscale_tau_factors(
@@ -1834,34 +1845,6 @@ cdef inline int _dscale_tau_factors(
         if case_idx == 4:
             out_tfact[0] = 0.94741036
             out_tcorr[0] = -0.08424648
-            return 0
-    return 1
-
-
-cdef inline int _dscale_kappa(
-    int family, const double* tuning, double* out_kappa,
-) nogil:
-    """Tabulated kappa per family. Returns 0 on success, 1 if no table."""
-    cdef int case_idx
-    if family == FAM_BISQUARE:
-        out_kappa[0] = _DSCALE_KAPPA_BISQUARE
-        return 0
-    if family == FAM_HAMPEL:
-        out_kappa[0] = _DSCALE_KAPPA_HAMPEL
-        return 0
-    if family == FAM_OPTIMAL:
-        out_kappa[0] = _DSCALE_KAPPA_OPTIMAL
-        return 0
-    if family == FAM_LQQ:
-        out_kappa[0] = _DSCALE_KAPPA_LQQ
-        return 0
-    if family == FAM_GGW:
-        case_idx = <int>(tuning[0])
-        if case_idx == 1:
-            out_kappa[0] = _DSCALE_KAPPA_GGW_C1
-            return 0
-        if case_idx == 4:
-            out_kappa[0] = _DSCALE_KAPPA_GGW_C4
             return 0
     return 1
 
@@ -1996,6 +1979,7 @@ def cy_lmrob_d_scale(
     int max_iter,
     double tol,
     cnp.ndarray[double, ndim=1, mode="c"] tau_out,
+    double kappa_val,
 ):
     """Design-adaptive D-scale (Koller & Stahel 2014).
 
@@ -2004,8 +1988,11 @@ def cy_lmrob_d_scale(
     until convergence. ``tau_out`` is filled with the per-observation
     tau values so the Python side can stash them for vcov_w.
 
+    ``kappa_val`` comes from ``pylmrob.d_scale.kappa`` so that this
+    kernel and the NumPy path share one definition.
+
     Returns ``(scale, converged, status)``. Status 0 = ok, 1 = no
-    tabulated tau/kappa (caller should fall back), 3 = LAPACK error.
+    tabulated tau factors (caller should fall back), 3 = LAPACK error.
     """
     if family == FAM_GGW and not _ggw_tables_init:
         _init_ggw_tables()
@@ -2014,7 +2001,6 @@ def cy_lmrob_d_scale(
     cdef Py_ssize_t p = X.shape[1]
 
     cdef double tfact = 0.0, tcorr = 0.0
-    cdef double kappa_val = 0.0
     cdef double* tuning_data = <double*>cnp.PyArray_DATA(tuning)
     cdef double* X_data = <double*>cnp.PyArray_DATA(X)
     cdef double* r_data = <double*>cnp.PyArray_DATA(residuals)
@@ -2027,8 +2013,6 @@ def cy_lmrob_d_scale(
 
     # Lookup tabulated coefficients before going nogil.
     if _dscale_tau_factors(family, tuning_data, &tfact, &tcorr) != 0:
-        return scale, 0, 1
-    if _dscale_kappa(family, tuning_data, &kappa_val) != 0:
         return scale, 0, 1
 
     cdef double* h = <double*>malloc(n * sizeof(double))
@@ -2367,6 +2351,9 @@ def cy_lmrob_fit(
             if exact_founds[tid]:
                 for j in range(p):
                     beta_out_data[j] = exact_betas[tid * p + j]
+                    if beta_init_out is not None:
+                        (<double*>cnp.PyArray_DATA(beta_init_out))[j] = \
+                            exact_betas[tid * p + j]
                 scale = 0.0
                 status = 2
                 break
@@ -2411,14 +2398,24 @@ def cy_lmrob_fit(
                         scratches[0].beta, &scratches[0], n, p,
                         &conv_s, &n_iter_s,
                     )
-                    if candidate_scale < scale:
-                        scale = candidate_scale
-                        for j in range(p):
-                            beta_out_data[j] = scratches[0].beta[j]
+                    # Only a finite, strictly positive scale is a real
+                    # survivor. Without this test a degenerate candidate
+                    # (scale 0) always won, since 0 < every real scale.
+                    if candidate_scale > 0.0 and isfinite(candidate_scale):
+                        if candidate_scale < scale:
+                            scale = candidate_scale
+                            for j in range(p):
+                                beta_out_data[j] = scratches[0].beta[j]
+                if scale == 1e300:
+                    # Every survivor was degenerate; let the caller fall
+                    # back rather than report a fit we do not have.
+                    status = 1
 
         # MM step -----------------------------------------------------------
         if status == 0 and scale > 0.0:
-            # Save the post-S beta if caller wants init residuals.
+            # Save the post-S beta if caller wants init residuals. This
+            # must happen on every path that reports success: leaving the
+            # buffer unwritten made the caller read uninitialised memory.
             if beta_init_out is not None:
                 for j in range(p):
                     (<double*>cnp.PyArray_DATA(beta_init_out))[j] = beta_out_data[j]

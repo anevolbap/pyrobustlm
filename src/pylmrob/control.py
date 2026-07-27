@@ -80,6 +80,11 @@ class Control:
     k_m_s: int = 20
 
     mts: int = 1000
+    # Gauss-Hermite nodes used for the E[...] expectations in the D-step
+    # (kappa). Matches R's ``lmrob.control(numpoints = 10)``; R's
+    # ``lmrob.E`` uses this rule rather than exact integration, so the
+    # node count is part of the answer, not just its accuracy.
+    numpoints: int = 10
     subsampling: Literal["nonsingular", "simple"] = "nonsingular"
 
     cov: str | None = None
