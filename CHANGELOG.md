@@ -34,6 +34,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Continuous Integration
+
+- Smoke-test the built wheel on every PR. `wheels.yml` only runs on a
+  `v*` tag, so nothing exercised the wheel until release time; the
+  v0.5.25 and v0.5.26 publishes both failed on a cwd-relative path in a
+  test and neither reached PyPI, while every PR went green. The new job
+  installs a real (non-editable) wheel and runs cibuildwheel's own
+  `test-command` from `/tmp`, on the host Python only, so it costs ~2
+  minutes rather than the ~45 the full matrix takes under QEMU.
+
 ### Bug Fixes
 
 - **`welsh` chi tuning constant** was the exact `1/sqrt(3)`
