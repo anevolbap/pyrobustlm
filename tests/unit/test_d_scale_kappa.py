@@ -34,6 +34,10 @@ _R_KAPPA = [
     ("lqq", "lqq", (1.4734061, 0.9822707, 1.5), 0.8618074039274787),
     ("ggw_b1", "ggw", (1.0,), 0.8989804359465622),
     ("ggw_b1.5", "ggw", (4.0,), 0.8590698460697594),
+    # welsh had no entry in the old hardcoded Cython table, so the D-step
+    # silently fell back to the NumPy path for it. Computing kappa per fit
+    # means every family works, tabulated or not.
+    ("welsh", "welsh", (2.11,), 0.8165683255302613),
 ]
 
 
