@@ -193,9 +193,17 @@ def main() -> None:
             else:
                 row.extend(["-", "-"])
         rows.append(row)
+    # Report the repetition count actually used rather than a hardcoded
+    # one: the heading said "5 reps" long after the harness moved on.
+    rep_counts = {
+        len(case.get("runtimes_sec", []))
+        for case in list(r_cases.values()) + list(py_cases.values())
+        if case.get("runtimes_sec")
+    }
+    reps = str(min(rep_counts)) if len(rep_counts) == 1 else "varying"
     body.append(
         _section(
-            "Runtime: median over 5 reps (lower is better)",
+            f"Runtime: median over {reps} reps (lower is better)",
             rows,
             headers,
         )

@@ -27,6 +27,11 @@ REPO_ROOT <- normalizePath(file.path(script_dir(), ".."))
 OUT_DIR <- file.path(REPO_ROOT, "tests", "bench", "r")
 dir.create(OUT_DIR, showWarnings = FALSE, recursive = TRUE)
 
+# Timing repetitions. Keep in step with BENCH_REPS in scripts/benchmark.py:
+# comparing a k-rep median on one side against a different k on the other
+# biases the ratio. Override with PYLMROB_BENCH_REPS.
+BENCH_REPS <- as.integer(Sys.getenv("PYLMROB_BENCH_REPS", "11"))
+
 # ---------------------------------------------------------------------------
 # Corpus: classical + synthetic + per-psi-family
 # ---------------------------------------------------------------------------
@@ -131,14 +136,21 @@ run_one <- function(entry) {
   if (is.null(fit_w)) {
     cat("  ERROR\n"); return(invisible(NULL))
   }
-  # Time over k repetitions
-  k <- 5
+  # Time over k repetitions.
+  #
+  # Sys.time(), not system.time(): the latter reports elapsed time
+  # quantised to 1 ms, and most of this corpus fits in 3-6 ms, so every
+  # classical dataset came out as exactly 3.0, 4.0, 5.0 or 6.0 ms. That
+  # made the py/R ratios for small n meaningless. Sys.time() differences
+  # resolve microseconds.
+  k <- BENCH_REPS
   set.seed(1)
   t <- numeric(k)
   for (i in 1:k) {
     set.seed(1)
-    tt <- system.time(fit <- lmrob(ds$formula, data=ds$data, control=ctrl))
-    t[i] <- as.numeric(tt["elapsed"])
+    t0 <- Sys.time()
+    fit <- lmrob(ds$formula, data=ds$data, control=ctrl)
+    t[i] <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
   }
   out <- list(
     name = entry$name,
