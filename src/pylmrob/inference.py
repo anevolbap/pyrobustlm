@@ -165,7 +165,11 @@ def _asympt_corrfact(psi_family: str, psi_k: float | tuple[float, ...]) -> float
         "huber": np.array([1.345]),
         "hampel": np.array([1.5 * 0.9016085, 3.5 * 0.9016085, 8.0 * 0.9016085]),
         "optimal": np.array([1.060158]),
-        "lqq": np.array([1.4734061, 0.9826779, 1.5]),
+        # Internal form from robustbase:::.psi.conv.cc("lqq", <default>).
+        # This was 0.9826779, which no longer matched Control's value, so
+        # np.allclose below always failed and lqq silently took the
+        # numerical-integration fallback instead of this table.
+        "lqq": np.array([1.4734061, 0.9822707, 1.5]),
     }
     if fam in DEFAULT_CORRFACT:
         d = DEFAULT_TUNING.get(fam)

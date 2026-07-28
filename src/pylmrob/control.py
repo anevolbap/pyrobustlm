@@ -35,7 +35,7 @@ _DEFAULT_TUNING_PSI: dict[str, tuple[float, ...]] = {
 
 _DEFAULT_TUNING_CHI: dict[str, tuple[float, ...]] = {
     "huber": (0.6745,),
-    "bisquare": (1.547645,),
+    "bisquare": (1.54764,),
     "hampel": (1.5 * 0.2119163, 3.5 * 0.2119163, 8.0 * 0.2119163),
     "optimal": (0.4047,),
     "welsh": (0.5773502691896258,),  # = 1/sqrt(3); gives E[chi(Z)]=0.5 under Z~N(0,1).

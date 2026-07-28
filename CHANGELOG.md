@@ -21,6 +21,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Bug Fixes
+
+- **bisquare chi tuning constant was wrong in the 6th digit.** We
+  carried `1.547645`; R's `lmrob.control(psi="bisquare")$tuning.chi` is
+  `1.54764`. The 3.231e-06 relative difference is exactly the "scale
+  relative error: median 3.23e-06" that appeared in every
+  `docs/bench-report.md` revision, and the floor `numerical-notes`
+  attributed to irreducible LAPACK differences. `m_scale` on a fixed
+  residual vector now matches R to all 12 printed digits.
+- **lqq psi mid-constant** was `0.9826779` in `psi.py` and
+  `inference.py` where the internal form is `0.9822707`. In
+  `inference.py` it gated a precomputed correction factor through
+  `np.allclose`, so lqq silently took the numerical-integration
+  fallback.
+
+### Added
+
+- `tests/validation/test_vcov_avar1_vs_r.py`: pins `vcov_avar1` against
+  R with the RNG removed (R's own residuals in, R's `vcov()` compared).
+  All five families agree to 1e-10 or better, establishing that the
+  0.4-0.5 cov errors in the bench report are about which fit was found,
+  not how the covariance is computed.
+
+### Documentation
+
+- `numerical-notes` entries 11 and 12: corrects the "3.2e-6 LAPACK
+  floor" claim, and separates the ggw cov divergence (R's `lmrob.S`
+  returns a stale `init$residuals` for ggw/lqq, which its own
+  `.vcov.avar1` then consumes) from the hampel one (genuine basin
+  drift).
+
 ## [0.5.24](https://github.com/anevolbap/pyrobustlm/compare/v0.5.23...v0.5.24) (2026-06-11)
 
 

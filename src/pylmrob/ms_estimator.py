@@ -93,7 +93,7 @@ def m_s_fit(
     X_cont: NDArray[np.float64],
     y: NDArray[np.float64],
     psi_chi: str = "bisquare",
-    k_chi: tuple[float, ...] = (1.547645,),
+    k_chi: tuple[float, ...] = (1.54764,),
     b0: float = 0.5,
     nResample: int = 200,
     k_m_s: int = 20,

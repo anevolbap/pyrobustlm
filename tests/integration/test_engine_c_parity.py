@@ -156,7 +156,7 @@ def test_init_scale_matches_init_coef() -> None:
         fit = lmrob(formula, df, control=Control(nResample=500, engine_c=engine_c), seed=42)
         init_coef = np.asarray(fit.init_["coef"], dtype=np.float64)
         recomputed = m_scale(
-            y - X @ init_coef, "bisquare", (1.547645,), 0.5, 200, 1e-10, p=X.shape[1]
+            y - X @ init_coef, "bisquare", (1.54764,), 0.5, 200, 1e-10, p=X.shape[1]
         )
         np.testing.assert_allclose(
             recomputed,

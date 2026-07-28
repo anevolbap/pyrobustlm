@@ -61,7 +61,7 @@ The most-used R control fields and their Python equivalents:
 
 `Control()` with no arguments matches R's `lmrob.control()` (default
 `setting=NULL`): `psi="bisquare"`, `method="MM"`, `cov=".vcov.avar1"`,
-`tuning_psi=4.685061`, `tuning_chi=1.547645`.
+`tuning_psi=4.685061`, `tuning_chi=1.54764`.
 
 `Control(setting="KS2014")` matches R's `lmrob.control(setting="KS2014")`:
 `psi="lqq"`, `method="SMDM"`, `cov=".vcov.w"`, `tuning_psi=(1.4734061,

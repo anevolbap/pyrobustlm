@@ -137,7 +137,7 @@ _CY_LMROB_FAST_S: Callable[..., tuple[float, int, int, int]] | None = _try_impor
 @dataclass(frozen=True)
 class FastSConfig:
     psi_chi: str = "bisquare"
-    k_chi: tuple[float, ...] = (1.547645,)  # 50% bdp default for bisquare
+    k_chi: tuple[float, ...] = (1.54764,)  # 50% bdp default for bisquare
     b0: float = 0.5
     nResample: int = 500
     k_fast_s: int = 1  # number of refinement steps inside the resampling loop

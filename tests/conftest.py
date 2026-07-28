@@ -152,7 +152,7 @@ class _RBridge:
         self,
         r: np.ndarray,
         family: str = "bisquare",
-        k: float | tuple[float, ...] = 1.547645,  # 50% bdp default
+        k: float | tuple[float, ...] = 1.54764,  # 50% bdp default
         b0: float = 0.5,
         max_iter: int = 200,
         tol: float = 1e-10,
