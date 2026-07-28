@@ -33,10 +33,11 @@ def _stackloss() -> pd.DataFrame:
 
 _UNIMPLEMENTED = [
     ("trace_lev", 4),
-    ("eps_outlier", 1e-3),
-    ("eps_x", 1e-9),
     ("solve_tol", 1e-9),
 ]
+
+# Wired up by pylmrob.outlier_stats, so they must NOT warn any more.
+_IMPLEMENTED = [("eps_outlier", 1e-3), ("eps_x", 1e-9)]
 
 
 @pytest.mark.parametrize("field,value", _UNIMPLEMENTED)
@@ -79,3 +80,12 @@ def test_converged_fit_does_not_warn_about_convergence() -> None:
         warnings.simplefilter("error", RuntimeWarning)
         fit = lmrob(formula, df, control=Control(nResample=500), seed=42)
     assert fit.converged_
+
+
+@pytest.mark.parametrize("field,value", _IMPLEMENTED)
+def test_implemented_control_does_not_warn(field: str, value: float) -> None:
+    """eps_outlier / eps_x are read by outlier_stats; they were on the
+    unimplemented list until that landed."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        Control(**{field: value})

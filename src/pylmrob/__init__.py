@@ -13,6 +13,7 @@ from pylmrob.anova import anova
 from pylmrob.bootstrap import bootstrap
 from pylmrob.control import Control
 from pylmrob.lmrob import LmRob, lmrob
+from pylmrob.outliers import OutlierStats, outlier_stats
 from pylmrob.rng import (
     RState,
     r_norm_rand,
@@ -25,12 +26,14 @@ from pylmrob.rng import (
 __all__ = [
     "Control",
     "LmRob",
+    "OutlierStats",
     "RState",
     "__version__",
     "anova",
     "bootstrap",
     "lmrob",
     "make_generator",
+    "outlier_stats",
     "r_norm_rand",
     "r_qnorm",
     "r_sample_noreplace",
