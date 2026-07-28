@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Bug Fixes
 
+- **Wheel builds failed since v0.5.25, so neither v0.5.25 nor v0.5.26
+  published to PyPI.** `tests/unit/test_control_warnings.py` read
+  `tests/data/stackloss.csv` through a relative path; cibuildwheel runs
+  `pytest {project}/tests/unit` from the build's working directory, not
+  the repo root, so the test raised `FileNotFoundError` and `-x` failed
+  the job. Resolves the path from `__file__` like every other test
+  module.
+
 - **bisquare chi tuning constant was wrong in the 6th digit.** We
   carried `1.547645`; R's `lmrob.control(psi="bisquare")$tuning.chi` is
   `1.54764`. The 3.231e-06 relative difference is exactly the "scale
