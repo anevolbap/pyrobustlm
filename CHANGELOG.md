@@ -21,38 +21,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Bug Fixes
-
-- **D-step `kappa` now matches R.** `robustbase:::lmrob.E` applies a
-  10-node Gauss-Hermite rule (`lmrob.control(numpoints = 10)`) rather
-  than integrating, so R's `kappa` is up to 8e-3 from the exact
-  integral. We were computing the integral and inheriting that gap.
-  All six family/tuning combinations now agree with R to 2e-15. Adds
-  `Control.numpoints`.
-- **`ggw` D-scale was 3.8% wrong through the default engine.** The
-  Cython D-step carried a second hardcoded `kappa` table whose ggw
-  case-4 entry was a copy of the case-1 value. `kappa` is now computed
-  once per fit and passed in, so both engines share one definition and
-  every family works, including `welsh`, which had no table entry.
-- **The Cython fast-S could return uninitialised memory.** A candidate
-  whose M-scale collapsed to zero always won the best-of-`best_r`
-  comparison, after which `cy_lmrob_fit` reported success with an
-  unwritten `beta_init` buffer. Non-positive and non-finite scales are
-  now rejected at every stage.
-- **`Control.preset()` disagreed with `Control(setting=)` and with R**,
-  and applied overrides after `__post_init__` so the tuning constants
-  went stale.
-- **`init_["coef"]` held the post-MM estimate** on the engine_c path and
-  the post-S estimate elsewhere.
-
-### Features
-
-- Warnings where the code was previously silent: unimplemented controls
-  (`trace_lev`, `eps_outlier`, `eps_x`, `solve_tol`), IRWLS
-  non-convergence, and the engine_c singular-`X'WX` refit.
-- `tests/integration/test_kernel_parity.py`: RNG-free differential tests
-  between each Cython kernel and its NumPy reference.
-
 ## [0.5.24](https://github.com/anevolbap/pyrobustlm/compare/v0.5.23...v0.5.24) (2026-06-11)
 
 
