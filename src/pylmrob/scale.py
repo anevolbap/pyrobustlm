@@ -18,6 +18,7 @@ from typing import Any
 import numpy as np
 
 from pylmrob import _psifuns as _pf
+from pylmrob.control import _DEFAULT_TUNING_CHI as _CONTROL_TUNING_CHI
 
 
 def _try_import_cpsi() -> Any | None:
@@ -126,14 +127,13 @@ def _cython_rho(
     return None
 
 
+# Derived from Control, not restated. These used to be a separate
+# literal table and drifted: ggw carried case 3 (b=1) where Control has
+# case 6 (b=1.5, R's default), and huber carried 1.345, which is the
+# *psi* constant, where Control has 0.6745.
 _DEFAULT_K_CHI: dict[str, tuple[float, ...]] = {
-    "huber": (1.345,),
-    "bisquare": (1.54764,),
-    "biweight": (1.54764,),
-    "hampel": (1.5 * 0.2119163, 3.5 * 0.2119163, 8.0 * 0.2119163),
-    "optimal": (0.4047,),
-    "lqq": (0.4015457, 0.2676971, 1.5),
-    "ggw": (3,),  # case 3: b=1, bp=0.5
+    **_CONTROL_TUNING_CHI,
+    "biweight": _CONTROL_TUNING_CHI["bisquare"],  # alias
 }
 
 
