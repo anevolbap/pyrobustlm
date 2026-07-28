@@ -47,7 +47,7 @@ def case():
     ref = json.loads(REFERENCE.read_text())
     df = pd.read_csv(DATA)
     df["g"] = pd.Categorical(df["g"])
-    fit = lmrob(_FORMULA, df, control=Control(nResample=500), seed=1)
+    fit = lmrob(_FORMULA, df, control=Control(nResample=500, compute_outlier_stats=None), seed=1)
     # Compare the statistic, not the fit: use R's own robustness weights.
     fit.rweights_ = np.asarray(ref["rweights"], dtype=np.float64)
     return ref, outlier_stats(fit, shout=False)
@@ -97,7 +97,7 @@ def test_warns_on_local_breakdown() -> None:
     ref = json.loads(REFERENCE.read_text())
     df = pd.read_csv(DATA)
     df["g"] = pd.Categorical(df["g"])
-    fit = lmrob(_FORMULA, df, control=Control(nResample=500), seed=1)
+    fit = lmrob(_FORMULA, df, control=Control(nResample=500, compute_outlier_stats=None), seed=1)
     fit.rweights_ = np.asarray(ref["rweights"], dtype=np.float64)
     with pytest.warns(RuntimeWarning, match="local breakdown"):
         outlier_stats(fit)
@@ -114,7 +114,7 @@ def test_clean_fit_does_not_warn() -> None:
         }
     )
     df["y"] = 1.0 + 2.0 * df["x"] + rng.standard_normal(n) * 0.3
-    fit = lmrob("y ~ x + g", df, control=Control(nResample=500), seed=3)
+    fit = lmrob("y ~ x + g", df, control=Control(nResample=500, compute_outlier_stats=None), seed=3)
     stats = outlier_stats(fit, shout=None)
     assert stats.flagged == [], stats.flagged
 
@@ -129,7 +129,7 @@ def test_shout_forces_and_suppresses() -> None:
         }
     )
     df["y"] = 1.0 + 2.0 * df["x"] + rng.standard_normal(n) * 0.3
-    fit = lmrob("y ~ x + g", df, control=Control(nResample=500), seed=4)
+    fit = lmrob("y ~ x + g", df, control=Control(nResample=500, compute_outlier_stats=None), seed=4)
 
     with pytest.warns(RuntimeWarning, match="local breakdown"):
         outlier_stats(fit, shout=True)
@@ -139,3 +139,37 @@ def test_shout_forces_and_suppresses() -> None:
     with _w.catch_warnings():
         _w.simplefilter("error")
         outlier_stats(fit, shout=False)
+
+
+def test_lmrob_computes_ostats_like_r() -> None:
+    """R runs outlierStats inside the fit and warns; so do we.
+
+    ``lmrob..M..fit`` computes it whenever the stage name is listed in
+    ``control$compute.outlier.stats`` (default ``"SM"``). A plain MM fit
+    is named ``"SM"`` internally, and an SMDM fit passes through an
+    ``"SM"`` stage, so R warns for both settings on this data. Verified
+    against robustbase 0.99-7.
+    """
+    df = pd.read_csv(DATA)
+    df["g"] = pd.Categorical(df["g"])
+
+    for setting in (None, "KS2014"):
+        ctrl = Control(setting=setting, nResample=500)  # type: ignore[arg-type]
+        with pytest.warns(RuntimeWarning, match="local breakdown"):
+            fit = lmrob(_FORMULA, df, control=ctrl, seed=1)
+        assert fit.ostats_ is not None, f"setting={setting}: ostats not attached"
+        assert [_r_name(n) for n in fit.ostats_.flagged] == ["gc"]  # type: ignore[attr-defined]
+
+
+def test_compute_outlier_stats_can_be_disabled() -> None:
+    """Opting out must silence the fit entirely."""
+    import warnings as _w
+
+    df = pd.read_csv(DATA)
+    df["g"] = pd.Categorical(df["g"])
+    with _w.catch_warnings():
+        _w.simplefilter("error", RuntimeWarning)
+        fit = lmrob(
+            _FORMULA, df, control=Control(nResample=500, compute_outlier_stats=None), seed=1
+        )
+    assert fit.ostats_ is None

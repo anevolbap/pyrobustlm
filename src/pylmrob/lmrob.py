@@ -732,7 +732,7 @@ def _lmrob_impl(
             stacklevel=3,
         )
 
-    return LmRobResults(
+    result = LmRobResults(
         coef_=np.asarray(coef, dtype=np.float64),
         scale_=float(sigma),
         weights_=(
@@ -755,6 +755,23 @@ def _lmrob_impl(
         design_x_=np.asarray(design_x_out, dtype=np.float64),
         design_y_=np.asarray(design_y_out, dtype=np.float64),
     )
+
+    # robustbase computes outlierStats inside lmrob..M..fit whenever the
+    # stage name is listed in control$compute.outlier.stats (default "SM").
+    # A plain MM fit is named "SM" internally and an SMDM fit passes
+    # through an "SM" stage, so R does this for both; the warning is how a
+    # user learns that a factor level has locally broken down.
+    wanted = control.compute_outlier_stats
+    if wanted:
+        stages = (wanted,) if isinstance(wanted, str) else tuple(wanted)
+        # Our "MM" is R's "SM"; SMDM contains an SM stage.
+        stage = "SM" if method in ("MM", "SM") else method
+        if stage in stages or (method.startswith("S") and "SM" in stages):
+            from pylmrob.outliers import outlier_stats
+
+            result.ostats_ = outlier_stats(result)
+
+    return result
 
 
 # sklearn integration. LmRob inherits BaseEstimator + RegressorMixin when

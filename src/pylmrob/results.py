@@ -46,6 +46,9 @@ class LmRobResults:
     # (e.g. anova(test="Deviance") refits reduced models on the full scale).
     design_x_: np.ndarray | None = None
     design_y_: np.ndarray | None = None
+    # robustbase's ``$ostats``: per-coefficient outlier statistics, set by
+    # ``lmrob()`` when ``Control.compute_outlier_stats`` covers the fit.
+    ostats_: object | None = None
 
     # Backwards-compatible alias to mirror R's $coefficients.
     @property
