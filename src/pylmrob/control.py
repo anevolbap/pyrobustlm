@@ -8,8 +8,8 @@ from ``robustbase/R/lmrob.R``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Literal
+from dataclasses import dataclass, field, fields
+from typing import Any, Literal
 
 PsiFamily = Literal["bisquare", "huber", "hampel", "optimal", "ggw", "lqq", "welsh"]
 InitMethod = Literal["auto", "S", "M-S", "L1"]
@@ -50,7 +50,10 @@ _DEFAULT_TUNING_CHI: dict[str, tuple[float, ...]] = {
 class Control:
     """Parameters controlling an ``lmrob`` fit.
 
-    Defaults follow R's ``lmrob.control(setting="KS2014")``.
+    Defaults follow R's plain ``lmrob.control()``: psi="bisquare",
+    method="MM", cov=".vcov.avar1". Pass ``setting="KS2011"`` or
+    ``setting="KS2014"`` for the Koller-Stahel presets (both are
+    psi="lqq", method="SMDM", cov=".vcov.w" in robustbase 0.99-7).
     """
 
     # ``setting=None`` (and ``"MM"``) follow R's plain default: psi="bisquare",
@@ -80,6 +83,11 @@ class Control:
     k_m_s: int = 20
 
     mts: int = 1000
+    # Gauss-Hermite nodes used for the E[...] expectations in the D-step
+    # (kappa). Matches R's ``lmrob.control(numpoints = 10)``; R's
+    # ``lmrob.E`` uses this rule rather than exact integration, so the
+    # node count is part of the answer, not just its accuracy.
+    numpoints: int = 10
     subsampling: Literal["nonsingular", "simple"] = "nonsingular"
 
     cov: str | None = None
@@ -123,10 +131,11 @@ class Control:
     # large n ``lmrob()`` auto-falls-back to the threaded default path
     # (since the monolithic kernel is a single C call that does not
     # parallelise). The Cython subset-draw is not byte-identical to
-    # ``np.random.choice``: on a few small classical datasets it lands
-    # in a basin where ``vcov_avar1`` is singular; ``lmrob()`` catches
-    # that FloatingPointError and retries with ``engine_c=False`` so
-    # the fit always succeeds.
+    # ``np.random.choice``, so the two engines can land in different
+    # basins of attraction; they agree element-wise on 98 of 100 fits
+    # over the classical corpus. ``lmrob()`` still catches a singular
+    # ``X'WX`` from this path and refits with ``engine_c=False``, but
+    # that is now a warned last resort rather than a routine event.
     engine_c: bool = True
 
     bb: float = 0.5  # consistency constant (target value of mean(chi))
@@ -178,6 +187,35 @@ class Control:
                 raise ValueError(f"unknown psi family {self.psi!r}")
             self.tuning_chi = _DEFAULT_TUNING_CHI[self.psi]
 
+        self._warn_unimplemented()
+
+    def _warn_unimplemented(self) -> None:
+        """Tell the caller when a control they set is not wired up yet.
+
+        These fields exist so the surface matches ``lmrob.control()``, but
+        nothing reads them. Accepting a value and silently ignoring it is
+        worse than not offering it: a user who passes ``trace_lev=4`` and
+        sees no trace has no way to tell the difference between "no
+        output" and "not implemented".
+        """
+        import warnings
+
+        unimplemented = {
+            "trace_lev": (self.trace_lev, 0),
+            "eps_outlier": (self.eps_outlier, None),
+            "eps_x": (self.eps_x, None),
+            "solve_tol": (self.solve_tol, 1e-7),
+        }
+        set_anyway = [name for name, (got, default) in unimplemented.items() if got != default]
+        if set_anyway:
+            warnings.warn(
+                f"Control({', '.join(sorted(set_anyway))}) is accepted for "
+                "lmrob.control() compatibility but not implemented yet; the "
+                "value is ignored.",
+                UserWarning,
+                stacklevel=3,
+            )
+
     # sklearn-compatibility shim. Lets ``GridSearchCV`` reach Control fields
     # via the standard ``estimator__nested__field`` parameter syntax, e.g.
     # ``param_grid={"control__nResample": [200, 500, 1000]}``.
@@ -202,25 +240,28 @@ class Control:
         return self
 
     @classmethod
-    def preset(cls, setting: Setting, **overrides: object) -> Control:
+    def preset(cls, setting: Setting, **overrides: Any) -> Control:
         """Build a Control for a named preset.
 
-        Settings:
+        Equivalent to ``Control(setting=..., **overrides)``; the presets
+        follow ``robustbase::lmrob.control(setting=)``:
 
-        - ``"KS2014"``: psi="bisquare" (matches robustbase 0.99-7 default).
-        - ``"KS2011"``: same families with KS2011-specific cov estimator.
-        - ``"MM"``: legacy MM defaults (psi="bisquare").
+        - ``"KS2014"``: psi="lqq", method="SMDM", cov=".vcov.w".
+        - ``"KS2011"``: same as KS2014 in robustbase 0.99-7.
+        - ``"MM"``: psi="bisquare", method="MM", cov=".vcov.avar1".
+
+        This used to build the object and then ``setattr`` the overrides
+        on top, which ran after ``__post_init__``. Two bugs came out of
+        that: ``preset("KS2014")`` returned psi="bisquare" with
+        cov=".vcov.avar1" (so it disagreed with ``Control(setting=
+        "KS2014")`` and with R), and an override like ``psi="lqq"``
+        left the tuning constants at the previous family's values.
+        Going through the constructor keeps one code path.
         """
-        if setting == "KS2014":
-            ctrl = cls(setting="KS2014", psi="bisquare", cov=".vcov.avar1", init="S")
-        elif setting == "KS2011":
-            ctrl = cls(setting="KS2011", psi="bisquare", cov=".vcov.w", init="S")
-        elif setting == "MM":
-            ctrl = cls(setting="MM", psi="bisquare", cov=".vcov.avar1", init="S")
-        else:
+        if setting not in ("KS2014", "KS2011", "MM"):
             raise ValueError(f"unknown setting: {setting!r}")
-        for key, value in overrides.items():
-            if not hasattr(ctrl, key):
-                raise TypeError(f"unknown Control field: {key!r}")
-            setattr(ctrl, key, value)
-        return ctrl
+        valid = {f.name for f in fields(cls)}
+        unknown = sorted(set(overrides) - valid)
+        if unknown:
+            raise TypeError(f"unknown Control field: {unknown[0]!r}")
+        return cls(setting=setting, **overrides)

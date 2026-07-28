@@ -233,3 +233,95 @@ normalised so ``chi(inf) = 1``; ``chi' = (1/rho_unnorm(inf)) * psi``) and
 the proper R formula ported from ``lmrob.MM.R:510-577``, the covariance
 matrix now matches R element-wise to ``rtol=1e-3`` on stackloss/delivery/
 phosphor.
+
+### 9. D-step ``kappa``: match R's quadrature, not the integral
+
+**What.** ``robustbase:::lmrob.kappa`` solves
+``E[psi(Z) Z - kappa wgt(Z)] = 0`` with ``uniroot``. The expression is
+linear in ``kappa``, so the root is ``E[psi(Z) Z] / E[wgt(Z)]`` and the
+only question is how the expectations are taken. R takes them with
+``robustbase:::lmrob.E``, which does **not** integrate: it applies an
+``numpoints``-node Gauss-Hermite rule, and ``lmrob.control`` sets
+``numpoints = 10``.
+
+Ten nodes resolve the kinked families only roughly, so R's ``kappa``
+sits up to 8e-3 away from the exact integral:
+
+| family | R (GH, 10 nodes) | exact integral | rerr |
+|---|---|---|---|
+| bisquare | 0.8280907302 | 0.8280771566 | 1.6e-05 |
+| hampel | 0.8504151400 | 0.8569775806 | 7.7e-03 |
+| optimal | 0.9361829182 | 0.9355077953 | 7.2e-04 |
+| lqq | 0.8618074039 | 0.8626400360 | 9.7e-04 |
+| ggw (b=1) | 0.8989804359 | 0.8914986546 | 8.3e-03 |
+| ggw (b=1.5) | 0.8590698461 | 0.8597035165 | 7.4e-04 |
+
+We previously computed the exact integral with ``scipy.integrate.quad``
+and inherited the whole right-hand column as error.
+
+**Why the rule and not the integral.** The goal is agreement with R.
+R's D-scale is defined by the value R actually uses, so reproducing the
+quadrature is reproducing the estimator. ``Control.numpoints`` exists so
+the node count stays a parameter rather than a hidden constant, and
+``tests/unit/test_d_scale_kappa.py`` pins both the R values and the fact
+that the exact integral genuinely differs, so a later reader does not
+"fix" it back.
+
+**A second, larger error on the same line.** The Cython D-step carried
+its own hardcoded ``kappa`` table, copied from the old ``quad`` output.
+Its ggw case-4 entry was a copy of the case-1 value, so every ggw fit
+through the default engine ran with a ``kappa`` 3.8% wrong. ``kappa`` is
+now computed once per fit in Python and passed into the kernel; there is
+no table left to drift, and non-default tunings work instead of silently
+falling back.
+
+End-to-end KS2014 scale on stackloss vs R, worst over five seeds:
+
+| psi | before | after |
+|---|---|---|
+| bisquare | 5.0e-01 | 1.2e-07 |
+| hampel | 7.7e-03 | 1.1e-07 |
+| optimal | 7.2e-04 | 4.4e-12 |
+| lqq | 9.7e-04 | 8.6e-08 |
+| ggw | 3.8e-02 | 7.1e-07 |
+
+The bisquare row was a different fault found in the same investigation;
+see entry 10.
+
+**Where.** ``pylmrob/d_scale.py::kappa``,
+``tests/unit/test_d_scale_kappa.py``,
+``tests/integration/test_kernel_parity.py::test_cy_d_scale_matches_numpy``.
+
+### 10. Degenerate zero-scale candidates in the Cython fast-S
+
+**What.** ``_mscale_generic`` can return a non-positive scale for a
+resampled candidate. Zero is smaller than every real scale, so such a
+candidate always won the best-of-``best_r`` comparison. ``cy_lmrob_fit``
+then returned ``status = 0`` (success) with ``scale = 0`` and never wrote
+``beta_init_out``, and the caller read that uninitialised buffer:
+coefficients around 1e241 fed straight into ``vcov_avar1``.
+
+It needed roughly 1000 resamples to hit, so it looked seed-dependent: on
+stackloss with ``setting="KS2014"`` and ``psi="bisquare"`` it fired on 3
+of 4 seeds, giving scales 36-50% away from R while the NumPy path was
+correct on all four.
+
+**Why these are not exact fits.** A zero M-scale is a legitimate S
+solution when the fit passes exactly through more than half the data.
+That is not the case here: over all 5719 non-singular 4-subsets of
+stackloss the best any candidate achieves is 8 exactly-zero residuals,
+and ``(n - p) * b0 = 8.5`` are required. Checked in double precision
+from both plausible starting scales (MAD and ``max|r| / k0``), no subset
+collapses. These are numerical degeneracies, so they are now rejected
+and the search continues. A genuine exact fit is still detected earlier,
+by ``max|r| == 0``.
+
+**Knock-on.** The ``FloatingPointError`` retry in ``lmrob()`` existed to
+paper over the singular ``X'WX`` this produced. Over a 500-fit sweep (10
+classical datasets x 5 psi families x 10 seeds) it now fires zero times.
+It is kept for pathological data but warns, because falling back changes
+the estimator and that should not be silent.
+
+**Where.** ``pylmrob/_core/_psi_kernels.pxi``,
+``pylmrob/_core/_lmrob.pyx::cy_lmrob_fit``,
+``tests/integration/test_engine_c_parity.py``.

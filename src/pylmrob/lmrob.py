@@ -7,6 +7,7 @@ iteration -> covariance -> :class:`pylmrob.results.LmRobResults`.
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
@@ -18,6 +19,7 @@ from pylmrob._fast_s import FastSConfig, fast_s
 from pylmrob._mm import mm_iterate
 from pylmrob.control import Control
 from pylmrob.d_scale import d_scale
+from pylmrob.d_scale import kappa as d_scale_kappa
 from pylmrob.formula import model_matrix
 from pylmrob.inference import vcov_avar1, vcov_w
 from pylmrob.ms_estimator import m_s_fit
@@ -136,14 +138,23 @@ def lmrob(
     try:
         return _lmrob_impl(formula, data, control, na_action, seed, weights)
     except FloatingPointError as exc:
-        # ``engine_c=True`` uses an internal Floyd subset-draw which is
-        # not byte-identical to ``np.random.choice``. On a few small
-        # classical datasets that puts fast-S in a basin where the
-        # final ``X' W X`` is singular for ``vcov_avar1``. Retry once
-        # with engine_c off (numpy choice -- different basin) so the
-        # default path stays robust on those datasets.
+        # Last-resort net. This used to fire routinely (stackloss and hbk
+        # on the default settings) because the Cython kernel could accept
+        # a degenerate zero-scale candidate and hand back an unwritten
+        # beta buffer; that is fixed in the kernel, and a 500-fit sweep
+        # over the classical corpus x 5 psi families x 10 seeds now
+        # reaches it zero times. It is kept because a singular X'WX is
+        # still possible on pathological data, but it is no longer a
+        # silent path: falling back changes the estimator, so say so.
         if not control.engine_c or "singular" not in str(exc):
             raise
+        warnings.warn(
+            f"lmrob: the Cython engine produced a singular X'WX ({exc}); "
+            "re-fitting with engine_c=False. The two paths resample "
+            "differently, so this fit may differ from an engine_c fit.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
         return _lmrob_impl(
             formula, data, replace(control, engine_c=False), na_action, seed, weights
         )
@@ -325,12 +336,32 @@ def _lmrob_impl(
             bitgen_capsules=_ec_caps,
             n_workers=_ec_workers,
         )
-        if status_e == 1:
-            raise RuntimeError("lmrob: no non-singular subsamples found")
+        # Only status 0 with a usable scale means the kernel filled every
+        # output buffer. Anything else (no non-singular subsample, exact
+        # fit, LAPACK failure) leaves at least one buffer untouched, so
+        # reading them would be reading uninitialised memory. Fall back
+        # to the NumPy path, which handles these cases explicitly.
+        if status_e != 0 or not (scale_e > 0.0) or not np.isfinite(scale_e):
+            if status_e == 2:
+                warnings.warn(
+                    "lmrob: S-estimated scale == 0 (exact fit through more than "
+                    "half the data); re-fitting on the NumPy path",
+                    RuntimeWarning,
+                    stacklevel=3,
+                )
+            return _lmrob_impl(
+                formula, data, replace(control, engine_c=False), na_action, seed, case_weights
+            )
         beta_init = beta_init_out
         sigma_init = float(scale_e)
         init_info = {
-            "coef": beta_out,
+            # The *initial S* coefficients, mirroring R's $init.S$coefficients
+            # and the NumPy branches below. This used to be ``beta_out``, which
+            # is the buffer ``_mm_loop`` mutates in place, so ``init_["coef"]``
+            # held the post-MM estimate on the engine_c path and the post-S
+            # estimate everywhere else. Copy, because beta_init_out is a view
+            # into the shared workspace allocation.
+            "coef": np.array(beta_init_out, dtype=np.float64),
             "scale": float(scale_e),
             "n_iter": int(n_iter_s),
             "method": "S",
@@ -530,28 +561,28 @@ def _lmrob_impl(
         # Cython D-step when engine_c is on and tabulated coefficients exist.
         if control.engine_c and _CY_LMROB_D_SCALE is not None and psi_family in _CY_FAMILY_IDS:
             _cy_d = _CY_LMROB_D_SCALE
-            if True:
-                _tau_buf = np.empty(n, dtype=np.float64)
-                _tuning_psi = np.zeros(3, dtype=np.float64)
-                for _i, _v in enumerate(
-                    tuple(np.atleast_1d(np.asarray(control.tuning_psi, dtype=float)).ravel())[:3]
-                ):
-                    _tuning_psi[_i] = float(_v)
-                _sigma_d, _d_conv, _d_status = _cy_d(
-                    np.ascontiguousarray(X, dtype=np.float64),
-                    np.ascontiguousarray(residuals, dtype=np.float64),
-                    np.ascontiguousarray(rweights, dtype=np.float64),
-                    float(sigma),
-                    _CY_FAMILY_IDS[psi_family],
-                    _tuning_psi,
-                    control.k_max,
-                    control.rel_tol,
-                    _tau_buf,
-                )
-                if _d_status == 0:
-                    sigma_d = float(_sigma_d)
-                    d_converged = bool(_d_conv)
-                    tau_vec = _tau_buf
+            _tau_buf = np.empty(n, dtype=np.float64)
+            _tuning_psi = np.zeros(3, dtype=np.float64)
+            for _i, _v in enumerate(psi_k_eff[:3]):
+                _tuning_psi[_i] = float(_v)
+            # Shared with the NumPy path so both engines use one kappa.
+            _kappa = d_scale_kappa(psi_family, psi_k_eff, numpoints=control.numpoints)
+            _sigma_d, _d_conv, _d_status = _cy_d(
+                np.ascontiguousarray(X, dtype=np.float64),
+                np.ascontiguousarray(residuals, dtype=np.float64),
+                np.ascontiguousarray(rweights, dtype=np.float64),
+                float(sigma),
+                _CY_FAMILY_IDS[psi_family],
+                _tuning_psi,
+                control.k_max,
+                control.rel_tol,
+                _tau_buf,
+                _kappa,
+            )
+            if _d_status == 0:
+                sigma_d = float(_sigma_d)
+                d_converged = bool(_d_conv)
+                tau_vec = _tau_buf
         if sigma_d is None:
             sigma_d, d_converged, tau_vec, _h = d_scale(
                 X=X,
@@ -562,6 +593,7 @@ def _lmrob_impl(
                 c_psi=psi_k_eff,
                 max_iter=control.k_max,
                 tol=control.rel_tol,
+                numpoints=control.numpoints,
             )
         if d_converged and sigma_d > 0:
             sigma = sigma_d
@@ -686,6 +718,19 @@ def _lmrob_impl(
         fitted_out = fitted
         design_x_out = X
         design_y_out = y
+
+    # plan.md 5.3: a convergence failure returns a result with
+    # ``converged_=False`` and warns; it does not raise, matching R.
+    # Without the warning the flag is easy to miss, and summary() then
+    # reports NaN t-values with no explanation of why.
+    if not mm.converged:
+        warnings.warn(
+            f"lmrob: IRWLS did not converge in {control.max_it} iterations "
+            f"(rel_tol={control.rel_tol:g}). Coefficients are returned with "
+            "converged_=False; treat the standard errors with caution.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
 
     return LmRobResults(
         coef_=np.asarray(coef, dtype=np.float64),
