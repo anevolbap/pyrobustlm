@@ -22,8 +22,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import pylmrob._fast_s as fast_s_mod
 from pylmrob import psi as _psi
-from pylmrob._fast_s import FastSConfig, _refine_to_convergence
 from pylmrob._mm import mm_iterate
 from pylmrob.d_scale import d_scale, kappa
 from pylmrob.formula import model_matrix
@@ -114,10 +114,8 @@ def test_cy_mm_matches_numpy(dataset: str, formula: str, family: str) -> None:
 
 @pytest.mark.parametrize("dataset,formula,family", _CASES, ids=_IDS)
 def test_cy_refine_matches_numpy(dataset: str, formula: str, family: str) -> None:
-    import pylmrob._fast_s as fs_mod
-
     X, y, beta0, _r0, sigma0 = _fixture(dataset, formula)
-    cfg = FastSConfig(psi_chi=family, k_chi=_TUNING_CHI[family])
+    cfg = fast_s_mod.FastSConfig(psi_chi=family, k_chi=_TUNING_CHI[family])
 
     beta_cy = np.ascontiguousarray(beta0).copy()
     scale_cy, _conv, _it, status = _cy_fast_s.cy_refine_to_convergence(
@@ -136,12 +134,12 @@ def test_cy_refine_matches_numpy(dataset: str, formula: str, family: str) -> Non
     if status != 0:
         pytest.skip(f"{dataset}/{family}: Cython refine reported status {status}")
 
-    saved = fs_mod._CY_REFINE
-    fs_mod._CY_REFINE = None  # force the NumPy implementation
+    saved = fast_s_mod._CY_REFINE
+    fast_s_mod._CY_REFINE = None  # force the NumPy implementation
     try:
-        beta_np, scale_np, _c, _i = _refine_to_convergence(X, y, beta0, sigma0, cfg)
+        beta_np, scale_np, _c, _i = fast_s_mod._refine_to_convergence(X, y, beta0, sigma0, cfg)
     finally:
-        fs_mod._CY_REFINE = saved
+        fast_s_mod._CY_REFINE = saved
 
     np.testing.assert_allclose(beta_cy, beta_np, rtol=1e-9, atol=1e-11)
     np.testing.assert_allclose(scale_cy, scale_np, rtol=1e-9)
