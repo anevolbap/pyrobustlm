@@ -10,11 +10,26 @@ from a bug at the call site, so setting one warns.
 from __future__ import annotations
 
 import warnings
+from pathlib import Path
 
 import pandas as pd
 import pytest
 
 from pylmrob import Control, lmrob
+
+# Absolute, not relative: cibuildwheel runs ``pytest {project}/tests/unit``
+# from the wheel build's working directory, not the repo root, so a
+# relative "tests/data/..." raises FileNotFoundError there. That broke
+# the v0.5.25 and v0.5.26 wheel builds, so neither release published.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+STACKLOSS = REPO_ROOT / "tests" / "data" / "stackloss.csv"
+
+
+def _stackloss() -> pd.DataFrame:
+    if not STACKLOSS.exists():  # pragma: no cover - sdist without test data
+        pytest.skip(f"data file missing: {STACKLOSS}")
+    return pd.read_csv(STACKLOSS)
+
 
 _UNIMPLEMENTED = [
     ("trace_lev", 4),
@@ -48,7 +63,7 @@ def test_default_control_is_silent() -> None:
 
 def test_nonconvergence_warns_and_does_not_raise() -> None:
     """plan.md 5.3: warn, set converged_=False, do not raise."""
-    df = pd.read_csv("tests/data/stackloss.csv")
+    df = _stackloss()
     formula = "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc."
     # One IRWLS iteration cannot converge from the S estimate.
     with pytest.warns(RuntimeWarning, match="did not converge"):
@@ -58,7 +73,7 @@ def test_nonconvergence_warns_and_does_not_raise() -> None:
 
 
 def test_converged_fit_does_not_warn_about_convergence() -> None:
-    df = pd.read_csv("tests/data/stackloss.csv")
+    df = _stackloss()
     formula = "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc."
     with warnings.catch_warnings():
         warnings.simplefilter("error", RuntimeWarning)
