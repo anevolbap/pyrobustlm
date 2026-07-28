@@ -5,6 +5,13 @@ All notable changes to `pylmrob` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.25](https://github.com/anevolbap/pyrobustlm/compare/v0.5.24...v0.5.25) (2026-07-28)
+
+
+### Bug Fixes
+
+* D-step kappa, degenerate zero-scale candidates, and Control.preset ([#127](https://github.com/anevolbap/pyrobustlm/issues/127)) ([abfe1c0](https://github.com/anevolbap/pyrobustlm/commit/abfe1c09fa5d26c7e37a473329902c35c2ff8e1e))
+
 ## [Unreleased]
 
 ### Bug Fixes
