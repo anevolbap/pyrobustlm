@@ -7,7 +7,7 @@ project(
   # scripts/check_version_sync.py pre-commit hook guards against drift.
   # release-please-version annotation tells the release bot which
   # string to bump in this file.
-  version: '0.5.25', # x-release-please-version
+  version: '0.5.26', # x-release-please-version
   license: 'GPL-3.0-or-later',
   meson_version: '>=1.4.0',
   default_options: [
