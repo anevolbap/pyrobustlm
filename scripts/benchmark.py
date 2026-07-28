@@ -163,7 +163,10 @@ def _serialize(result: dict, name: str, psi_family: str) -> None:
         "py_version": __import__("sys").version.split()[0],
         "pylmrob_version": __import__("pylmrob").__version__,
     }
-    (OUT_DIR / f"{name}.json").write_text(json.dumps(out, indent=2))
+    # Trailing newline: these files are committed, and pre-commit's
+    # end-of-file-fixer rewrites them without one. The R side already
+    # gets this for free from ``write()``.
+    (OUT_DIR / f"{name}.json").write_text(json.dumps(out, indent=2) + "\n")
 
 
 def _safe_fit(name: str, fn, *args, **kwargs):
