@@ -95,23 +95,36 @@ per-dataset tolerances reflecting this sensitivity (PCG64 path).
 
 **Default ``Control()``** (since v0.5.11) routes the entire fit
 through a monolithic Cython kernel. Median wall-clock across the
-34-case bench corpus is **0.93x R**; pylmrob is faster than R on
-more than half of cases. Pass ``Control(engine_c=False)`` to force
-the legacy NumPy path (median 2.74x R).
+34-case bench corpus is **1.30x R**, against **4.32x R** for the
+legacy NumPy path (``Control(engine_c=False)``).
+
+An earlier revision of this entry claimed 0.93x R and "faster than R
+on more than half of cases". That was a measurement artefact, not a
+regression since: the harness timed R with ``system.time()``, whose
+elapsed field is quantised to 1 ms, on a corpus where most fits take
+2-7 ms. R was credited with about 23% more time than it used. The
+harness now uses ``Sys.time()`` deltas over 11 repetitions on both
+sides. The honest summary is that we are faster than R on the large
+synthetic fits and 1.3-1.7x on the small classical ones.
 
 | dataset / setting | engine_c=False | default | ratio vs R |
 |---|---|---|---|
-| stackloss MM     | 25 ms | 4.7 ms | 1.2x R |
-| stackloss KS2014 | 71 ms | 6.0 ms | 0.7x R |
-| phosphor MM      | 26 ms | 4.3 ms | 1.4x R |
-| salinity MM      | 28 ms | 4.2 ms | 0.8x R |
-| delivery MM      | 27 ms | 4.2 ms | 1.0x R |
+| stackloss MM      | 19.7 ms | 4.0 ms | 1.65x R |
+| stackloss KS2014  | 24.3 ms | 5.7 ms | 0.82x R |
+| phosphor MM       | 19.9 ms | 2.9 ms | 1.30x R |
+| salinity MM       | 23.0 ms | 4.8 ms | 1.56x R |
+| delivery MM       | 21.3 ms | 3.7 ms | 1.58x R |
+| synth n=2000 p=20 | 608.8 ms | 422.1 ms | 0.90x R |
 
-**Why this is the floor.** The Cython kernel performs the same BLAS
-work R's C kernel does (we share OpenBLAS). The remaining gap is one
-Python/C boundary cross at the top of every fit plus formulaic
-parsing for non-trivial formulas. Going below R wall-clock would
-mean dropping the Python public API.
+**Where the gap lives.** The Cython kernel performs the same BLAS work
+R's C kernel does (we share OpenBLAS), so on the large synthetic fits,
+where BLAS dominates, we match or beat R. The residual 1.3-1.7x on the
+small classical datasets is fixed per-fit overhead: one Python/C
+boundary cross, formulaic parsing for non-trivial formulas, and
+result-object construction. At n=21 that overhead is most of the
+wall-clock, which is why the ratio is worst on the smallest datasets
+and best on the largest. Closing it further means attacking per-call
+overhead, not the kernel.
 
 **The engine_c trade-off** is byte-level RNG drift; see
 ``docs/engine_c.md`` for the long explanation.
