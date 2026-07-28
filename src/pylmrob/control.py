@@ -92,6 +92,12 @@ class Control:
     # node count is part of the answer, not just its accuracy.
     numpoints: int = 10
     subsampling: Literal["nonsingular", "simple"] = "nonsingular"
+    # Which fitting stages get outlier statistics computed, mirroring R's
+    # ``lmrob.control(compute.outlier.stats = "SM")``. R checks the stage
+    # name inside ``lmrob..M..fit``; both a plain MM fit (whose internal
+    # name is "SM") and an SMDM fit pass through an "SM" stage, so R warns
+    # for both. Set to ``None`` or ``()`` to turn the check off.
+    compute_outlier_stats: str | tuple[str, ...] | None = "SM"
 
     cov: str | None = None
     eps_outlier: float | None = None

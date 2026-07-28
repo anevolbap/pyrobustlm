@@ -36,6 +36,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Features
 
+- **`lmrob()` now computes outlier statistics and warns on local
+  breakdown**, matching R. `robustbase` runs `outlierStats` inside
+  `lmrob..M..fit` whenever the stage name is listed in
+  `control$compute.outlier.stats` (default `"SM"`); a plain MM fit is
+  named `"SM"` internally and an SMDM fit passes through an `"SM"`
+  stage, so R warns for both. The report is attached as `fit.ostats_`
+  (R's `$ostats`). Adds `Control.compute_outlier_stats`, default
+  `"SM"`; set it to `None` to opt out.
+
 - **`outlier_stats()`**, a port of `robustbase::outlierStats`. A
   high-breakdown fit can look healthy overall and still have broken down
   *locally*: within one level of a factor, most observations are
