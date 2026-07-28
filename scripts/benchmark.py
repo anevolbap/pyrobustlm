@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -21,6 +22,11 @@ import pandas as pd
 from pylmrob import Control, lmrob
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+# Timing repetitions. Keep in step with BENCH_REPS in scripts/benchmark.R:
+# comparing a k-rep median on one side against a different k on the other
+# biases the ratio. Override with PYLMROB_BENCH_REPS.
+BENCH_REPS = int(os.environ.get("PYLMROB_BENCH_REPS", "11"))
 
 _ENGINE_C = False
 OUT_DIR = REPO_ROOT / "tests" / "bench" / "py"
@@ -116,7 +122,7 @@ def _fit_and_time(
     df: pd.DataFrame,
     psi_family: str = "bisquare",
     setting: str | None = None,
-    k_reps: int = 5,
+    k_reps: int = BENCH_REPS,
 ) -> dict:
     # ``setting=None`` matches R's plain ``lmrob.control()`` default
     # (psi=bisquare unless overridden, method=MM, cov=.vcov.avar1).
@@ -157,7 +163,10 @@ def _serialize(result: dict, name: str, psi_family: str) -> None:
         "py_version": __import__("sys").version.split()[0],
         "pylmrob_version": __import__("pylmrob").__version__,
     }
-    (OUT_DIR / f"{name}.json").write_text(json.dumps(out, indent=2))
+    # Trailing newline: these files are committed, and pre-commit's
+    # end-of-file-fixer rewrites them without one. The R side already
+    # gets this for free from ``write()``.
+    (OUT_DIR / f"{name}.json").write_text(json.dumps(out, indent=2) + "\n")
 
 
 def _safe_fit(name: str, fn, *args, **kwargs):
@@ -218,7 +227,7 @@ def main() -> None:
             seed=1,
         )
         runtimes = []
-        for _ in range(5):
+        for _ in range(BENCH_REPS):
             t0 = time.perf_counter()
             fit = lmrob(
                 "stack.loss ~ Air.Flow + Water.Temp + Acid.Conc.",

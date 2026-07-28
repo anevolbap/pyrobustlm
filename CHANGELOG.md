@@ -16,6 +16,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Bug Fixes
 
+- **Benchmark harness timed R with 1 ms resolution.**
+  `scripts/benchmark.R` used `system.time()`, whose elapsed field is
+  quantised to 1 ms, on a corpus where most fits take 2-7 ms. R was
+  credited with about 23% more time than it used, so every py/R ratio
+  the weekly cron publishes read better than it is. Now uses
+  `Sys.time()` deltas with a shared repetition count
+  (`PYLMROB_BENCH_REPS`, default 11) on both sides, and
+  `build_bench_report` derives the count from the data instead of
+  printing a hardcoded "5 reps".
+- Regenerated `docs/bench-report.md` and corrected the stale "0.93x R"
+  claim in `docs/numerical-notes.md`. Real figures at v0.5.24:
+  engine_c 1.30x R median, NumPy path 4.32x R.
+
+### Bug Fixes
+
 - **D-step `kappa` now matches R.** `robustbase:::lmrob.E` applies a
   10-node Gauss-Hermite rule (`lmrob.control(numpoints = 10)`) rather
   than integrating, so R's `kappa` is up to 8e-3 from the exact
