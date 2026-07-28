@@ -46,7 +46,7 @@ TUNING_M = {
     "ggw":      (1.0, 1.5, 0.5, 1.694),
 }
 TUNING_S = {
-    "bisquare": (1.547645,),
+    "bisquare": (1.54764,),
     "welsh":    (1.0 / np.sqrt(3.0),),
     "optimal":  (0.4047,),
     "hampel":   (1.5 * 0.2119163, 3.5 * 0.2119163, 8.0 * 0.2119163),
@@ -113,7 +113,7 @@ bisquare at both tunings makes the trade-off visible.
 ```{code-cell} ipython3
 fig, axes = plt.subplots(1, 3, figsize=(13, 3.6), sharex=True)
 for label, k, color, ls in [
-    ("S-step (k=1.548, 50% bp, ~28% eff)", 1.547645, "#d62728", "-"),
+    ("S-step (k=1.548, 50% bp, ~28% eff)", 1.54764, "#d62728", "-"),
     ("M-step (k=4.685, 95% eff)", 4.685061, "#1f77b4", "--"),
 ]:
     axes[0].plot(u, P.rho(u, "bisquare", (k,)), label=label, color=color, ls=ls)

@@ -37,7 +37,7 @@ def test_kernel_matches_fast_rng_path() -> None:
     # New monolithic kernel.
     beta_out = np.empty(p, dtype=np.float64)
     rng = np.random.default_rng(42)
-    tuning = np.array([1.547645, 0.0, 0.0], dtype=np.float64)
+    tuning = np.array([1.54764, 0.0, 0.0], dtype=np.float64)
     scale, status, _n_iter, _conv = cy_lmrob_fast_s(
         X,
         y,

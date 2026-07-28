@@ -96,13 +96,13 @@ _PSI_TUNING_DEFAULT_PSI: dict[str, tuple[float, ...]] = {
     "hampel": (1.5 * 0.9016085, 3.5 * 0.9016085, 8.0 * 0.9016085),
     "optimal": (1.060158,),
     "ggw": (1.0, 1.5, 0.5, 1.694),  # case 0 (b=1, 95% eff)
-    "lqq": (1.4734061, 0.9826779, 1.5),
+    "lqq": (1.4734061, 0.9822707, 1.5),
 }
 
 _PSI_TUNING_DEFAULT_CHI: dict[str, tuple[float, ...]] = {
     "huber": (0.6745,),  # for ~50% bdp via huber proposal-2 scale
-    "bisquare": (1.547645,),
-    "biweight": (1.547645,),
+    "bisquare": (1.54764,),
+    "biweight": (1.54764,),
     "hampel": (1.5 * 0.2119163, 3.5 * 0.2119163, 8.0 * 0.2119163),
     "optimal": (0.4047,),
     "ggw": (1.0, 1.5, 0.5, 0.4375470),  # case 2 (b=1, bp 0.5)

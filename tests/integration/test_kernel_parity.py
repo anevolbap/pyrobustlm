@@ -45,7 +45,7 @@ _TUNING_PSI: dict[str, tuple[float, ...]] = {
     "ggw": (4.0,),
 }
 _TUNING_CHI: dict[str, tuple[float, ...]] = {
-    "bisquare": (1.547645,),
+    "bisquare": (1.54764,),
     "hampel": (1.5 * 0.2119163, 3.5 * 0.2119163, 8.0 * 0.2119163),
     "optimal": (0.4047,),
     "lqq": (0.4015457, 0.2676971, 1.5),

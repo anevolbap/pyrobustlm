@@ -29,14 +29,12 @@ After MM, the final beta agrees with R's MM beta to about
 ``rtol=5e-5`` on stackloss; on small-n datasets (pension, starsCYG)
 the divergence can be ``rtol=1e-1``.
 
-For redescending psi (hampel, ggw) on n=21 stackloss the basin drift
-also leaks into the parametric cov: a few rweights differ from R's by
-about 5e-3 (in 4 of 21 observations near the bisquare/ggw boundary),
-and that propagates through ``X^T diag(rweights) X`` to a cov diagonal
-rerr of about 0.4-0.5 on the most sensitive elements. Coef and scale
-stay within ~1e-3 rerr of R; only the parametric vcov is sensitive on
-this regime. See ``psi_hampel`` and ``psi_ggw`` rows in
-``docs/bench-report.md``.
+For redescending psi (hampel, ggw) on n=21 stackloss the ``psi_hampel``
+and ``psi_ggw`` rows of ``docs/bench-report.md`` show cov-diagonal
+errors of 0.4-0.5. This note used to attribute both to basin drift.
+Only the hampel one is: see entry 11, which separates them by feeding
+R's own residuals into our ``vcov_avar1`` and getting agreement to
+1e-12, so the formula is not at fault in either case.
 
 **Opt-in fix.** ``Control(rng="R")`` (v0.5.16+) drives the resample
 loop through ``pylmrob.r_set_seed`` + ``r_sample_noreplace`` /
@@ -47,11 +45,19 @@ coefficients and ``~3.2e-6`` on scale. Forces ``n_workers=1`` and
 ``engine_c=False``; see [`rng-r-perf`](rng-r-perf.md) for wall-clock
 costs.
 
-The residual ``~3.2e-6`` scale floor is from accumulated LAPACK
-``dgels`` ULP differences across the IRWLS solves; it's identical
-to pylmrob's historic PCG64-path scale floor and is **not** caused
-by RNG or MAD. Closing it would require matching R's exact BLAS
-implementation; see ``plan.md`` §11.3 for details.
+The residual ``~3.2e-6`` scale floor was **not** irreducible LAPACK
+noise, which is what this note claimed through v0.5.25. It was a typo
+in our bisquare chi tuning constant: we carried ``1.547645`` where
+R's ``lmrob.control(psi="bisquare")$tuning.chi`` is ``1.54764``. The
+relative difference is ``3.231e-06``, which is exactly the "scale
+relative error: median 3.23e-06" that ran through every row of
+``docs/bench-report.md``.
+
+On a fixed 200-element residual vector, ``m_scale`` now reproduces R's
+value to all 12 printed digits (2.502215052460); the old constant gave
+2.502206968516. The investigation log below is retained for the record,
+but its premise was wrong: single-threaded BLAS and tighter tolerances
+did not move the gap because the gap was not numerical.
 
 #### Investigation log: confirmed irreducible
 
@@ -338,3 +344,77 @@ the estimator and that should not be silent.
 **Where.** ``pylmrob/_core/_psi_kernels.pxi``,
 ``pylmrob/_core/_lmrob.pyx::cy_lmrob_fit``,
 ``tests/integration/test_engine_c_parity.py``.
+
+### 11. ``vcov_avar1`` is correct; the bench-report cov errors are not the formula
+
+**What.** ``docs/bench-report.md`` shows cov-diagonal errors of 0.4-0.5
+for ``psi_hampel`` and ``psi_ggw`` on stackloss. Entry 1 used to call
+both basin drift. Feeding R's *own* final residuals, initial-S
+residuals and scale into ``vcov_avar1`` and comparing against R's
+``vcov()`` removes the search entirely:
+
+| psi | max cov rerr, R's inputs |
+|---|---|
+| bisquare | 1.1e-12 |
+| hampel | 3.6e-12 |
+| optimal | 4.1e-13 |
+| lqq | 5.4e-12 |
+| ggw | 1.7e-10 |
+
+So the formula is right for every family. The two bench rows have
+different causes, and only one of them is ours.
+
+**hampel: basin drift.** R's ``lmrob.S`` is self-consistent for
+hampel, so we and R agree on what the initial-S residuals are; we just
+sometimes find a different S optimum. Genuine RNG sensitivity, as entry
+1 describes.
+
+**ggw and lqq: R's ``init$residuals`` is stale.**
+``robustbase::lmrob.S`` returns a ``residuals`` field that does not
+match ``y - X %*% coefficients`` for these two families. On stackloss
+the gap is ~2.5 (seed-dependent; some seeds are clean).
+``residuals`` and ``fitted.values`` agree with each other but lag
+``coefficients`` by one refinement step. ``coefficients`` is the
+correct one: the M-scale of ``y - X coef`` reproduces the reported
+``S$scale`` (1.97542 vs 1.97547) while the M-scale of ``S$residuals``
+does not (1.98040).
+
+``.vcov.avar1`` reads ``obj$init$resid``, so **R's own ggw/lqq
+covariance is built from residuals inconsistent with the coefficients
+R reports**. pylmrob computes ``init_residuals = y - X @ beta_init``,
+which is self-consistent, so we disagree with R here by construction.
+We are not reproducing that behaviour.
+
+Verified against robustbase 0.99-7 / R 4.2.2. Affects only the two
+families whose tuning goes through ``.psi.conv.cc``.
+
+**Where.** ``tests/validation/test_vcov_avar1_vs_r.py`` pins both the
+formula agreement and the upstream quirk, so if a later robustbase
+makes ``lmrob.S`` self-consistent the second test fails and this entry
+needs revisiting.
+
+### 12. bisquare chi tuning constant was wrong in the 6th digit
+
+**What.** ``_DEFAULT_TUNING_CHI["bisquare"]`` was ``1.547645``. R's
+``lmrob.control(psi="bisquare")$tuning.chi`` is ``1.54764``. Relative
+difference ``3.231e-06``.
+
+**Impact.** That is exactly the "Scale relative error: median
+3.23e-06" that appeared in every ``docs/bench-report.md`` revision, and
+the ``~3.2e-6`` floor entry 1 attributed to irreducible LAPACK
+differences. bisquare is the default family, so the constant fed the
+M-scale on most of the corpus. On a fixed 200-element residual vector
+``m_scale`` went from 2.502206968516 to 2.502215052460, matching R to
+all 12 printed digits. ``vcov_avar1`` on R's inputs went from 4.7e-06
+to 1.1e-12.
+
+The same sweep found ``psi.py`` and ``inference.py`` carrying
+``0.9826779`` for the lqq psi mid-constant where the internal form from
+``.psi.conv.cc`` is ``0.9822707``. In ``inference.py`` that value gates
+a precomputed correction factor via ``np.allclose``, so the mismatch
+silently pushed lqq onto the numerical-integration fallback.
+
+**Lesson.** Both this and the D-step kappa bug (entry 9) were constants
+transcribed by hand from R output at reduced precision. Constants that
+can be read from R should be pinned by a test that reads them from R,
+not eyeballed.

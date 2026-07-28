@@ -168,7 +168,7 @@ def fit_p_subset(x, y, idx):
     X = sm.add_constant(x[idx])
     return np.linalg.solve(X.T @ X, X.T @ y[idx])
 
-def m_scale(r, c=1.547645, b0=0.5, tol=1e-8, max_iter=100):
+def m_scale(r, c=1.54764, b0=0.5, tol=1e-8, max_iter=100):
     """Bisquare M-scale solving E[chi(r/s)] = b0."""
     s = np.median(np.abs(r)) / 0.6744897
     for _ in range(max_iter):
