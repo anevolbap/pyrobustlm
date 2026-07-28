@@ -5,6 +5,13 @@ All notable changes to `pylmrob` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.26](https://github.com/anevolbap/pyrobustlm/compare/v0.5.25...v0.5.26) (2026-07-28)
+
+
+### Bug Fixes
+
+* **bench:** Time R with Sys.time, not system.time ([#129](https://github.com/anevolbap/pyrobustlm/issues/129)) ([b259ae2](https://github.com/anevolbap/pyrobustlm/commit/b259ae268c55bb54b3c8b259bdf88d217c609d2a))
+
 ## [0.5.25](https://github.com/anevolbap/pyrobustlm/compare/v0.5.24...v0.5.25) (2026-07-28)
 
 
@@ -13,21 +20,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 * D-step kappa, degenerate zero-scale candidates, and Control.preset ([#127](https://github.com/anevolbap/pyrobustlm/issues/127)) ([abfe1c0](https://github.com/anevolbap/pyrobustlm/commit/abfe1c09fa5d26c7e37a473329902c35c2ff8e1e))
 
 ## [Unreleased]
-
-### Bug Fixes
-
-- **Benchmark harness timed R with 1 ms resolution.**
-  `scripts/benchmark.R` used `system.time()`, whose elapsed field is
-  quantised to 1 ms, on a corpus where most fits take 2-7 ms. R was
-  credited with about 23% more time than it used, so every py/R ratio
-  the weekly cron publishes read better than it is. Now uses
-  `Sys.time()` deltas with a shared repetition count
-  (`PYLMROB_BENCH_REPS`, default 11) on both sides, and
-  `build_bench_report` derives the count from the data instead of
-  printing a hardcoded "5 reps".
-- Regenerated `docs/bench-report.md` and corrected the stale "0.93x R"
-  claim in `docs/numerical-notes.md`. Real figures at v0.5.24:
-  engine_c 1.30x R median, NumPy path 4.32x R.
 
 ### Bug Fixes
 
