@@ -355,7 +355,13 @@ def _lmrob_impl(
         beta_init = beta_init_out
         sigma_init = float(scale_e)
         init_info = {
-            "coef": beta_out,
+            # The *initial S* coefficients, mirroring R's $init.S$coefficients
+            # and the NumPy branches below. This used to be ``beta_out``, which
+            # is the buffer ``_mm_loop`` mutates in place, so ``init_["coef"]``
+            # held the post-MM estimate on the engine_c path and the post-S
+            # estimate everywhere else. Copy, because beta_init_out is a view
+            # into the shared workspace allocation.
+            "coef": np.array(beta_init_out, dtype=np.float64),
             "scale": float(scale_e),
             "n_iter": int(n_iter_s),
             "method": "S",

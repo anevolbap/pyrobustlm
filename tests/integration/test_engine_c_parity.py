@@ -111,3 +111,56 @@ def test_engines_agree_on_most_fits() -> None:
         f"engines agreed on only {agree}/{total} fits ({rate:.0%}); "
         f"drifted cases: {sorted(drifted, key=lambda t: -t[2])[:5]}"
     )
+
+
+@pytest.mark.parametrize("dataset,formula", _DATASETS)
+def test_init_coef_is_the_s_estimate_on_both_engines(dataset: str, formula: str) -> None:
+    """``init_["coef"]`` must be the initial S estimate, not the MM one.
+
+    The engine_c branch used to store ``beta_out``, the buffer the Cython
+    MM loop mutates in place, so ``init_["coef"]`` held the post-MM
+    coefficients there and the post-S coefficients on the NumPy path.
+    The tell: on the engine_c path it was equal to ``coef_``.
+    """
+    df = _load(dataset)
+    fit_c = lmrob(formula, df, control=Control(nResample=500, engine_c=True), seed=42)
+    fit_np = lmrob(formula, df, control=Control(nResample=500, engine_c=False), seed=42)
+
+    for label, fit in (("engine_c", fit_c), ("numpy", fit_np)):
+        init_coef = np.asarray(fit.init_["coef"], dtype=np.float64)
+        assert init_coef.shape == fit.coef_.shape
+        # MM moves off the S estimate, so the two must not be identical.
+        assert not np.array_equal(init_coef, fit.coef_), (
+            f"{dataset}/{label}: init_['coef'] is the MM estimate, not the S estimate"
+        )
+        # and it must not alias the reported coefficients
+        assert init_coef is not fit.coef_
+
+
+def test_init_scale_matches_init_coef() -> None:
+    """The recorded init scale must be the M-scale at the recorded init coef.
+
+    Cross-checks the two halves of ``init_`` against each other, which is
+    what exposed the aliasing above.
+    """
+    from pylmrob.formula import model_matrix
+    from pylmrob.scale import m_scale
+
+    formula = "Y ~ X1 + X2 + X3"
+    df = _load("salinity")
+    design = model_matrix(formula, df)
+    X = np.ascontiguousarray(design.X, dtype=np.float64)
+    y = np.ascontiguousarray(design.y, dtype=np.float64)
+
+    for engine_c in (True, False):
+        fit = lmrob(formula, df, control=Control(nResample=500, engine_c=engine_c), seed=42)
+        init_coef = np.asarray(fit.init_["coef"], dtype=np.float64)
+        recomputed = m_scale(
+            y - X @ init_coef, "bisquare", (1.547645,), 0.5, 200, 1e-10, p=X.shape[1]
+        )
+        np.testing.assert_allclose(
+            recomputed,
+            float(fit.init_["scale"]),  # type: ignore[arg-type]
+            rtol=1e-6,
+            err_msg=f"engine_c={engine_c}: init scale does not match init coef",
+        )
