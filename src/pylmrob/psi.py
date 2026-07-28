@@ -22,6 +22,8 @@ import numpy as np
 from numpy.typing import ArrayLike
 
 from pylmrob import _psifuns
+from pylmrob.control import _DEFAULT_TUNING_CHI as _CONTROL_TUNING_CHI
+from pylmrob.control import _DEFAULT_TUNING_PSI as _CONTROL_TUNING_PSI
 
 # Public type aliases. ``PsiFamily`` is the constrained Literal users should
 # pass; functions also accept plain ``str`` for runtime convenience and
@@ -90,23 +92,13 @@ def EDpsi(family: str, k: TuningK) -> float:
 # .Mpsi.tuning.default() and .Mchi.tuning.default() tables.
 # Values here are taken directly from those R tables.
 _PSI_TUNING_DEFAULT_PSI: dict[str, tuple[float, ...]] = {
-    "huber": (1.345,),
-    "bisquare": (4.685061,),
-    "biweight": (4.685061,),
-    "hampel": (1.5 * 0.9016085, 3.5 * 0.9016085, 8.0 * 0.9016085),
-    "optimal": (1.060158,),
-    "ggw": (1.0, 1.5, 0.5, 1.694),  # case 0 (b=1, 95% eff)
-    "lqq": (1.4734061, 0.9822707, 1.5),
+    **_CONTROL_TUNING_PSI,
+    "biweight": _CONTROL_TUNING_PSI["bisquare"],  # alias
 }
 
 _PSI_TUNING_DEFAULT_CHI: dict[str, tuple[float, ...]] = {
-    "huber": (0.6745,),  # for ~50% bdp via huber proposal-2 scale
-    "bisquare": (1.54764,),
-    "biweight": (1.54764,),
-    "hampel": (1.5 * 0.2119163, 3.5 * 0.2119163, 8.0 * 0.2119163),
-    "optimal": (0.4047,),
-    "ggw": (1.0, 1.5, 0.5, 0.4375470),  # case 2 (b=1, bp 0.5)
-    "lqq": (0.4015457, 0.2676971, 1.5),
+    **_CONTROL_TUNING_CHI,
+    "biweight": _CONTROL_TUNING_CHI["bisquare"],  # alias
 }
 
 

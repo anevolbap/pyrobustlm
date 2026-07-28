@@ -38,7 +38,10 @@ _DEFAULT_TUNING_CHI: dict[str, tuple[float, ...]] = {
     "bisquare": (1.54764,),
     "hampel": (1.5 * 0.2119163, 3.5 * 0.2119163, 8.0 * 0.2119163),
     "optimal": (0.4047,),
-    "welsh": (0.5773502691896258,),  # = 1/sqrt(3); gives E[chi(Z)]=0.5 under Z~N(0,1).
+    # R's .Mchi.tuning.default("welsh") is 0.5773502, a 7-digit
+    # truncation of 1/sqrt(3). We carried the exact value, which is
+    # 6.9e-08 away; parity means using R's number, not the nicer one.
+    "welsh": (0.5773502,),
     # ggw: case index 6 = (b=1.5, breakdown=0.5).
     "ggw": (6,),
     # lqq: (b, c, s) - converted from user-facing (-0.5, 1.5, NA, 0.5).

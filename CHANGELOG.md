@@ -23,6 +23,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Bug Fixes
 
+- **`welsh` chi tuning constant** was the exact `1/sqrt(3)`
+  (`0.5773502691896258`); R's `.Mchi.tuning.default("welsh")` is the
+  7-digit `0.5773502`. Parity means using R's number, 6.9e-08 away.
+- **`scale._DEFAULT_K_CHI` had drifted from `Control`**: `ggw` carried
+  case 3 (b=1) where R's default is case 6 (b=1.5), and `huber` carried
+  `1.345`, which is the *psi* constant, where `Control` has `0.6745`.
+  `psi._PSI_TUNING_DEFAULT_*` had the same ggw drift, so
+  `psi.tuning_for_breakdown("ggw")` returned the wrong case.
+
+### Changed
+
+- The duplicate tuning tables in `scale.py` and `psi.py` are now derived
+  from `control.py` rather than restated, so they cannot drift again.
+  Both gain `welsh`, which they were missing.
+
+### Added
+
+- `tests/validation/test_tuning_constants_vs_r.py`: reads every tuning
+  constant back from `robustbase:::.Mpsi.tuning.default` /
+  `.Mchi.tuning.default` (through `.psi.conv.cc`) and compares at
+  `rtol=1e-15`, plus a check that the duplicate tables agree. Three
+  recent bugs were hand-transcribed constants that no test caught,
+  because every test that used one imported the same wrong value it was
+  checking.
+
+### Bug Fixes
+
 - **Wheel builds failed since v0.5.25, so neither v0.5.25 nor v0.5.26
   published to PyPI.** `tests/unit/test_control_warnings.py` read
   `tests/data/stackloss.csv` through a relative path; cibuildwheel runs
