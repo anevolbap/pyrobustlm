@@ -203,10 +203,10 @@ class Control:
         """
         import warnings
 
+        # eps_outlier / eps_x are no longer listed: pylmrob.outlier_stats
+        # reads them (as a number or a callable, like R).
         unimplemented = {
             "trace_lev": (self.trace_lev, 0),
-            "eps_outlier": (self.eps_outlier, None),
-            "eps_x": (self.eps_x, None),
             "solve_tol": (self.solve_tol, 1e-7),
         }
         set_anyway = [name for name, (got, default) in unimplemented.items() if got != default]

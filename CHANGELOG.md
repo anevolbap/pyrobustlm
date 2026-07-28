@@ -34,6 +34,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Features
+
+- **`outlier_stats()`**, a port of `robustbase::outlierStats`. A
+  high-breakdown fit can look healthy overall and still have broken down
+  *locally*: within one level of a factor, most observations are
+  rejected and the level's coefficient rests on the few that remain.
+  The global scale and mean robustness weight hide this. `outlier_stats`
+  reports, per indicator column, how many observations it touches, how
+  many were rejected, and their mean robustness weight, and warns on
+  possible local breakdown like R does. Matches R row-for-row on a
+  factor design with a deliberately broken level.
+- `Control.eps_outlier` and `Control.eps_x` are now read (by
+  `outlier_stats`), as a number or a callable, matching R. They are off
+  the "accepted but not implemented" warning list.
+
 ### Continuous Integration
 
 - Smoke-test the built wheel on every PR. `wheels.yml` only runs on a

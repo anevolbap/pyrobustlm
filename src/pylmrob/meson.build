@@ -17,6 +17,7 @@ python_sources = [
   'anova.py',
   'bootstrap.py',
   'ms_estimator.py',
+  'outliers.py',
   'rng.py',
   'summary.py',
   '_utils.py',
