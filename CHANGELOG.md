@@ -5,6 +5,19 @@ All notable changes to `pylmrob` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.27](https://github.com/anevolbap/pyrobustlm/compare/v0.5.26...v0.5.27) (2026-07-28)
+
+
+### Bug Fixes
+
+* **psi:** Correct the bisquare chi and lqq psi tuning constants ([#132](https://github.com/anevolbap/pyrobustlm/issues/132)) ([e3eb090](https://github.com/anevolbap/pyrobustlm/commit/e3eb090a7b7b533357c43148a85a2b1cbce2c645))
+* **tests:** Resolve stackloss path from __file__, not cwd ([#134](https://github.com/anevolbap/pyrobustlm/issues/134)) ([2608513](https://github.com/anevolbap/pyrobustlm/commit/2608513a8167934a50dedbed4480200e8934d53c))
+
+
+### Documentation
+
+* **changelog:** Empty [Unreleased] of already-released entries ([#131](https://github.com/anevolbap/pyrobustlm/issues/131)) ([d20d5aa](https://github.com/anevolbap/pyrobustlm/commit/d20d5aae3486297fbc0c125c6d69ab511c9a4007))
+
 ## [0.5.26](https://github.com/anevolbap/pyrobustlm/compare/v0.5.25...v0.5.26) (2026-07-28)
 
 
