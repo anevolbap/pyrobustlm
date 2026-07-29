@@ -9,6 +9,9 @@ py.install_sources(core_sources, subdir: 'pylmrob/_core')
 # Real kernels (_psi, _scale, _fast_s, _mm, _lapack_helpers, _ctables) will
 # be added in their respective phases.
 # -----------------------------------------------------------------------------
+# _psi_kernels.pxi is textually included by _fast_s.pyx and _lmrob.pyx.
+# py.extension_module() does not accept depend_files, so rebuild-on-edit
+# rests on the depfile meson generates from Cython.
 cython_deps = []
 if omp_dep.found()
   cython_deps += omp_dep
