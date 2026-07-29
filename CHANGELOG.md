@@ -5,6 +5,28 @@ All notable changes to `pylmrob` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.29](https://github.com/anevolbap/pyrobustlm/compare/v0.5.28...v0.5.29) (2026-07-29)
+
+
+### Bug Fixes
+
+* **control:** Reject psi="huber", as robustbase does ([#144](https://github.com/anevolbap/pyrobustlm/issues/144)) ([410d566](https://github.com/anevolbap/pyrobustlm/commit/410d5668de4aa9c6e1ea25a96052f97fe7e4ab99))
+
+
+### Refactoring
+
+* **core:** Share the psi/chi/M-scale kernels between both engines ([#146](https://github.com/anevolbap/pyrobustlm/issues/146)) ([54ac018](https://github.com/anevolbap/pyrobustlm/commit/54ac0184463e0a8652fd14fef5e4b398668e300d))
+
+
+### Tests
+
+* **diagnostics:** Make the plot() tests actually run in CI ([#142](https://github.com/anevolbap/pyrobustlm/issues/142)) ([a80fc09](https://github.com/anevolbap/pyrobustlm/commit/a80fc09980b321c792e408ef274dacf4a4fed825))
+
+
+### Build System
+
+* Add a linetrace option for Cython coverage ([#145](https://github.com/anevolbap/pyrobustlm/issues/145)) ([2142611](https://github.com/anevolbap/pyrobustlm/commit/214261190ebf92d5a06e07975095ba5723d10a45))
+
 ## [0.5.28](https://github.com/anevolbap/pyrobustlm/compare/v0.5.27...v0.5.28) (2026-07-28)
 
 
