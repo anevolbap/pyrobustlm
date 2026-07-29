@@ -59,6 +59,12 @@ dev = [
     # interop). Keep this in the dev set so CI's type-check + tests
     # exercise the sklearn-inherited path; runtime install is optional.
     "scikit-learn>=1.4",
+    # diagnostics.plot() is a public function that docs/r-source-map.md
+    # advertises as the plot.lmrob equivalent, but matplotlib is an
+    # optional runtime dep, so nothing exercised it. Same reasoning as
+    # scikit-learn above: dev-only, so CI runs the code users are
+    # pointed at.
+    "matplotlib>=3.7",
 ]
 # Validation harness against R. Requires a local R install with the
 # robustbase package, so it lives in its own optional group; CI installs

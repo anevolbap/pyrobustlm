@@ -42,6 +42,30 @@ Public surface of `pylmrob`.
    :members:
 ```
 
+## Diagnostics
+
+```{eval-rst}
+.. autoclass:: pylmrob.diagnostics.DiagnosticsTable
+   :members:
+
+.. autofunction:: pylmrob.diagnostics.plot
+
+.. autofunction:: pylmrob.diagnostics.hatvalues
+
+.. autofunction:: pylmrob.diagnostics.dfbetas
+
+.. autofunction:: pylmrob.diagnostics.cooks_distance
+```
+
+## Outlier statistics
+
+```{eval-rst}
+.. autofunction:: pylmrob.outlier_stats
+
+.. autoclass:: pylmrob.OutlierStats
+   :members:
+```
+
 ## Psi family kernels
 
 ```{eval-rst}
