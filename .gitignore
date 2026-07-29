@@ -56,3 +56,7 @@ tests/data/_d_test_*.csv
 local/
 scratch/
 uv.lock
+
+# Local scratch (large temp: build venvs, logs). /tmp is on a small
+# partition; this one is on the same disk as the repo.
+.scratch/
