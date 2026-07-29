@@ -4,6 +4,7 @@ python_sources = [
   '_fast_s.py',
   '_l1.py',
   '_mm.py',
+  '_cykernels.py',
   '_psifuns.py',
   'd_scale.py',
   'control.py',
