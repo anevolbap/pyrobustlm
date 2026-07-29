@@ -21,7 +21,7 @@ from typing import Literal
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pylmrob import _psifuns
+from pylmrob import _cykernels, _psifuns
 from pylmrob.control import _DEFAULT_TUNING_CHI as _CONTROL_TUNING_CHI
 from pylmrob.control import _DEFAULT_TUNING_PSI as _CONTROL_TUNING_PSI
 
@@ -33,6 +33,16 @@ TuningK = float | tuple[float, ...] | ArrayLike
 
 
 def _eval(kind: str, x: ArrayLike, family: str, k: TuningK) -> np.ndarray:
+    # Prefer the compiled kernel. This module dispatched straight to the
+    # NumPy reference for a long time, which left most of
+    # pylmrob._core._psi unreachable (line coverage 55%) even though the
+    # functions existed and were shipped. _cykernels returns None for the
+    # combinations with no kernel (welsh anywhere, ggw rho), so those
+    # still take the NumPy path.
+    arr = np.ascontiguousarray(np.atleast_1d(np.asarray(x, dtype=np.float64)))
+    cy = _cykernels.evaluate(kind, arr, family, k)
+    if cy is not None:
+        return cy.reshape(()) if np.isscalar(x) else cy
     fn = _psifuns._dispatch(family, kind)
     out = fn(x, k)
     if np.isscalar(x):
