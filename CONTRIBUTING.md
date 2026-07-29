@@ -88,3 +88,21 @@ Papers (DOI links):
 - Maronna, R. A. and Yohai, V. J. (2000). Robust regression with both
   continuous and categorical predictors. *JSPI*, 89(1-2).
   [doi:10.1016/S0378-3758(99)00208-6](https://doi.org/10.1016/S0378-3758(99)00208-6).
+
+## The changelog
+
+Do not edit `CHANGELOG.md`. release-please generates it from Conventional
+Commit messages when it cuts a release, and a hand-written `[Unreleased]`
+section is not pruned on release: entries stay behind and the file ends up
+documenting the same fix twice. That happened across v0.5.26, v0.5.27 and
+v0.5.28 before the manual section was dropped.
+
+What this means in practice:
+
+- The commit subject is what users read. Write it for them.
+- Anything worth explaining goes in the commit body, which lands in the
+  release notes.
+- Pick the type deliberately. `feat:`, `fix:`, `perf:`, `refactor:`,
+  `test:`, `build:`, `ci:` and `docs:` all appear in the changelog;
+  `chore:` and `style:` are hidden. A real correction committed as
+  `chore:` will be invisible to users.
