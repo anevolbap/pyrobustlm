@@ -152,7 +152,14 @@ addopts = [
     # so this leaves room while still catching real regressions.
     "--cov=pylmrob",
     "--cov-report=term-missing:skip-covered",
-    "--cov-fail-under=65",
+    # Measured 80% on a run without rpy2 (the rpy2-gated tests only run
+    # on the Linux job, so this is the floor across the matrix). Kept a
+    # couple of points below that: the gate is there to catch a real
+    # regression, not to fail on platform noise. It sat at 65 while the
+    # suite was at 80, which is 15 points of slack a regression could
+    # hide in. Note it measures the Python side only; ~4000 lines of
+    # Cython are the default execution path and are not in this number.
+    "--cov-fail-under=78",
 ]
 markers = [
     "slow: marks tests as slow",
