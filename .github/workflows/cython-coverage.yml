@@ -23,7 +23,12 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "src/pylmrob/_core/**"
+      # Any Python that dispatches into the kernels changes which of them
+      # run, so watch the whole package rather than _core alone. #151
+      # rerouted pylmrob.psi onto the compiled kernels -- the change this
+      # job most wanted to see -- and the old _core-only filter skipped it.
+      - "src/pylmrob/**"
+      - "tests/**"
       - "meson.build"
       - "meson.options"
       - ".github/workflows/cython-coverage.yml"
