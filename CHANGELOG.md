@@ -5,6 +5,14 @@ All notable changes to `pylmrob` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.28](https://github.com/anevolbap/pyrobustlm/compare/v0.5.27...v0.5.28) (2026-07-28)
+
+
+### Features
+
+* **outliers:** Compute outlier stats during the fit, like R ([#139](https://github.com/anevolbap/pyrobustlm/issues/139)) ([ea5edf3](https://github.com/anevolbap/pyrobustlm/commit/ea5edf303d1d60020b59ec5fb6a0dd81f7ebe947))
+* **outliers:** Port robustbase::outlierStats ([#137](https://github.com/anevolbap/pyrobustlm/issues/137)) ([5c995b7](https://github.com/anevolbap/pyrobustlm/commit/5c995b795563501171c06458a5d0261e52569bca))
+
 ## [0.5.27](https://github.com/anevolbap/pyrobustlm/compare/v0.5.26...v0.5.27) (2026-07-28)
 
 
