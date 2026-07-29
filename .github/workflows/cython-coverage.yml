@@ -1,0 +1,107 @@
+name: Cython coverage
+
+# The main test job measures --cov=pylmrob, which is the Python side only.
+# About 4000 lines of Cython are the default execution path for every fit
+# and are absent from that number, so the headline coverage has always
+# described roughly half of what runs.
+#
+# This job builds with -Dlinetrace=true and reports the .pyx files. It is
+# separate, and informational, for two reasons: linetrace costs a trace
+# call per line (this set takes about 9 minutes traced, against seconds
+# untraced), and the figure needs a few runs before a gate on it means
+# anything.
+#
+# Baseline measured locally on this set, without R so the rng="R" tests
+# skip:
+#
+#   _lmrob.pyx   1038 stmts  78%
+#   _fast_s.pyx   404 stmts  61%
+#   _psi.pyx      488 stmts  55%
+#   _r_rng.pyx    166 stmts  11%   (R-gated tests skip locally)
+#   TOTAL        2096 stmts  64%
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/pylmrob/_core/**"
+      - "meson.build"
+      - "meson.options"
+      - ".github/workflows/cython-coverage.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cython-coverage:
+    name: Cython line coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install build deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "meson-python>=0.16" "meson>=1.4" ninja \
+            "Cython>=3" "numpy>=2" "scipy>=1.11" pandas formulaic \
+            pytest pytest-cov
+
+      - name: Build with linetrace
+        # CYTHON_TRACE_NOGIL (set in meson.build behind this option) is what
+        # makes the nogil kernels traceable; plain CYTHON_TRACE skips them,
+        # which would leave the fast-S loop unmeasured.
+        run: pip install -e . --no-build-isolation -Csetup-args=-Dlinetrace=true
+
+      - name: Expose the generated C next to the sources
+        # Cython.Coverage maps C lines back to .pyx lines by reading the
+        # generated C, which it looks for beside the .pyx. meson keeps it in
+        # the build tree under a per-target directory, so link it across.
+        run: |
+          shopt -s globstar
+          for c in build/**/*.pyx.c; do
+            base=$(basename "$c" .pyx.c)
+            ln -sf "$PWD/$c" "src/pylmrob/_core/$base.c"
+            echo "linked $base.c -> $c"
+          done
+          # The generated C embeds two path conventions: the .pyx as
+          # "pylmrob/_core/_lmrob.pyx" (relative to src/) and the shared
+          # _psi_kernels.pxi as "../../src/pylmrob/_core/_psi_kernels.pxi"
+          # (relative to the build dir). Only the build dir can resolve
+          # both, once pylmrob/ is bridged into it.
+          ln -sfn "$PWD/src/pylmrob" "$(ls -d build/*/)pylmrob"
+
+      - name: Report
+        # Run from the meson build dir: see the bridging symlink above for
+        # why that is the only directory where both embedded path
+        # conventions resolve.
+        run: |
+          cd "$(ls -d build/*/)"
+          cat > .coveragerc <<'EOF'
+          [run]
+          plugins = Cython.Coverage
+          [report]
+          include = */pylmrob/_core/*.pyx
+          EOF
+          # No --no-cov here: it would disable the coverage it is meant to
+          # collect. addopts in pyproject.toml already sets --cov flags for
+          # the Python-side run; these override them for the .pyx report.
+          python -m pytest -q --no-header -p no:randomly \
+            --cov=pylmrob --cov-config=.coveragerc \
+            --cov-report=term --cov-report=xml:$GITHUB_WORKSPACE/cython-coverage.xml \
+            --cov-fail-under=0 \
+            "$GITHUB_WORKSPACE/tests/integration/test_kernel_parity.py" \
+            "$GITHUB_WORKSPACE/tests/integration/test_engine_c_parity.py" \
+            "$GITHUB_WORKSPACE/tests/unit/test_psi.py" \
+            "$GITHUB_WORKSPACE/tests/unit/test_scale.py" \
+            "$GITHUB_WORKSPACE/tests/unit/test_d_scale.py" \
+            "$GITHUB_WORKSPACE/tests/unit/test_lmrob_kernel.py"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cython-coverage-xml
+          path: cython-coverage.xml
