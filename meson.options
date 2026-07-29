@@ -1,0 +1,16 @@
+# Build the Cython kernels with line tracing so coverage.py can see them.
+#
+# Off by default: linetrace inserts a trace call per line, which makes the
+# nogil resampling loop several times slower and defeats the point of the
+# kernels. CI turns it on in a dedicated job:
+#
+#   pip install -e . -Csetup-args=-Dlinetrace=true
+#
+# ~4000 lines of Cython are the default execution path for every fit, and
+# nothing measured them until this existed.
+option(
+  'linetrace',
+  type: 'boolean',
+  value: false,
+  description: 'Compile Cython kernels with linetrace for coverage measurement',
+)

@@ -85,6 +85,16 @@ c_args_common = [
   np_inc_arg,
 ]
 
+# Coverage build. linetrace costs a trace call per line, so it stays off
+# for real builds; a dedicated CI job turns it on with
+# -Dlinetrace=true. CYTHON_TRACE_NOGIL is what makes the nogil
+# kernels traceable at all -- plain CYTHON_TRACE skips them, which would
+# leave the fast-S loop unmeasured, i.e. exactly the code we want to see.
+if get_option('linetrace')
+  cython_args += ['-X', 'linetrace=True']
+  c_args_common += ['-DCYTHON_TRACE=1', '-DCYTHON_TRACE_NOGIL=1']
+endif
+
 # -----------------------------------------------------------------------------
 # Subdirs
 # -----------------------------------------------------------------------------
