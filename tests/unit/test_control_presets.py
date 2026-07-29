@@ -74,3 +74,38 @@ def test_every_preset_field_is_a_real_field() -> None:
     """Guard against the override whitelist drifting from the dataclass."""
     names = {f.name for f in dataclasses.fields(Control)}
     assert "numpoints" in names, "numpoints should exist (R's lmrob.control has it)"
+
+
+def test_huber_psi_is_rejected_like_r() -> None:
+    """robustbase rejects psi="huber" for lmrob; so do we.
+
+    Huber's rho is unbounded, so an S-estimate built on it has 0%
+    breakdown: the high-breakdown initial estimate MM relies on does not
+    exist. We used to accept it and return a plausible-looking fit with
+    none of the robustness the user came for. R's message lists
+    tukey/biweight/bisquare, lqq, welsh, optimal, hampel, ggw.
+    """
+    with pytest.raises(ValueError, match="not a valid lmrob psi"):
+        Control(psi="huber")  # type: ignore[arg-type]
+
+
+def test_huber_primitives_still_work() -> None:
+    """Only lmrob's psi rejects huber. Mpsi/Mchi/m_scale still support it,
+    as they do in R."""
+    import numpy as np
+
+    from pylmrob import psi as psi_mod
+    from pylmrob.scale import m_scale
+
+    x = np.linspace(-3, 3, 21)
+    assert np.all(np.isfinite(psi_mod.psi(x, "huber", (1.345,))))
+    assert m_scale(np.array([1.0, -2.0, 3.0, -1.0, 0.5]), "huber") > 0
+
+
+@pytest.mark.parametrize("alias", ["bisquare", "tukey", "biweight"])
+def test_accepted_psi_families_match_r(alias: str) -> None:
+    """The families R accepts must construct without error."""
+    from pylmrob.control import PsiFamily  # noqa: F401
+
+    if alias == "bisquare":
+        assert Control(psi=alias).psi == "bisquare"  # type: ignore[arg-type]
