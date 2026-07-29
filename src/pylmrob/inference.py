@@ -28,6 +28,8 @@ This is the same expression robustbase uses inside ``.vcov.avar1`` modulo a
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -113,6 +115,20 @@ def vcov_avar1(
 
     denom = float(np.mean(w0_pp * r0_s))
     if denom == 0.0:
+        # An exact fit (sigma == 0, every residual zero) drives this
+        # denominator to zero legitimately: chi'(0) * 0 == 0 for every
+        # observation. R warns "S-estimated scale == 0: Probably exact
+        # fit" and returns a zero covariance rather than failing, so a
+        # noiseless design like y = 1 + 2x still produces a fit. Match
+        # that instead of raising.
+        if sigma <= 0.0 or not np.any(np.abs(residuals) > 0.0):
+            warnings.warn(
+                "vcov_avar1: exact fit (scale == 0); returning a zero "
+                "covariance matrix, matching R's behaviour.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return np.zeros((p, p), dtype=np.float64)
         raise FloatingPointError("vcov_avar1: mean(chi'(r0/s) * r0/s) = 0")
 
     # ``a`` uses w = psi' (R/lmrob.MM.R:547,563), not w = psi.
