@@ -77,6 +77,7 @@ def test_engine_c_via_lmrob_api() -> None:
     assert fit.coef_.shape == (X.shape[1],)
 
 
+@pytest.mark.perf
 @pytest.mark.skipif(
     bool(__import__("os").environ.get("CI")),
     reason="Wall-clock perf comparison is too noisy on CI runners",
