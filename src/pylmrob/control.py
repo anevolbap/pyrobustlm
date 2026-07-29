@@ -100,6 +100,13 @@ class Control:
     # name is "SM") and an SMDM fit pass through an "SM" stage, so R warns
     # for both. Set to ``None`` or ``()`` to turn the check off.
     compute_outlier_stats: str | tuple[str, ...] | None = "SM"
+    # Thresholds for the local-breakdown warning, matching R's
+    # lmrob.control(warn.limit.reject = 0.5, warn.limit.meanrw = 0.5).
+    # A coefficient is flagged when the share of its observations that the
+    # fit rejected reaches the first, or their mean robustness weight
+    # falls to the second. Either may be None to switch off that half.
+    warn_limit_reject: float | None = 0.5
+    warn_limit_meanrw: float | None = 0.5
 
     cov: str | None = None
     eps_outlier: float | None = None

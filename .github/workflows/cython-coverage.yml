@@ -17,8 +17,14 @@ name: Cython coverage
 #   _lmrob.pyx   1038 stmts  78%
 #   _fast_s.pyx   404 stmts  61%
 #   _psi.pyx      488 stmts  55%
-#   _r_rng.pyx    166 stmts  11%   (R-gated tests skip locally)
+#   _r_rng.pyx    166 stmts  11%
 #   TOTAL        2096 stmts  64%
+#
+# The _r_rng figure and most of the _fast_s shortfall were this job's
+# test selection, not a gap in the suite: everything uncovered in both
+# was the rng="R" path (cy_refine_fast_s_r, cy_find_scale_r,
+# cy_r_subsample_nonsingular, cy_r_sample_noreplace), whose 40 tests
+# were simply not in the list. They are now.
 on:
   pull_request:
     branches: [main]
@@ -104,7 +110,10 @@ jobs:
             "$GITHUB_WORKSPACE/tests/unit/test_psi.py" \
             "$GITHUB_WORKSPACE/tests/unit/test_scale.py" \
             "$GITHUB_WORKSPACE/tests/unit/test_d_scale.py" \
-            "$GITHUB_WORKSPACE/tests/unit/test_lmrob_kernel.py"
+            "$GITHUB_WORKSPACE/tests/unit/test_lmrob_kernel.py" \
+            "$GITHUB_WORKSPACE/tests/unit/test_r_rng.py" \
+            "$GITHUB_WORKSPACE/tests/unit/test_r_norm_rand.py" \
+            "$GITHUB_WORKSPACE/tests/unit/test_r_subsample_nonsingular.py"
 
       - uses: actions/upload-artifact@v4
         with:
