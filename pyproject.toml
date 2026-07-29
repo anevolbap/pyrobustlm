@@ -159,6 +159,7 @@ markers = [
     "rpy2: requires a working rpy2/R install",
     "rng_sensitive: result depends on RNG; tolerances are looser",
     "validation: cross-checks against R reference output",
+    "perf: wall-clock performance assertion; environment-dependent by nature",
 ]
 
 [tool.cibuildwheel]
@@ -180,10 +181,24 @@ test-requires = [
 # [tool.pytest.ini_options] reference --cov-* flags; --no-cov defangs
 # the --cov-fail-under gate for the wheel-install smoke. Real coverage
 # enforcement happens in the test job in ci.yml.
-test-command = "pytest --no-cov {project}/tests/unit -x"
+# -m "not perf": the wheel smoke checks that the built wheel imports and
+# works, not how fast it is. A wall-clock assertion here is
+# environment-dependent by construction, and under QEMU on aarch64 it
+# compares millisecond work measured in seconds. That failed the
+# v0.5.29 wheel build and blocked the release.
+test-command = "pytest --no-cov -m 'not perf' {project}/tests/unit -x"
 
 [tool.cibuildwheel.linux]
 archs = ["x86_64", "aarch64"]
+# tests/unit/test_lmrob_kernel.py::test_engine_c_speedup_at_small_n is a
+# wall-clock comparison guarded by @skipif(os.environ.get("CI")). The
+# Linux wheels build inside a manylinux container, which does not inherit
+# the runner's environment, so CI was unset there and the perf assertion
+# ran anyway -- under QEMU on aarch64, where millisecond work takes
+# seconds and the comparison is a coin flip. That failed the v0.5.29
+# wheel build and blocked the release. macOS and Windows build natively
+# and already saw CI.
+environment-pass = ["CI"]
 manylinux-x86_64-image = "manylinux_2_28"
 manylinux-aarch64-image = "manylinux_2_28"
 
