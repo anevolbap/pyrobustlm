@@ -173,3 +173,35 @@ def test_compute_outlier_stats_can_be_disabled() -> None:
             _FORMULA, df, control=Control(nResample=500, compute_outlier_stats=None), seed=1
         )
     assert fit.ostats_ is None
+
+
+def test_warn_limits_are_configurable_from_control() -> None:
+    """R exposes warn.limit.reject / warn.limit.meanrw; so do we.
+
+    They existed as ``outlier_stats`` arguments with R's defaults, but
+    ``Control`` had no fields and ``lmrob`` never passed them, so a
+    caller could not change the thresholds the fit warns at.
+    """
+    import warnings as _w
+
+    df = pd.read_csv(DATA)
+    df["g"] = pd.Categorical(df["g"])
+
+    # The fixture level is rejected at 0.70, so 0.9 is above it.
+    ctrl = Control(nResample=500, warn_limit_reject=0.9, warn_limit_meanrw=None)
+    with _w.catch_warnings():
+        _w.simplefilter("error", RuntimeWarning)
+        fit = lmrob(_FORMULA, df, control=ctrl, seed=1)
+    assert fit.ostats_.flagged == []  # type: ignore[attr-defined]
+
+    # ... and a threshold below it still fires.
+    ctrl = Control(nResample=500, warn_limit_reject=0.5, warn_limit_meanrw=None)
+    with pytest.warns(RuntimeWarning, match="local breakdown"):
+        fit = lmrob(_FORMULA, df, control=ctrl, seed=1)
+    assert [_r_name(n) for n in fit.ostats_.flagged] == ["gc"]  # type: ignore[attr-defined]
+
+
+def test_warn_limits_default_to_r_values() -> None:
+    ctrl = Control()
+    assert ctrl.warn_limit_reject == 0.5
+    assert ctrl.warn_limit_meanrw == 0.5

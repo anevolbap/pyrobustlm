@@ -769,7 +769,13 @@ def _lmrob_impl(
         if stage in stages or (method.startswith("S") and "SM" in stages):
             from pylmrob.outliers import outlier_stats
 
-            result.ostats_ = outlier_stats(result)
+            result.ostats_ = outlier_stats(
+                result,
+                eps_outlier=control.eps_outlier,
+                eps_x=control.eps_x,
+                warn_limit_reject=control.warn_limit_reject,
+                warn_limit_meanrw=control.warn_limit_meanrw,
+            )
 
     return result
 
