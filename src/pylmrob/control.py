@@ -11,7 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field, fields
 from typing import Any, Literal
 
-PsiFamily = Literal["bisquare", "huber", "hampel", "optimal", "ggw", "lqq", "welsh"]
+# Matches robustbase's accepted set. "huber" is deliberately absent:
+# see the check in __post_init__.
+PsiFamily = Literal["bisquare", "tukey", "biweight", "hampel", "optimal", "ggw", "lqq", "welsh"]
 InitMethod = Literal["auto", "S", "M-S", "L1"]
 Setting = Literal["KS2011", "KS2014", "MM"]
 
@@ -185,6 +187,21 @@ class Control:
                     " sequential); got n_workers=" + str(self.n_workers)
                 )
             self.engine_c = False
+
+        # robustbase rejects psi="huber" for lmrob, and it is right to.
+        # Huber's rho is unbounded, so an S-estimate built on it has 0%
+        # breakdown: the high-breakdown initial estimate that MM relies
+        # on does not exist, and the fit silently loses the guarantee the
+        # user came for. We used to accept it and return plausible
+        # numbers. The psi/chi primitives still support huber for direct
+        # Mpsi/Mchi/m_scale use; only lmrob's psi rejects it.
+        if isinstance(self.psi, str) and self.psi.lower() == "huber":
+            raise ValueError(
+                "psi='huber' is not a valid lmrob psi: its rho is unbounded, so "
+                "the S step would have 0% breakdown. robustbase rejects it too. "
+                "Use one of 'bisquare' ('tukey'/'biweight'), 'lqq', 'welsh', "
+                "'optimal', 'hampel', 'ggw'."
+            )
 
         # Fill in default tuning constants matching R.
         if self.tuning_psi is None:
