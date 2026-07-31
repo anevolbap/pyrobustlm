@@ -418,3 +418,31 @@ silently pushed lqq onto the numerical-integration fallback.
 transcribed by hand from R output at reduced precision. Constants that
 can be read from R should be pinned by a test that reads them from R,
 not eyeballed.
+
+### 13. We reproduce an upstream inconsistency in ``vcov_avar1``'s ``u4``
+
+**What.** ``u4`` scales by ``mean(chi(r0/s)^2 - bb^2)``, dividing by
+``n``, which assumes ``mean(chi) = bb``. Our M-scale enforces the
+constraint R's does, ``sum(chi)/(n - p) = bb``. The two disagree by a
+factor ``n/(n - p)``.
+
+**Why it is here.** This is not ours. It is robustbase R-Forge bug
+[#6471](https://r-forge.r-project.org/tracker/index.php?func=detail&aid=6471&group_id=59&atid=302),
+reported by Ben Hansen in 2016 and still open and unassigned. We ported
+``.vcov.avar1`` line for line and match it to 1e-12 (entry 11), so we
+inherited the mismatch along with everything else.
+
+**Why we keep it.** Parity with R is the goal. Applying Hansen's
+proposed correction (``bb <- bb * (n - p)/n``) would make our covariance
+disagree with R's on every fit, trading a documented upstream quirk for
+an undocumented local divergence. His own simulation put the benefit at
+about one percentage point of type I error at ``n = 50, p = 2``, which
+does not justify breaking the thing the test suite is built to check.
+
+**What to watch.** If robustbase ever applies the fix, our covariance
+will start disagreeing with R and the validation corpus will go red.
+That would be this, not a regression on our side. Apply the same
+correction and re-baseline rather than hunting for a local cause.
+
+**Where.** ``pylmrob/inference.py::vcov_avar1`` (the ``u4`` term),
+``pylmrob/scale.py::m_scale`` (the ``n - p`` denominator).
