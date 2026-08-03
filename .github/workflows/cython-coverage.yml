@@ -115,7 +115,7 @@ jobs:
             "$GITHUB_WORKSPACE/tests/unit/test_r_norm_rand.py" \
             "$GITHUB_WORKSPACE/tests/unit/test_r_subsample_nonsingular.py"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cython-coverage-xml
           path: cython-coverage.xml
