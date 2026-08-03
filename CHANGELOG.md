@@ -5,6 +5,35 @@ All notable changes to `pylmrob` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.30](https://github.com/anevolbap/pyrobustlm/compare/v0.5.29...v0.5.30) (2026-08-03)
+
+
+### Features
+
+* **control:** Expose warn.limit.reject and warn.limit.meanrw ([#153](https://github.com/anevolbap/pyrobustlm/issues/153)) ([7e1287d](https://github.com/anevolbap/pyrobustlm/commit/7e1287dad7159a85f90cc0fc24fb9289dcc3f559))
+
+
+### Bug Fixes
+
+* **cibw:** Keep the perf assertion out of the wheel build ([#148](https://github.com/anevolbap/pyrobustlm/issues/148)) ([f3017d0](https://github.com/anevolbap/pyrobustlm/commit/f3017d03b103a1e3a6dd892377b329fb43ad64a3))
+
+
+### Performance
+
+* **psi:** Route the public psi API through the compiled kernels ([#151](https://github.com/anevolbap/pyrobustlm/issues/151)) ([e321d76](https://github.com/anevolbap/pyrobustlm/commit/e321d76e1b0a7f9c0bedc70c062115aad77a43a7))
+
+
+### Continuous Integration
+
+* Raise the coverage gate from 65% to 78% ([#147](https://github.com/anevolbap/pyrobustlm/issues/147)) ([dcab90c](https://github.com/anevolbap/pyrobustlm/commit/dcab90ce686bece259761a62ec1b721bb9dff894))
+* Report Cython line coverage ([#150](https://github.com/anevolbap/pyrobustlm/issues/150)) ([9ecea55](https://github.com/anevolbap/pyrobustlm/commit/9ecea557b429be7d9b41e0c423a06627bc10bc0a))
+* Widen the Cython coverage trigger beyond _core ([#152](https://github.com/anevolbap/pyrobustlm/issues/152)) ([cbb4746](https://github.com/anevolbap/pyrobustlm/commit/cbb47468441eabf0be87c559dfc31b2c929fe441))
+
+
+### Documentation
+
+* **numerical-notes:** Record the inherited u4 inconsistency ([#154](https://github.com/anevolbap/pyrobustlm/issues/154)) ([c0563ff](https://github.com/anevolbap/pyrobustlm/commit/c0563fff389205558e9b4fa23c4ff7b87638deb2))
+
 ## [0.5.29](https://github.com/anevolbap/pyrobustlm/compare/v0.5.28...v0.5.29) (2026-07-29)
 
 
