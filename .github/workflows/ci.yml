@@ -76,8 +76,17 @@ jobs:
         run: sphinx-build -W -b html docs docs/_build
 
   wheel-smoke:
-    name: Wheel install smoke (cibuildwheel test-command)
-    runs-on: ubuntu-latest
+    name: Wheel install smoke (cibuildwheel test-command) ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    # Runs on all three OSes because cibuildwheel does not use the same
+    # shell everywhere: sh -c on Linux and macOS, cmd on Windows. A
+    # test-command that parses under one can fail under the other, which
+    # is how v0.5.30 died (single-quoted -m marker, fine under sh, split
+    # into two arguments by cmd).
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -89,18 +98,51 @@ jobs:
           python -m pip install --upgrade pip build
           python -m build --wheel --outdir dist/
       - name: Install the wheel (not editable, no source tree on sys.path)
+        # Resolve the wheel in Python rather than with a dist/*.whl glob,
+        # because the default shell is not the same on all three runners
+        # and cmd does not expand globs. The index stays enabled so the
+        # runtime deps (numpy, scipy, ...) still resolve.
+        shell: python
         run: |
-          python -m pip install dist/*.whl
-          python -m pip install pytest pytest-cov pytest-randomly pytest-rerunfailures
-      - name: Run cibuildwheel's test-command from a foreign working directory
-        # This is the whole point of the job. wheels.yml only runs on a v*
-        # tag, so nothing exercised the wheel until release time, and the
-        # v0.5.25 and v0.5.26 publishes both failed on a test that read a
-        # data file through a cwd-relative path. Same command cibuildwheel
-        # runs (see test-command in pyproject.toml), from /tmp so a
-        # relative path cannot accidentally resolve.
-        working-directory: /tmp
-        run: pytest --no-cov "$GITHUB_WORKSPACE/tests/unit" -x
+          import glob, subprocess, sys
+          wheel = glob.glob("dist/*.whl")[0]
+          pip = [sys.executable, "-m", "pip", "install"]
+          subprocess.check_call(pip + [wheel])
+          subprocess.check_call(
+              pip + ["pytest", "pytest-cov", "pytest-randomly", "pytest-rerunfailures"]
+          )
+      - name: Read test-command out of pyproject.toml
+        # Read rather than copy. This job used to hardcode its own copy of
+        # the command, which silently drifted when #148 added the -m
+        # marker, so the job kept passing while the real wheel build
+        # broke. Reading the value means the two cannot disagree.
+        id: cmd
+        shell: python
+        run: |
+          import os, tomllib
+          with open("pyproject.toml", "rb") as fh:
+              cmd = tomllib.load(fh)["tool"]["cibuildwheel"]["test-command"]
+          cmd = cmd.replace("{project}", os.environ["GITHUB_WORKSPACE"])
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"cmd={cmd}\n")
+      # The next two steps are the whole point of the job. wheels.yml only
+      # runs on a v* tag, so nothing exercised the wheel until release
+      # time, and the v0.5.25 and v0.5.26 publishes both failed on a test
+      # that read a data file through a cwd-relative path. Running from
+      # the runner temp dir means a relative path cannot accidentally
+      # resolve. They are split by OS because the shell has to be a
+      # literal, and because that is what cibuildwheel itself does: sh -c
+      # on Linux and macOS, cmd on Windows.
+      - name: Run cibuildwheel's test-command (sh, as on Linux and macOS)
+        if: runner.os != 'Windows'
+        working-directory: ${{ runner.temp }}
+        shell: sh
+        run: ${{ steps.cmd.outputs.cmd }}
+      - name: Run cibuildwheel's test-command (cmd, as on Windows)
+        if: runner.os == 'Windows'
+        working-directory: ${{ runner.temp }}
+        shell: cmd
+        run: ${{ steps.cmd.outputs.cmd }}
 
   test:
     name: Tests (${{ matrix.os }} / py${{ matrix.python-version }})
