@@ -86,13 +86,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            shell: bash
-          - os: macos-latest
-            shell: bash
-          - os: windows-latest
-            shell: cmd
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -123,14 +117,23 @@ jobs:
           cmd = cmd.replace("{project}", os.environ["GITHUB_WORKSPACE"])
           with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
               fh.write(f"cmd={cmd}\n")
-      - name: Run cibuildwheel's test-command from a foreign working directory
-        # This is the whole point of the job. wheels.yml only runs on a v*
-        # tag, so nothing exercised the wheel until release time, and the
-        # v0.5.25 and v0.5.26 publishes both failed on a test that read a
-        # data file through a cwd-relative path. Running from the runner
-        # temp dir means a relative path cannot accidentally resolve.
+      # The next two steps are the whole point of the job. wheels.yml only
+      # runs on a v* tag, so nothing exercised the wheel until release
+      # time, and the v0.5.25 and v0.5.26 publishes both failed on a test
+      # that read a data file through a cwd-relative path. Running from
+      # the runner temp dir means a relative path cannot accidentally
+      # resolve. They are split by OS because the shell has to be a
+      # literal, and because that is what cibuildwheel itself does: sh -c
+      # on Linux and macOS, cmd on Windows.
+      - name: Run cibuildwheel's test-command (sh, as on Linux and macOS)
+        if: runner.os != 'Windows'
         working-directory: ${{ runner.temp }}
-        shell: ${{ matrix.shell }}
+        shell: sh
+        run: ${{ steps.cmd.outputs.cmd }}
+      - name: Run cibuildwheel's test-command (cmd, as on Windows)
+        if: runner.os == 'Windows'
+        working-directory: ${{ runner.temp }}
+        shell: cmd
         run: ${{ steps.cmd.outputs.cmd }}
 
   test:
