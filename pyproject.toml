@@ -193,7 +193,11 @@ test-requires = [
 # environment-dependent by construction, and under QEMU on aarch64 it
 # compares millisecond work measured in seconds. That failed the
 # v0.5.29 wheel build and blocked the release.
-test-command = "pytest --no-cov -m 'not perf' {project}/tests/unit -x"
+# The marker must be quoted with double quotes, not single. cibuildwheel
+# runs this through `sh -c` on Linux/macOS but through `cmd` on Windows,
+# and cmd does not treat ' as a quoting character: pytest then saw `perf'`
+# as a path and exited 4. That failed the v0.5.30 Windows wheel build.
+test-command = 'pytest --no-cov -m "not perf" {project}/tests/unit -x'
 
 [tool.cibuildwheel.linux]
 archs = ["x86_64", "aarch64"]
