@@ -364,34 +364,65 @@ residuals and scale into ``vcov_avar1`` and comparing against R's
 So the formula is right for every family. The two bench rows have
 different causes, and only one of them is ours.
 
-**hampel: basin drift.** R's ``lmrob.S`` is self-consistent for
-hampel, so we and R agree on what the initial-S residuals are; we just
-sometimes find a different S optimum. Genuine RNG sensitivity, as entry
-1 describes.
+**R's ``init$residuals`` is stale.** ``robustbase::lmrob.S`` returns a
+``residuals`` field that does not match ``y - X %*% coefficients``.
+On stackloss the gap reaches 2.99 (seed-dependent; most seeds are
+clean). ``residuals`` and ``fitted.values`` agree with each other but
+belong to a different candidate fit than ``coefficients``.
+``coefficients`` is the correct one: the M-scale of ``y - X coef``
+reproduces the reported ``S$scale`` to about 5e-6 relative (ggw:
+1.975423 vs 1.975471) while the M-scale of ``S$residuals`` is off by
+about 2.5e-3 (1.980399).
 
-**ggw and lqq: R's ``init$residuals`` is stale.**
-``robustbase::lmrob.S`` returns a ``residuals`` field that does not
-match ``y - X %*% coefficients`` for these two families. On stackloss
-the gap is ~2.5 (seed-dependent; some seeds are clean).
-``residuals`` and ``fitted.values`` agree with each other but lag
-``coefficients`` by one refinement step. ``coefficients`` is the
-correct one: the M-scale of ``y - X coef`` reproduces the reported
-``S$scale`` (1.97542 vs 1.97547) while the M-scale of ``S$residuals``
-does not (1.98040).
+Sweep over seeds 1:20 on stackloss, robustbase 0.99-7 / R 4.2.2,
+counting ``max|S$residuals - (y - X coef)| > 1e-4``:
 
-``.vcov.avar1`` reads ``obj$init$resid``, so **R's own ggw/lqq
-covariance is built from residuals inconsistent with the coefficients
+| psi | seeds affected | max gap |
+|---|---|---|
+| bisquare | 0/20 | 9.6e-07 |
+| optimal | 0/20 | 8.8e-07 |
+| welsh | 2/20 | 2.590 |
+| hampel | 3/20 | 2.987 |
+| lqq | 3/20 | 2.566 |
+| ggw | 7/20 | 2.588 |
+
+**Root cause.** ``fast_s()`` in ``src/lmrob.c`` refines the ``best_r``
+survivors in a loop, passing the same ``res`` scratch array to every
+``refine_fast_s()`` call, but copying into ``bbeta`` only when a
+survivor improves on the best scale so far. So ``res`` always holds the
+*last* survivor's residuals while ``bbeta`` holds the *best* survivor's
+coefficients, and ``R_lmrob_S()`` returns that array as ``residuals``
+(``COPY(res, y, *n)``). ``fast_s_large_n()`` has the same pattern. The
+gap is large only when two survivors converge to different S optima,
+which is why it shows up on the non-monotone families and never on
+bisquare or optimal. A second, much smaller effect explains the ~1e-6
+floor on the clean rows: ``refine_fast_s()`` breaks out of the loop on
+convergence before recomputing ``res`` from the new ``beta_ref``, so
+even the winner's residuals lag its coefficients by one step.
+
+The earlier version of this entry blamed the two families whose tuning
+goes through ``.psi.conv.cc`` and called the hampel row basin drift.
+That was the fixture seed, not the rule: hampel and welsh show the same
+gap on other seeds.
+
+``.vcov.avar1`` reads ``obj$init$resid``, so **R's own covariance for an
+affected fit is built from residuals inconsistent with the coefficients
 R reports**. pylmrob computes ``init_residuals = y - X @ beta_init``,
 which is self-consistent, so we disagree with R here by construction.
 We are not reproducing that behaviour.
 
-Verified against robustbase 0.99-7 / R 4.2.2. Affects only the two
-families whose tuning goes through ``.psi.conv.cc``.
+Reported upstream as R-Forge bug
+[#6873](https://r-forge.r-project.org/tracker/index.php?func=detail&aid=6873&group_id=59&atid=302)
+(2026-07-31), open.
 
 **Where.** ``tests/validation/test_vcov_avar1_vs_r.py`` pins both the
-formula agreement and the upstream quirk, so if a later robustbase
-makes ``lmrob.S`` self-consistent the second test fails and this entry
-needs revisiting.
+formula agreement and the upstream quirk on the reference fixture, so if
+a later robustbase makes ``lmrob.S`` self-consistent the second test
+fails and this entry needs revisiting.
+``tests/integration/test_s_self_consistency.py`` pins our side: reported
+residuals rebuilt from reported coefficients, reported S scale equal to
+the M-scale at the reported S coefficients, and the Cython kernel's
+inline covariance equal to one built from ``y - X b_init``.
 
 ### 12. bisquare chi tuning constant was wrong in the 6th digit
 
