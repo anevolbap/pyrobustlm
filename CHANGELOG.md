@@ -5,6 +5,18 @@ All notable changes to `pylmrob` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.31](https://github.com/anevolbap/pyrobustlm/compare/v0.5.30...v0.5.31) (2026-08-17)
+
+
+### Bug Fixes
+
+* **cibw:** Quote the perf marker so Windows cmd parses it ([#163](https://github.com/anevolbap/pyrobustlm/issues/163)) ([2edccc4](https://github.com/anevolbap/pyrobustlm/commit/2edccc4a3d77a5188d9437ac897bd94c97e78e61))
+
+
+### Continuous Integration
+
+* Run the wheel smoke on all three OSes, read the command from pyproject ([#165](https://github.com/anevolbap/pyrobustlm/issues/165)) ([76562c3](https://github.com/anevolbap/pyrobustlm/commit/76562c3026a1114102873899f0beb4540cbf71db))
+
 ## [0.5.30](https://github.com/anevolbap/pyrobustlm/compare/v0.5.29...v0.5.30) (2026-08-03)
 
 
