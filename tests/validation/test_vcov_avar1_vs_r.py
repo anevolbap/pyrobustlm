@@ -42,11 +42,16 @@ DATA = REPO_ROOT / "tests" / "data" / "stackloss.csv"
 _FAMILIES = ["bisquare", "hampel", "optimal", "lqq", "ggw"]
 
 # R's lmrob.S returns an ``init$residuals`` field that does not match
-# ``y - X %*% init$coefficients`` for ggw and lqq (about 2.5 on this
-# dataset, seed-dependent), while bisquare/hampel/optimal agree to
-# float noise. ``.vcov.avar1`` reads that field, so R's own ggw/lqq
-# covariance is built from residuals inconsistent with the coefficients
-# it reports. See numerical-notes entry 11.
+# ``y - X %*% init$coefficients`` (about 2.5 on this dataset), because
+# ``fast_s()`` returns the last refined survivor's residuals next to the
+# best survivor's coefficients. ``.vcov.avar1`` reads that field, so R's
+# own covariance for an affected fit is built from residuals
+# inconsistent with the coefficients it reports. R-Forge bug #6873, see
+# numerical-notes entry 11.
+#
+# Which families land on it is seed-dependent: hampel and welsh show the
+# same gap on other seeds. This set is what the committed fixture's seed
+# produced, not a statement about the families.
 _R_INIT_INCONSISTENT = {"ggw", "lqq"}
 _FLOAT_NOISE = 1e-4
 
@@ -109,10 +114,11 @@ def test_vcov_avar1_matches_r_given_r_inputs(family: str) -> None:
 def test_r_init_residual_self_consistency(family: str) -> None:
     """Pin the upstream quirk the divergence note depends on.
 
-    If a future robustbase makes ``lmrob.S`` self-consistent for ggw and
-    lqq, this fails and the note in ``numerical-notes.md`` (entry 11)
-    needs revisiting, because our ``init_residuals`` would then agree
-    with R's and the ggw covariance gap should close on its own.
+    If a future robustbase makes ``lmrob.S`` self-consistent, this fails
+    for the families in ``_R_INIT_INCONSISTENT`` and the note in
+    ``numerical-notes.md`` (entry 11) needs revisiting, because our
+    ``init_residuals`` would then agree with R's and the ggw covariance
+    gap should close on its own.
     """
     ref = _load_reference()["families"][family]
     gap = float(ref["init_resid_vs_coef_maxabs"])
