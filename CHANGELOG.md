@@ -5,6 +5,13 @@ All notable changes to `pylmrob` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.32](https://github.com/anevolbap/pyrobustlm/compare/v0.5.31...v0.5.32) (2026-08-22)
+
+
+### Tests
+
+* Pin S residual/coefficient self-consistency (R-Forge [#6873](https://github.com/anevolbap/pyrobustlm/issues/6873)) ([#166](https://github.com/anevolbap/pyrobustlm/issues/166)) ([97599d9](https://github.com/anevolbap/pyrobustlm/commit/97599d9fe31465e5b8f59b96d47efc7b263c5e9e))
+
 ## [0.5.31](https://github.com/anevolbap/pyrobustlm/compare/v0.5.30...v0.5.31) (2026-08-17)
 
 
