@@ -305,7 +305,7 @@ def make_summary(result: LmRobResults) -> SummaryLmRob:
         denom = yMy + rMr * (correc - 1.0)
         r2 = (yMy - rMr) / denom if denom > 0 else 0.0
         df_int = 1
-        adj = 1.0 - (1.0 - r2) * ((result.nobs_ - df_int) / df) if df > 0 else 0.0
+        adj = 1.0 - (1.0 - r2) * ((result.nobs_ - df_int) / df)
     else:
         r2 = 0.0
         adj = 0.0
