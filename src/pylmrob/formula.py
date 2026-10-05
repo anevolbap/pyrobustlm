@@ -116,7 +116,8 @@ def model_matrix(
 
     from formulaic import Formula
 
-    parsed = Formula(formula)
+    # Formula.__new__ dispatches to a concrete subclass.
+    parsed = Formula(formula)  # ty: ignore[call-non-callable]
     mm = parsed.get_model_matrix(data)
     if not hasattr(mm, "lhs") or not hasattr(mm, "rhs"):
         raise ValueError(f"formula {formula!r} must be two-sided (have a y ~ ... LHS)")

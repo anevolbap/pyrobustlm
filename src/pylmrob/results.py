@@ -325,6 +325,7 @@ class LmRobResults:
                 lev_thresh = med + 3.0 * max(mad, 1e-12)
                 masked_outliers = (clean_lev > lev_thresh) & (self.rweights_ < wt_eps)
             except np.linalg.LinAlgError:
+                # Singular clean block: report no masked outliers.
                 pass
         return DiagnosticsTable(
             leverage=h,

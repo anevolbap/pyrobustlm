@@ -94,7 +94,6 @@ def test_matches_robustbase_idc_for_well_conditioned() -> None:
     """
     # Build the same X R would build: set.seed(42); rnorm(n*p), reshape (n, p)
     # column-major.
-    rng = r_set_seed(42)
     # Skip: simpler to use the runif-equivalent. Instead, just use a
     # deterministic numpy seed and compute X here; check the algorithm
     # is internally consistent.

@@ -103,8 +103,10 @@ def main() -> None:
     body: list[str] = [
         "# Benchmark report",
         "",
-        "Element-wise comparison between `pylmrob` and `robustbase::lmrob` "
-        "on a fixed corpus of fits. Re-generate with::",
+        (
+            "Element-wise comparison between `pylmrob` and `robustbase::lmrob` "
+            "on a fixed corpus of fits. Re-generate with::"
+        ),
         "",
         "    Rscript scripts/benchmark.R",
         "    python  scripts/benchmark.py",

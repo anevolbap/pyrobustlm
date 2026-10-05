@@ -10,6 +10,7 @@ byte-identical with numpy's choice). Reports median over k_reps runs.
 
 from __future__ import annotations
 
+import math
 import os
 import time
 from pathlib import Path
@@ -70,7 +71,7 @@ def main() -> None:
             except Exception as exc:
                 t_c = float("nan")
                 print(f"[engine_c] {dataset} {label}: failed ({exc.__class__.__name__})")
-            speedup = t_def / t_c if t_c and t_c == t_c else float("nan")
+            speedup = t_def / t_c if t_c and not math.isnan(t_c) else float("nan")
             rows.append((dataset, label, t_def, t_c, speedup))
 
     print()
