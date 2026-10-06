@@ -5,6 +5,13 @@ All notable changes to `pylmrob` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.33](https://github.com/anevolbap/pyrobustlm/compare/v0.5.32...v0.5.33) (2026-10-05)
+
+
+### Bug Fixes
+
+* Resolve CodeQL quality alerts and ty 0.0.84 lint failure ([#181](https://github.com/anevolbap/pyrobustlm/issues/181)) ([5439f2b](https://github.com/anevolbap/pyrobustlm/commit/5439f2b12b8439b3ca0ff8707ad1fa223db26557))
+
 ## [0.5.32](https://github.com/anevolbap/pyrobustlm/compare/v0.5.31...v0.5.32) (2026-08-22)
 
 
