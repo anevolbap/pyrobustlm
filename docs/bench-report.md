@@ -11,8 +11,8 @@ Element-wise comparison between `pylmrob` and `robustbase::lmrob` on a fixed cor
 - Coefficient max-relative-error: median 3.07e-11, max 1.98e-03
 - Scale relative error: median 4.16e-09, max 3.45e-03
 - Cov diagonal max-rerr: median 2.02e-07, max 5.20e-01
-- Runtime ratio (py/R): median 4.69x, min 1.66x, max 9.51x
-- Runtime ratio (py engine_c/R): median 1.50x, min 0.78x, max 5.12x
+- Runtime ratio (py/R): median 4.63x, min 1.57x, max 9.38x
+- Runtime ratio (py engine_c/R): median 1.48x, min 0.79x, max 5.15x
 
 ## Environment
 
@@ -20,7 +20,7 @@ Element-wise comparison between `pylmrob` and `robustbase::lmrob` on a fixed cor
 - Python: 3.12.15
 - Platform: Linux-7.0.0-1017-azure-x86_64-with-glibc2.43
 - robustbase: 0.99.7
-- R: R version 4.6.1 (2026-06-24)
+- R: R version 4.6.2 (2026-10-29)
 
 ## Numerical accuracy: max relative error vs R
 
@@ -65,40 +65,40 @@ Element-wise comparison between `pylmrob` and `robustbase::lmrob` on a fixed cor
 
 | case | psi | n_x_p | R (ms) | py (ms) | py/R | py engine_c (ms) | py engine_c/R |
 |---|---|---|---|---|---|---|---|
-| classical_aircraft | bisquare | 23x5 | 3.8 | 26.2 | 6.92x | 4.8 | 1.27x |
-| classical_coleman | bisquare | 20x6 | 4.1 | 26.2 | 6.41x | 4.7 | 1.15x |
-| classical_delivery | bisquare | 25x3 | 3.1 | 24.8 | 8.11x | 4.7 | 1.54x |
-| classical_hbk | bisquare | 75x4 | 5.2 | 29.2 | 5.58x | 9.0 | 1.71x |
-| classical_pension | bisquare | 18x2 | 2.3 | 21.9 | 9.51x | 3.8 | 1.67x |
-| classical_phosphor | bisquare | 18x3 | 2.8 | 23.6 | 8.51x | 3.8 | 1.37x |
-| classical_salinity | bisquare | 28x4 | 3.6 | 25.6 | 7.11x | 5.2 | 1.44x |
-| classical_stackloss | bisquare | 21x4 | 3.3 | 25.5 | 7.76x | 4.1 | 1.25x |
-| classical_starsCYG | bisquare | 47x2 | 3.4 | 24.1 | 7.17x | 5.3 | 1.58x |
-| classical_wood | bisquare | 20x6 | 4.1 | 26.1 | 6.35x | 4.7 | 1.15x |
-| psi_bisquare | bisquare | 21x4 | 3.2 | 25.6 | 7.97x | 4.2 | 1.29x |
-| psi_ggw | ggw | 21x4 | 5.6 | 29.1 | 5.16x | 6.8 | 1.20x |
-| psi_hampel | hampel | 21x4 | 3.4 | 26.9 | 7.88x | 5.0 | 1.46x |
-| psi_lqq | lqq | 21x4 | 3.9 | 27.5 | 6.95x | 5.6 | 1.42x |
-| psi_optimal | optimal | 21x4 | 3.3 | 24.9 | 7.48x | 4.2 | 1.26x |
-| setting_KS2011_stackloss | lqq | 21x4 | 5.2 | 28.6 | 5.54x | 6.8 | 1.33x |
-| setting_KS2014_stackloss | lqq | 21x4 | 8.9 | 28.8 | 3.25x | 6.9 | 0.78x |
-| synth_bisquare_n2000_p20 | bisquare | 2000x21 | 381.7 | 688.3 | 1.80x | 524.5 | 1.37x |
-| synth_bisquare_n500_p10 | bisquare | 500x11 | 41.1 | 93.9 | 2.29x | 67.2 | 1.64x |
-| synth_ggw_n2000_p20 | ggw | 2000x21 | 611.7 | 1012.8 | 1.66x | 857.8 | 1.40x |
-| synth_ggw_n500_p10 | ggw | 500x11 | 73.6 | 163.0 | 2.22x | 133.2 | 1.81x |
-| synth_hampel_n2000_p20 | hampel | 2000x21 | 439.0 | 858.0 | 1.95x | 729.6 | 1.66x |
-| synth_hampel_n500_p10 | hampel | 500x11 | 48.2 | 131.4 | 2.73x | 104.8 | 2.18x |
-| synth_lqq_n2000_p20 | lqq | 2000x21 | 473.4 | 829.9 | 1.75x | 737.3 | 1.56x |
-| synth_lqq_n500_p10 | lqq | 500x11 | 53.4 | 137.2 | 2.57x | 111.4 | 2.09x |
-| synth_n10000_p20 | bisquare | 10000x21 | 517.7 | 2906.8 | 5.61x | 2651.9 | 5.12x |
-| synth_n10000_p50 | bisquare | 10000x51 | 1799.7 | 7344.4 | 4.08x | 7203.0 | 4.00x |
-| synth_n1000_p10 | bisquare | 1000x11 | 110.9 | 270.0 | 2.44x | 180.7 | 1.63x |
-| synth_n100_p5 | bisquare | 100x6 | 8.2 | 34.7 | 4.22x | 12.8 | 1.56x |
-| synth_n2000_p20 | bisquare | 2000x21 | 381.2 | 734.4 | 1.93x | 529.8 | 1.39x |
-| synth_n5000_p20 | bisquare | 5000x21 | 411.9 | 1557.4 | 3.78x | 1314.3 | 3.19x |
-| synth_n500_p10 | bisquare | 500x11 | 41.6 | 93.8 | 2.26x | 67.0 | 1.61x |
-| synth_optimal_n2000_p20 | optimal | 2000x21 | 440.2 | 767.4 | 1.74x | 559.9 | 1.27x |
-| synth_optimal_n500_p10 | optimal | 500x11 | 47.1 | 103.8 | 2.20x | 75.5 | 1.60x |
+| classical_aircraft | bisquare | 23x5 | 3.8 | 25.7 | 6.83x | 4.9 | 1.29x |
+| classical_coleman | bisquare | 20x6 | 4.2 | 26.0 | 6.21x | 4.8 | 1.14x |
+| classical_delivery | bisquare | 25x3 | 3.1 | 24.6 | 7.94x | 4.7 | 1.52x |
+| classical_hbk | bisquare | 75x4 | 5.3 | 29.0 | 5.51x | 8.7 | 1.66x |
+| classical_pension | bisquare | 18x2 | 2.3 | 21.7 | 9.38x | 3.9 | 1.68x |
+| classical_phosphor | bisquare | 18x3 | 2.8 | 23.3 | 8.19x | 3.8 | 1.34x |
+| classical_salinity | bisquare | 28x4 | 3.7 | 25.4 | 6.90x | 5.1 | 1.39x |
+| classical_stackloss | bisquare | 21x4 | 3.2 | 25.3 | 7.84x | 4.1 | 1.28x |
+| classical_starsCYG | bisquare | 47x2 | 3.4 | 24.0 | 7.10x | 5.3 | 1.57x |
+| classical_wood | bisquare | 20x6 | 4.2 | 25.9 | 6.23x | 4.7 | 1.12x |
+| psi_bisquare | bisquare | 21x4 | 3.2 | 25.5 | 7.86x | 4.1 | 1.26x |
+| psi_ggw | ggw | 21x4 | 5.7 | 28.6 | 5.04x | 6.6 | 1.17x |
+| psi_hampel | hampel | 21x4 | 3.5 | 26.7 | 7.69x | 5.0 | 1.44x |
+| psi_lqq | lqq | 21x4 | 3.9 | 27.2 | 6.92x | 5.6 | 1.43x |
+| psi_optimal | optimal | 21x4 | 3.4 | 24.7 | 7.35x | 4.2 | 1.24x |
+| setting_KS2011_stackloss | lqq | 21x4 | 5.1 | 28.6 | 5.62x | 6.8 | 1.33x |
+| setting_KS2014_stackloss | lqq | 21x4 | 8.7 | 28.5 | 3.29x | 6.8 | 0.79x |
+| synth_bisquare_n2000_p20 | bisquare | 2000x21 | 380.5 | 690.6 | 1.81x | 522.7 | 1.37x |
+| synth_bisquare_n500_p10 | bisquare | 500x11 | 41.2 | 93.9 | 2.28x | 67.0 | 1.63x |
+| synth_ggw_n2000_p20 | ggw | 2000x21 | 623.4 | 980.1 | 1.57x | 820.0 | 1.32x |
+| synth_ggw_n500_p10 | ggw | 500x11 | 74.7 | 163.5 | 2.19x | 132.9 | 1.78x |
+| synth_hampel_n2000_p20 | hampel | 2000x21 | 434.0 | 852.7 | 1.96x | 713.0 | 1.64x |
+| synth_hampel_n500_p10 | hampel | 500x11 | 48.2 | 132.0 | 2.74x | 102.9 | 2.13x |
+| synth_lqq_n2000_p20 | lqq | 2000x21 | 472.8 | 844.8 | 1.79x | 736.7 | 1.56x |
+| synth_lqq_n500_p10 | lqq | 500x11 | 53.2 | 137.9 | 2.59x | 108.6 | 2.04x |
+| synth_n10000_p20 | bisquare | 10000x21 | 518.0 | 2914.8 | 5.63x | 2669.3 | 5.15x |
+| synth_n10000_p50 | bisquare | 10000x51 | 1876.1 | 7165.0 | 3.82x | 7029.0 | 3.75x |
+| synth_n1000_p10 | bisquare | 1000x11 | 110.8 | 264.0 | 2.38x | 182.2 | 1.64x |
+| synth_n100_p5 | bisquare | 100x6 | 8.2 | 34.6 | 4.23x | 12.8 | 1.56x |
+| synth_n2000_p20 | bisquare | 2000x21 | 380.9 | 651.9 | 1.71x | 530.0 | 1.39x |
+| synth_n5000_p20 | bisquare | 5000x21 | 410.7 | 1540.5 | 3.75x | 1352.3 | 3.29x |
+| synth_n500_p10 | bisquare | 500x11 | 41.3 | 93.7 | 2.27x | 67.2 | 1.63x |
+| synth_optimal_n2000_p20 | optimal | 2000x21 | 434.2 | 736.5 | 1.70x | 556.3 | 1.28x |
+| synth_optimal_n500_p10 | optimal | 500x11 | 47.3 | 103.5 | 2.19x | 75.5 | 1.59x |
 
 ## Coverage
 
